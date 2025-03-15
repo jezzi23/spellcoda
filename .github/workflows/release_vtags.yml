@@ -16,8 +16,9 @@ jobs:
 
       - name: SpellCoda must be name of top level dir containing addon
         run: |
-          mkdir -p SpellCoda
-          mv * SpellCoda
+          mkdir -p topdir
+          mv !(topdir) topdir/
+          mv topdir SpellCoda
 
       - name: Get tag name
         id: get_tag
