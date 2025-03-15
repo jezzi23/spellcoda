@@ -16,6 +16,7 @@ jobs:
 
       - name: SpellCoda must be name of top level dir containing addon
         run: |
+          shopt -s extglob
           mkdir -p topdir
           mv !(topdir) topdir/
           mv topdir SpellCoda
