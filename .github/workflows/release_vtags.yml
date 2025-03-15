@@ -30,10 +30,25 @@ jobs:
         run: |
           zip -r ${{ steps.get_tag.outputs.TAG_NAME }}.zip SpellCoda/
 
-      - name: Upload release
-        uses: actions/upload-release-asset@v1
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ github.event.release.upload_url }}
+          tag_name: ${{ steps.get_tag.outputs.TAG_NAME }}
+          release_name: Release ${{ steps.get_tag.outputs.TAG_NAME }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+      - name: Upload release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./${{ steps.get_tag.outputs.TAG_NAME }}.zip
           asset_name: ${{ steps.get_tag.outputs.TAG_NAME }}.zip
           asset_content_type: application/zip
+
