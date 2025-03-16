@@ -527,11 +527,7 @@ local overlay_label_handler = {
         frame_overlay:SetText(format_number(info.expected, 1));
     end,
     overlay_display_effect_per_sec = function(frame_overlay, info)
-        if info.effect_per_sec == math.huge then
-            frame_overlay:SetText("inf");
-        else
-            frame_overlay:SetText(format_number(info.effect_per_sec, 1));
-        end
+        frame_overlay:SetText(format_number(info.effect_per_sec, 1));
     end,
     overlay_display_effect_per_cost = function(frame_overlay, info)
         frame_overlay:SetText(format_number(info.effect_per_cost, 2));
@@ -540,11 +536,7 @@ local overlay_label_handler = {
         frame_overlay:SetText(format_number(info.threat, 1));
     end,
     overlay_display_threat_per_sec = function(frame_overlay, info)
-        if info.threat_per_sec == math.huge then
-            frame_overlay:SetText("inf");
-        else
-            frame_overlay:SetText(format_number(info.threat_per_sec, 1));
-        end
+        frame_overlay:SetText(format_number(info.threat_per_sec, 1));
     end,
     overlay_display_threat_per_cost = function(frame_overlay, info)
         frame_overlay:SetText(format_number(info.threat_per_cost, 2));
