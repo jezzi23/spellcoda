@@ -40,6 +40,11 @@ lookups.sacred_shield               = 412019;
 lookups.rapid_healing               = 468531;
 lookups.water_shield                = 408510;
 lookups.fingers_of_frost            = 400669;
+lookups.living_seed                 = 414677;
+lookups.fanaticism                  = 429142;
+lookups.divine_aegis                = 431622;
+lookups.overload                    = 408438;
+lookups.ancestral_awakening         = 425858;
 
 -- NOTE:
 --  THREAT: Client data does not contain special threat information
@@ -322,6 +327,8 @@ elseif sc.class == sc.classes.warrior then
         { spids.heroic_strike, {20, 39, 59, 78, 98, 118, 137, 145, 175} },
         { spids.hamstring, {61, 101, 141} },
     });
+elseif sc.class == sc.classes.hunter then
+
 end
 
 -- Remove eval from wands while broken

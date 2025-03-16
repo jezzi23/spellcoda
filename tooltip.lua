@@ -754,12 +754,19 @@ info.min_noncrit_if_hit1
         local crit_mod = stats.crit_mod;
         local special_crit_mod_str = "";
 
-        if info.min_crit_if_hit1 ~= 0 and stats.special_crit_mod_tracked ~= 0 and
-            (bit.band(stats["extra_effect_flags" .. stats.special_crit_mod_tracked], effect_flags.is_periodic) == 0 or
-            bit.band(eval_flags, evaluation_flags.isolate_direct) == 0) then
+        if info.min_crit_if_hit1 ~= 0 and stats.num_special_crit_mod_tracked ~= 0 then
+            local special_crit_mod = 0;
+            for i = 1, stats.num_special_crit_mod_tracked do
+                local effect_index = stats["special_crit_mod_tracked"..i];
+                if (bit.band(stats["extra_effect_flags" .. effect_index], effect_flags.base_on_periodic_effect) == 0 and
+                    (bit.band(stats["extra_effect_flags" .. effect_index], effect_flags.is_periodic) == 0 or
+                    bit.band(eval_flags, evaluation_flags.isolate_direct) == 0)) then
 
-            special_crit_mod_str = " + "..stats["extra_effect_desc" .. stats.special_crit_mod_tracked];
-            crit_mod = stats.crit_mod * (1.0 + stats["extra_effect_val" .. stats.special_crit_mod_tracked]);
+                    special_crit_mod_str = " + "..stats["extra_effect_desc" .. effect_index];
+                    special_crit_mod = special_crit_mod + stats["extra_effect_val" .. effect_index];
+                end
+            end
+            crit_mod = stats.crit_mod * (1.0 + special_crit_mod);
         end
 
         local crit_chance_info_str = string.format(" (%.2f%%||%.2fx)", info.crit1*100, crit_mod);
@@ -1051,8 +1058,21 @@ info.min_noncrit_if_hit1
         if info.num_periodic_effects > 0 and config.settings.tooltip_display_crit then
             if stats.crit_ot ~= 0.0 and spell.periodic then
                 local crit_mod_ot = stats.crit_mod_ot or stats.crit_mod;
-                if stats.special_crit_mod_tracked ~= 0 then
-                    crit_mod_ot = crit_mod_ot * (1.0 + stats["extra_effect_val" .. stats.special_crit_mod_tracked]);
+                if stats.num_special_crit_mod_tracked ~= 0 then
+
+                    local special_crit_mod = 0;
+                    for i = 1, stats.num_special_crit_mod_tracked do
+                        local effect_index = stats["special_crit_mod_tracked"..i];
+
+                        if (bit.band(stats["extra_effect_flags" .. effect_index], effect_flags.base_on_periodic_effect) ~= 0 and
+                            bit.band(stats["extra_effect_flags" .. effect_index], effect_flags.is_periodic) ~= 0) then
+
+                            special_crit_mod = special_crit_mod + stats["extra_effect_val" .. effect_index];
+                        end
+
+                    end
+
+                    crit_mod_ot = crit_mod_ot * (1 + special_crit_mod);
                 end
                 local crit_chance_info_str =  string.format(" (%.2f%%||%.2fx)", stats.crit_ot * 100, crit_mod_ot);
 
@@ -1828,9 +1848,13 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     tt.new_item.id = nil;
     if tt.new_item.link then
 
+        local link_fields = tt.new_item.link:match("item:(.+)");
+        if not link_fields then
+            return;
+        end
         local item_id, _, _, _, _, _, suffix_id =
             --strsplit(":", tt.new_item.link:match("|Hitem:(.+)|h"));
-            strsplit(":", tt.new_item.link:match("item:(.+)")); -- works for link from SetHyperLink link too
+            strsplit(":", link_fields); -- works for link from SetHyperLink link too
         tt.new_item.id = tonumber(item_id);
         tt.new_item.suffix_id = tonumber(suffix_id);
     else

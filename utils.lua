@@ -206,6 +206,39 @@ local function add_threat_mod_all_ranks(list)
     end
 end
 
+
+local lname_cache = {};
+local function spell_lname(spell_id)
+    local lname = lname_cache[spell_id];
+    if not lname then
+        local name = GetSpellInfo(spell_id);
+        lname_cache[spell_id] = name;
+        return name;
+    else
+        return lname;
+    end
+
+end
+
+local dummy_min_idx = 1;
+local dummy_max_idx = 2;
+local dummy_iid_idx = 3;
+local function dummy_value(dummy_id, iid)
+    local dummy = sc.dummies[dummy_id];
+    if dummy then
+        for _, v in pairs(dummy) do
+            if v[dummy_iid_idx] == iid then
+                return v[dummy_min_idx];
+            end
+        end
+    end
+    if sc.__sw__debug__ then
+        print("Missing dummy value for spell id:", dummy_id, " iid:", iid);
+
+    end
+    return 0;
+end
+
 utils.deep_table_copy               = deep_table_copy;
 utils.spell_cost                    = spell_cost;
 utils.spell_cast_time               = spell_cast_time;
@@ -220,6 +253,8 @@ utils.effect_colors                 = effect_colors;
 utils.spell_coef_lvl_adjusted       = spell_coef_lvl_adjusted;
 utils.add_threat_flat_by_rank       = add_threat_flat_by_rank;
 utils.add_threat_mod_all_ranks      = add_threat_mod_all_ranks;
+utils.spell_lname                   = spell_lname;
+utils.dummy_value                   = dummy_value;
 
 
 sc.utils = utils;

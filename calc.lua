@@ -13,6 +13,8 @@ local lookups                                       = sc.lookups;
 local auto_attack_spell_id                          = sc.auto_attack_spell_id;
 
 local best_rank_by_lvl                              = sc.utils.best_rank_by_lvl;
+local spell_lname                                   = sc.utils.spell_lname;
+local dummy_value                                   = sc.utils.dummy_value;
 
 local config                                        = sc.config;
 
@@ -157,6 +159,7 @@ local effect_flags = {
     no_crit                 = bit.lshift(1, 7),
     can_be_blocked          = bit.lshift(1, 8),
     always_hits             = bit.lshift(1, 9),
+    shares_periodic_type    = bit.lshift(1, 10),
 };
 
 -- flexible way to add custom effects that behave according to flags
@@ -174,7 +177,8 @@ local function add_extra_effect(stats, flags,  utilization, description, value, 
         stats["extra_effect_tick_time" .. i] = freq;
     end
     if bit.band(flags, effect_flags.should_track_crit_mod) ~= 0 then
-        stats.special_crit_mod_tracked = i;
+        stats.num_special_crit_mod_tracked = stats.num_special_crit_mod_tracked + 1;
+        stats["special_crit_mod_tracked"..stats.num_special_crit_mod_tracked] = i;
     end
 end
 
@@ -1062,7 +1066,7 @@ local class_stats_spell = (function()
                                          bit.bor(effect_flags.is_periodic, effect_flags.use_flat, effect_flags.no_crit),
                                          1.0,
                                          string.format("%s|cFFA9A9A9 %d|r:",
-                                                       GetSpellInfo(renew5),
+                                                       spell_lname(renew5),
                                                        spells[renew5].rank),
                                          secondary_info.ot_min_noncrit_if_hit1,
                                          secondary_info.ot_ticks1,
@@ -1071,15 +1075,24 @@ local class_stats_spell = (function()
                 end
                 if num_set_pieces(loadout, 1812) >= 6 then
                     if bid == spids.circle_of_healing then
-                        add_extra_effect(stats, effect_flags.is_periodic, 1.0, "6P Set Bonus", 0.25, 5, 3 );
+                        add_extra_effect(stats,
+                            effect_flags.is_periodic,
+                            1.0,
+                            spell_lname(467586),
+                            0.01*dummy_value(467586, 0),
+                            5,
+                            3
+                        );
                     elseif bid == spids.penance then
-                        add_extra_effect(stats, effect_flags.is_periodic, 1.0, "6P Set Bonus", 0.25, 5, 3 );
+                        local lname = spell_lname(467586);
+                        local val = 0.01*dummy_value(467586, 0);
+                        add_extra_effect(stats, effect_flags.is_periodic, 1.0, lname, val, 5, 3 );
                         add_extra_effect(
                             stats,
                             bit.bor(effect_flags.base_on_periodic_effect, effect_flags.is_periodic),
                             1.0,
-                            "6P Set Bonus",
-                            0.25,
+                            lname,
+                            val,
                             5,
                             3
                         );
@@ -1105,11 +1118,13 @@ local class_stats_spell = (function()
                     stats.resource_refund = stats.resource_refund + 0.25 * 0.35 * stats.original_base_cost;
                 end
                 if loadout.enchants[lookups.rune_ancestral_awakening] then
-                    add_extra_effect(stats,
-                                     bit.bor(effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod),
-                                     1.0,
-                                     "Awakening",
-                                     0.3);
+                    add_extra_effect(
+                        stats,
+                        bit.bor(effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod),
+                        1.0,
+                        spell_lname(lookups.ancestral_awakening),
+                        0.01*dummy_value(lookups.ancestral_awakening, 0)
+                    );
                 end
             end
         end
@@ -1259,7 +1274,7 @@ local function stats_for_spell(stats, spell, loadout, effects, eval_flags)
     -- only on healing part which is not on base id
     local benefit_id = spell.beneficiary_id or bid;
 
-    stats.special_crit_mod_tracked = 0;
+    stats.num_special_crit_mod_tracked = 0;
     stats.num_extra_effects = 0;
     stats.num_periodic_effects = 0;
     stats.hit_inflation = 1.0; -- inflate hit value visually while not contributing to expectation
@@ -1407,9 +1422,16 @@ local function resolve_extra_spell_effects(info, stats)
                 info["ot_min_crit_if_hit" .. i] = flat;
                 info["ot_max_crit_if_hit" .. i] = flat;
             end
-            info["ot_ticks" .. i] = stats["extra_effect_ticks" .. k];
-            info["ot_tick_time" .. i] = stats["extra_effect_tick_time" .. k];
-            info["ot_dur" .. i] = stats["extra_effect_ticks" .. k] * stats["extra_effect_tick_time" .. k];
+            if bit.band(flags, effect_flags.shares_periodic_type) ~= 0 then
+                info["ot_ticks" .. i] = info.ot_ticks1;
+                info["ot_tick_time" .. i] = info.ot_tick_time1;
+                info["ot_dur" .. i] = info.ot_dur1;
+            else
+                info["ot_ticks" .. i] = stats["extra_effect_ticks" .. k];
+                info["ot_tick_time" .. i] = stats["extra_effect_tick_time" .. k];
+                info["ot_dur" .. i] = stats["extra_effect_ticks" .. k] * stats["extra_effect_tick_time" .. k];
+            end
+
             info["ot_description" .. i] = stats["extra_effect_desc" .. k];
             info["ot_crit" .. i] = math.min(stats.crit, crit_cap);
             info["ot_utilization" .. i] = stats["extra_effect_util" .. k];

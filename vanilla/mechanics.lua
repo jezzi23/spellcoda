@@ -11,6 +11,9 @@ local spell_flags                                   = sc.spell_flags;
 local comp_flags                                    = sc.comp_flags;
 local lookups                                       = sc.lookups;
 
+local spell_lname                                   = sc.utils.spell_lname;
+local dummy_value                                   = sc.utils.dummy_value;
+
 local num_set_pieces                                = sc.equipment.num_set_pieces;
 
 local effect_flags                                  = sc.calc.effect_flags;
@@ -34,14 +37,20 @@ local class_stats_spell = (function()
                         stats,
                         bit.bor(effect_flags.is_periodic, effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod),
                         1.0,
-                        "Fanaticism",
-                        0.6,
+                        spell_lname(lookups.fanaticism),
+                        0.01*dummy_value(lookups.fanaticism, 1),
                         4,
                         3
                         );
                 end
                 if bid == spids.flash_of_light and get_buff(loadout, loadout.friendly_towards, lookups.sacred_shield, false) then
-                    add_extra_effect(stats, effect_flags.is_periodic, 1.0, "Extra", 1.0, 12, 1);
+                    add_extra_effect(stats,
+                        effect_flags.is_periodic,
+                        1.0,
+                        spell_lname(lookups.sacred_shield),
+                        0.01*dummy_value(lookups.sacred_shield, 2),
+                        12,
+                        1);
                 end
             end
         end
@@ -55,13 +64,23 @@ local class_stats_spell = (function()
         return function(anycomp, bid, stats, spell, loadout, effects)
             if bit.band(spell_flags.heal, spell.flags) ~= 0 then
                 if loadout.enchants[lookups.rune_divine_aegis] then
-                    -- TODO:
-                    if spell.direct or bid == spids.penance then
+                    if spell.direct then
                         local aegis_flags = bit.bor(effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod);
+                        add_extra_effect(stats,
+                            aegis_flags,
+                            1.0,
+                            spell_lname(lookups.divine_aegis),
+                            0.01*dummy_value(lookups.divine_aegis, 0)
+                        );
                         if bid == spids.penance then
-                            aegis_flags = bit.bor(aegis_flags, effect_flags.base_on_periodic_effect);
+                            aegis_flags = bit.bor(aegis_flags, effect_flags.base_on_periodic_effect, effect_flags.is_periodic, effect_flags.shares_periodic_type);
+                            add_extra_effect(stats,
+                                aegis_flags,
+                                1.0,
+                                spell_lname(lookups.divine_aegis),
+                                0.01*dummy_value(lookups.divine_aegis, 0)
+                            );
                         end
-                        add_extra_effect(stats, aegis_flags, 1.0, "Divine Aegis", 0.3);
                     end
                 end
             end
@@ -78,7 +97,15 @@ local class_stats_spell = (function()
                     bid == spids.healing_wave or
                     bid == spids.lightning_bolt or
                     bid == spids.lava_burst) then
-                sc.calc.add_extra_effect(stats, 0, 0.6, "Overload", 0.5);
+
+                local proc = 0.01*dummy_value(lookups.overload, 1);
+                sc.calc.add_extra_effect(
+                    stats,
+                    0,
+                    proc,
+                    spell_lname(lookups.overload),
+                    dummy_value(lookups.overload, 0)/proc
+                );
             end
 
         end
@@ -91,7 +118,13 @@ local class_stats_spell = (function()
                 end
 
                 if num_set_pieces(loadout, 1807) >= 6 and bid == spids.fireball then
-                    add_extra_effect(stats, effect_flags.is_periodic, 1.0, "6P Set Bonus", 1.0, 4, 2);
+                    add_extra_effect(stats,
+                        effect_flags.is_periodic,
+                        1.0,
+                        spell_lname(467399),
+                        0.01*dummy_value(467399, 0),
+                        4,
+                        2);
                 end
 
                 if num_set_pieces(loadout, 1808) >= 2 and bid == spids.arcane_missiles then
@@ -124,24 +157,45 @@ local class_stats_spell = (function()
         end
     elseif class == classes.druid then
         return function(anycomp, bid, stats, spell, loadout, effects)
-            if loadout.enchants[lookups.rune_living_seed] then
-                if (bit.band(spell_flags.heal, spell.flags) ~= 0 and spell.direct) or
-                    bid == spids.swiftmend then
+            if bit.band(spell.flags, spell_flags.heal) ~= 0 then
+                if loadout.enchants[lookups.rune_living_seed] then
+                    if spell.direct or bid == spids.swiftmend then
+                        add_extra_effect(stats,
+                                         bit.bor(effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod),
+                                         1.0, spell_lname(lookups.living_seed), 0.01 * dummy_value(lookups.living_seed, 0));
+                    end
+                end
+                if bid == spids.nourish and
+                    (get_buff_by_lname(loadout, loadout.friendly_towards, lookups.rejuvenation_lname, false, true) or
+                    get_buff_by_lname(loadout, loadout.friendly_towards, lookups.regrowth_lname, false, true) or
+                    get_buff_by_lname(loadout, loadout.friendly_towards, lookups.lifebloom_lname, false, true) or
+                    get_buff_by_lname(loadout, loadout.friendly_towards, lookups.wild_growth_lname, false, true)) then
 
-                    add_extra_effect(stats,
-                                     bit.bor(effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod),
-                                     1.0, "Living Seed", 0.5);
+                    stats.target_vuln_mod_mul = stats.target_vuln_mod_mul * 1.2;
+                end
+                if num_set_pieces(loadout, 1835) >= 4 and
+                    (bid == spids.healing_touch or bid == spids.nourish and bid == spids.regrowth or bid == spids.regrowth_2) then
+                        add_extra_effect(
+                            stats,
+                            bit.bor(effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod),
+                            1.0,
+                            spell_lname(1213160),
+                            0.01*dummy_value(1213160, 0));
+                end
+            else
+                if num_set_pieces(loadout, 1838) >= 4 and
+                    (bid == spids.shred or bid == spids.ferocious_bite or bid == spids.mangle or bid == spids.mangle_2 or bid == spids.mangle_3) then
+                        add_extra_effect(
+                            stats,
+                            bit.bor(effect_flags.is_periodic, effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod),
+                            1.0,
+                            spell_lname(1213174),
+                            0.01*dummy_value(1213174, 0),
+                            4,
+                            1
+                            );
                 end
             end
-            if bid == spids.nourish and
-                (get_buff_by_lname(loadout, loadout.friendly_towards, lookups.rejuvenation_lname, false, true) or
-                get_buff_by_lname(loadout, loadout.friendly_towards, lookups.regrowth_lname, false, true) or
-                get_buff_by_lname(loadout, loadout.friendly_towards, lookups.lifebloom_lname, false, true) or
-                get_buff_by_lname(loadout, loadout.friendly_towards, lookups.wild_growth_lname, false, true)) then
-
-                stats.target_vuln_mod_mul = stats.target_vuln_mod_mul * 1.2;
-            end
-
         end
     end
 end)();
