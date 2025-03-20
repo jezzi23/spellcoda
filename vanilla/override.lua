@@ -332,7 +332,7 @@ elseif sc.class == sc.classes.hunter then
 end
 
 -- Remove eval from wands while broken
-if spells[5019] then
-    spells[5019].flags = bit.band(spells[5019].flags, bit.bnot(spell_flags.eval));
-end
+--if spells[5019] then
+--    spells[5019].flags = bit.band(spells[5019].flags, bit.bnot(spell_flags.eval));
+--end
 

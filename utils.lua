@@ -143,6 +143,21 @@ local function format_number(val, max_accuracy_digits)
         return "∞";
     end
 end
+
+local function format_dur(secs)
+    if not secs or secs < 0 then
+        return "";
+    elseif secs > 10000000 then
+        return "∞";
+    end
+    secs = math.floor(secs);
+    if secs > 60 then
+        return string.format("%dm%ds", math.floor(secs/60), secs%60);
+    else
+        return string.format("%ds", secs);
+    end
+end
+
 local function format_number_signed_colored(val, max_accuracy_digits)
 
     local normal_format = format_number(val, max_accuracy_digits);
@@ -245,6 +260,7 @@ utils.spell_cast_time               = spell_cast_time;
 utils.format_number                 = format_number;
 utils.color_by_lvl_diff             = color_by_lvl_diff;
 utils.format_number_signed_colored  = format_number_signed_colored;
+utils.format_dur                    = format_dur;
 utils.best_rank_by_lvl              = best_rank_by_lvl;
 utils.highest_learned_rank          = highest_learned_rank
 utils.next_rank                     = next_rank;

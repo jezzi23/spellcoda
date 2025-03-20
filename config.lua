@@ -78,6 +78,12 @@ local default_settings     = {
     overlay_icon_top_clearance                      = false,
     overlay_icon_bottom_clearance                   = false,
 
+    overlay_disable_currently_casting_info          = true,
+    overlay_currently_casting_info_scale            = 1.0,
+    overlay_currently_casting_info_region           = "CENTER",
+    overlay_currently_casting_info_x                = 350,
+    overlay_currently_casting_info_y                = 0,
+
     overlay_update_freq                             = 3,
     overlay_font_size                               = 8,
     overlay_offset                                  = 0.0,
@@ -290,6 +296,13 @@ local function activate_settings()
             end
         end
     end
+
+    sc.overlay.currently_casting_frame_parent:ClearAllPoints();
+    sc.overlay.currently_casting_frame_parent:SetPoint(
+        config.settings.overlay_currently_casting_info_region,
+        config.settings.overlay_currently_casting_info_x,
+        config.settings.overlay_currently_casting_info_y
+    );
 end
 
 local function set_active_loadout(idx)

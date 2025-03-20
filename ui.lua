@@ -2020,8 +2020,69 @@ local function create_sw_ui_overlay_frame()
             color = v.color,
             optional_evaluation = v.optional_evaluation,
         }
-
     end
+
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 15;
+    local div = __sc_frame.overlay_frame:CreateTexture(nil, "ARTWORK")
+    div:SetColorTexture(0.5, 0.5, 0.5, 0.6);
+    div:SetHeight(1);
+    div:SetPoint("TOPLEFT", __sc_frame.overlay_frame, "TOPLEFT", 0, __sc_frame.overlay_frame.y_offset);
+    div:SetPoint("TOPRIGHT", __sc_frame.overlay_frame, "TOPRIGHT", 0, __sc_frame.overlay_frame.y_offset);
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 5;
+
+    f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(GameFontNormal);
+    f_txt:SetPoint("TOPLEFT", 0, __sc_frame.overlay_frame.y_offset);
+    f_txt:SetText("Currently casting spell info frame");
+    f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
+
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 15;
+
+
+    multi_row_checkbutton(
+        {
+            {
+                id = "overlay_disable_currently_casting_info",
+                txt = "Disable currently casting spell frame",
+                func = function(self)
+                    if self:GetChecked() then
+                        sc.overlay.currently_casting_frame_parent.border.disabled_txt:Show();
+                    else
+                        sc.overlay.currently_casting_frame_parent.border.disabled_txt:Hide();
+                    end
+                end
+            },
+        },
+        __sc_frame.overlay_frame, 1, icon_checkbox_func);
+
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 10;
+    f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_currently_casting_info_scale", __sc_frame.overlay_frame, "UISliderTemplate");
+    f._type = slider_frame_type;
+    f:SetOrientation('HORIZONTAL');
+    f:SetPoint("TOPLEFT", 250, __sc_frame.overlay_frame.y_offset+4);
+    f:SetMinMaxValues(0.1, 3.0);
+    f:SetWidth(175)
+    f:SetHeight(20)
+    f:SetValueStep(0.05);
+
+    f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
+    f_txt:SetFontObject(GameFontNormal)
+    f_txt:SetTextColor(1.0, 1.0, 1.0);
+    f_txt:SetPoint("TOPLEFT", 15, __sc_frame.overlay_frame.y_offset)
+    f_txt:SetText("Scale")
+
+    f.val_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
+    f.val_txt:SetFontObject(font)
+    f.val_txt:SetPoint("TOPLEFT", 430, __sc_frame.overlay_frame.y_offset)
+    f.val_txt:SetText(string.format("%.1f", 0));
+
+    f:SetScript("OnValueChanged", function(self, val)
+        config.settings.overlay_currently_casting_info_scale = val;
+        self.val_txt:SetText(string.format("%.2f", val))
+        sc.overlay.currently_casting_f1.icon_frame:SetScale(val);
+        sc.overlay.currently_casting_f2.icon_frame:SetScale(val);
+        sc.overlay.currently_casting_frame_parent.border:SetScale(val);
+    end);
 end
 
 local function create_sw_ui_calculator_frame()
