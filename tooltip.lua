@@ -1737,6 +1737,16 @@ local inv_type_to_slot_ids = {
     INVTYPE_RELIC = { slots.RangedSlot },
 };
 
+local inv_type_to_spid_force_eval = {
+    INVTYPE_AMMO = {"shoot"},
+    INVTYPE_WEAPON = { "attack"},
+    INVTYPE_2HWEAPON = { "attack" },
+    INVTYPE_WEAPONMAINHAND = { "attack" },
+    INVTYPE_WEAPONOFFHAND = { "attack" },
+    INVTYPE_RANGED = { "shoot", "auto_shot", "shoot_bow" },
+    INVTYPE_RANGEDRIGHT = { "shoot", "auto_shot", "shoot_bow" },
+};
+
 local function make_item_tooltip_line_frames(tooltip)
     local role_tex = tooltip:CreateTexture(nil, "ARTWORK");
     role_tex:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-ROLES");
@@ -1883,6 +1893,28 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
 
             local i = 0;
             slot_cmp.len = 0;
+
+            if inv_type_to_spid_force_eval[tt.new_item.inv_type] then
+                for _, spid_id in pairs(inv_type_to_spid_force_eval[tt.new_item.inv_type]) do
+                    local k = spids[spid_id];
+                    if k and
+                        not config.settings.spell_calc_list[k] and
+                         spells[k] and bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
+                            i = i + 1;
+                            slot_cmp.diff_list[i] = slot_cmp.diff_list[i] or { frames = make_item_tooltip_line_frames(tooltip) };
+
+                            spell_diff(slot_cmp.diff_list[i],
+                                fight_type,
+                                spells[k],
+                                k,
+                                loadout,
+                                effects_finalized,
+                                effects_diffed,
+                                eval_flags);
+                        slot_cmp.len = i;
+                    end
+                end
+            end
 
             for k, _ in pairs(config.settings.spell_calc_list) do
                 if config.settings.calc_list_use_highest_rank and spells[k] then

@@ -329,10 +329,14 @@ elseif sc.class == sc.classes.warrior then
     });
 elseif sc.class == sc.classes.hunter then
 
+    if spids.shoot_bow then
+        spells[spids.shoot_bow].flags = bit.band(spells[spids.shoot_bow].flags, bit.bnot(spell_flags.eval));
+    end
+    if spids.shoot_gun then
+        spells[spids.shoot_bow].flags = bit.band(spells[spids.shoot_bow].flags, bit.bnot(spell_flags.eval));
+    end
+    if spids.shoot_crossbow then
+        spells[spids.shoot_bow].flags = bit.band(spells[spids.shoot_bow].flags, bit.bnot(spell_flags.eval));
+    end
 end
-
--- Remove eval from wands while broken
---if spells[5019] then
---    spells[5019].flags = bit.band(spells[5019].flags, bit.bnot(spell_flags.eval));
---end
 
