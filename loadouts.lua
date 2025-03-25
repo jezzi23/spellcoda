@@ -194,6 +194,7 @@ local effects_additive = {
         "crit_mod",
         "sp_dmg_flat",
         "crit",
+        "crit_forced",
         "target_res",
         "target_res_flat",
         "threat",

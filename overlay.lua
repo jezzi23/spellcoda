@@ -2,8 +2,9 @@ local _, sc = ...;
 
 local spell_cost                                    = sc.utils.spell_cost;
 local spell_cast_time                               = sc.utils.spell_cast_time;
-local effect_colors                                 = sc.utils.effect_colors;
+local effect_color                                  = sc.utils.effect_color;
 local format_number                                 = sc.utils.format_number;
+local format_dur                                    = sc.utils.format_dur;
 
 local spells                                        = sc.spells;
 local spell_flags                                   = sc.spell_flags;
@@ -46,10 +47,6 @@ sc.ext.unregister_spell = function(spell_id)
     if spells[spell_id] and externally_registered_spells[spell_id] then
         externally_registered_spells[spell_id] = math.max(0, externally_registered_spells[spell_id] - 1);
     end
-end
-
-sc.ext.currently_casting_spell_id = function()
-    return sc.core.currently_casting_spell_id;
 end
 
 local function check_old_rank(frame_info, spell_id, clvl)
@@ -205,9 +202,6 @@ local function try_register_frame(action_id, frame_name)
         local spell_id = spell_id_of_action(action_id);
         if spell_id ~= 0 then
             active_overlays[action_id] = spell_id;
-            if spell_id == 5019 then
-                sc.core.action_id_of_wand = action_id;
-            end
         else
             active_overlays[action_id] = nil;
         end
@@ -332,9 +326,6 @@ local function reassign_overlay_icon_spell(action_id, spell_id)
             active_overlays[action_id] = spell_id;
         end
         action_id_frames[action_id].spell_id = spell_id;
-        if spell_id == 5019 then
-            sc.core.action_id_of_wand = action_id;
-        end
     end
 end
 
@@ -591,7 +582,7 @@ local overlay_label_handler = {
         frame_overlay:SetText(format_number(info.effect_until_oom, 0));
     end,
     overlay_display_time_until_oom = function(frame_overlay, info)
-        frame_overlay:SetText(format_number(info.time_until_oom, 2));
+        frame_overlay:SetText(format_dur(info.time_until_oom));
     end,
 };
 
@@ -617,14 +608,14 @@ local function update_spell_icon_frame(frame_info, spell, spell_id, loadout, eff
             idx = 1;
         end
         frame_info.overlay_frames[idx]:SetText(string.format("%.0f", math.ceil(spell_effect.total_restored)));
-        frame_info.overlay_frames[idx]:SetTextColor(effect_colors.avg_cost[1], effect_colors.avg_cost[2], effect_colors.avg_cost[3]);
+        frame_info.overlay_frames[idx]:SetTextColor(effect_color("avg_cost"));
         frame_info.overlay_frames[idx]:Show();
 
     elseif __sc_frame.overlay_frame.num_overlay_components_toggled > 0 then 
         local spell_effect, stats;
 
         if bit.band(spell.flags, spell_flags.eval) ~= 0 then
-            spell_effect, stats = calc_spell_eval(spell, loadout, effects, eval_flags);
+            spell_effect, stats = calc_spell_eval(spell, loadout, effects, eval_flags, spell_id);
             cast_until_oom(spell_effect, spell, stats, loadout, effects);
 
             for i = 1, 3 do
@@ -748,6 +739,426 @@ local function update_overlay_frame(frame, loadout, effects, id, eval_flags)
     end
 end
 
+local currently_casting_frame_parent = CreateFrame("Frame", nil, UIParent);
+currently_casting_frame_parent:RegisterForDrag("LeftButton");
+currently_casting_frame_parent:SetSize(250, 100);
+currently_casting_frame_parent:SetScript("OnDragStart", currently_casting_frame_parent.StartMoving);
+currently_casting_frame_parent:SetScript("OnDragStop", function(self)
+    currently_casting_frame_parent:StopMovingOrSizing();
+    local region, _, _, x, y = self:GetPoint()
+    config.settings.overlay_currently_casting_info_region = region;
+    config.settings.overlay_currently_casting_info_x = x;
+    config.settings.overlay_currently_casting_info_y = y;
+end);
+currently_casting_frame_parent.config_mode = false;
+currently_casting_frame_parent:Show();
+
+local border = CreateFrame("Frame", nil, currently_casting_frame_parent, "BackdropTemplate");
+border:SetPoint("CENTER", 0, 0);
+border:SetSize(250, 100);
+border:SetBackdrop({edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", edgeSize = 16});
+border:SetBackdropBorderColor(1, 1, 1, 1);
+border:Hide();
+
+border.flash = border:CreateAnimationGroup();
+border.flash.anim = border.flash:CreateAnimation("Alpha");
+border.flash.anim:SetFromAlpha(1);
+border.flash.anim:SetToAlpha(0);
+border.flash.anim:SetDuration(0.5);
+border.flash.anim:SetSmoothing("IN_OUT");
+
+border.flash:SetScript("OnFinished", function(self)
+    self:Play();
+end);
+
+border.disabled_txt = border:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
+border.disabled_txt:SetPoint("TOP", 0, -10);
+border.disabled_txt:SetText("DISABLED: Currently casting spell info");
+
+currently_casting_frame_parent.border = border;
+
+local function create_currently_casting_frame()
+
+    local frames = {};
+
+    frames.spell_id = 0;
+    frames.txts = {};  -- Table to hold all fontstrings
+
+    frames.icon_frame = CreateFrame("Frame", nil, currently_casting_frame_parent);
+    frames.icon_frame:SetPoint("CENTER", 0, 0);
+    -- Create animation group for the transition
+    frames.icon_frame.anim_new_spell = frames.icon_frame:CreateAnimationGroup();
+    frames.icon_frame.slide_offset = 100;
+    frames.icon_frame.slide_dur = 0.3;
+
+    local slide_in = frames.icon_frame.anim_new_spell:CreateAnimation("Translation");
+    slide_in:SetDuration(frames.icon_frame.slide_dur);
+    slide_in:SetOffset(0, -frames.icon_frame.slide_offset);
+    slide_in:SetSmoothing("OUT");
+
+    local fade_in = frames.icon_frame.anim_new_spell:CreateAnimation("Alpha");
+    fade_in:SetDuration(frames.icon_frame.slide_dur);
+    fade_in:SetFromAlpha(0);
+    fade_in:SetToAlpha(1);
+    fade_in:SetSmoothing("OUT");
+    frames.icon_frame.anim_new_spell:SetScript("OnFinished", function()
+        frames.icon_frame.animating = false;
+        frames.icon_frame:SetAlpha(1);
+        frames.icon_frame:SetPoint("CENTER", 0, 0);
+    end);
+
+    frames.icon_frame.anim_old_spell = frames.icon_frame:CreateAnimationGroup();
+
+    local slide_out = frames.icon_frame.anim_old_spell:CreateAnimation("Translation");
+    slide_out:SetDuration(frames.icon_frame.slide_dur);
+    slide_out:SetOffset(0, -frames.icon_frame.slide_offset);
+    slide_out:SetSmoothing("OUT");
+
+    local fade_out = frames.icon_frame.anim_old_spell:CreateAnimation("Alpha");
+    fade_out:SetDuration(frames.icon_frame.slide_dur);
+    fade_out:SetFromAlpha(1);
+    fade_out:SetToAlpha(0);
+    fade_out:SetSmoothing("OUT");
+    frames.icon_frame.anim_old_spell:SetScript("OnFinished", function()
+        frames.icon_frame.animating = false;
+        frames.icon_frame:SetAlpha(0);
+        frames.icon_frame:ClearAllPoints();
+        frames.icon_frame:SetPoint("CENTER", 0, 0);
+    end);
+
+    frames.icon_frame:Hide();
+    frames.icon_frame:SetAlpha(0);
+
+    frames.icon_frame:SetSize(32, 32);
+
+    frames.icon_texture = frames.icon_frame:CreateTexture(nil, "ARTWORK");
+    frames.icon_texture:SetAllPoints(frames.icon_frame);
+    frames.icon_texture:SetTexture("Interface\\Icons\\Spell_Nature_Thorns");
+
+    local font = "Fonts\\FRIZQT__.TTF";
+    --font = "Interface\\AddOns\\SpellCoda\\font\\Oswald-Bold.ttf";
+
+    frames.txts.right_top_text = frames.icon_frame:CreateFontString(nil, "OVERLAY");
+    frames.txts.right_top_text.size = 13;
+    frames.txts.right_top_text:SetPoint("BOTTOMLEFT", frames.icon_frame, "TOPRIGHT", 0, -15);
+    frames.txts.right_top_text:SetTextColor(effect_color("normal"));
+
+    frames.txts.right_bottom_text = frames.icon_frame:CreateFontString(nil, "OVERLAY");
+    frames.txts.right_bottom_text.size = 13;
+    frames.txts.right_bottom_text:SetPoint("TOPLEFT", frames.icon_frame, "BOTTOMRIGHT", 0, 15);
+    frames.txts.right_bottom_text:SetTextColor(effect_color("crit"));
+
+    frames.txts.left_top_text = frames.icon_frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
+    frames.txts.left_top_text.size = 13;
+    frames.txts.left_top_text:SetPoint("BOTTOMRIGHT", frames.icon_frame, "TOPLEFT", 0, -15);
+    frames.txts.left_top_text:SetTextColor(effect_color("normal"));
+
+    frames.txts.left_bottom_text = frames.icon_frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
+    frames.txts.left_bottom_text.size = 13;
+    frames.txts.left_bottom_text:SetPoint("TOPRIGHT", frames.icon_frame, "BOTTOMLEFT", 0, 15);
+    frames.txts.left_bottom_text:SetTextColor(effect_color("crit"));
+
+    frames.txts.inside_top_text = frames.icon_frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
+    frames.txts.inside_top_text.size = 7;
+    frames.txts.inside_top_text:SetPoint("TOP", frames.icon_frame, "TOP", 0, 0);
+    frames.txts.inside_top_text:SetTextColor(effect_color("normal"));
+
+    frames.txts.inside_bottom_text = frames.icon_frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
+    frames.txts.inside_bottom_text.size = 7;
+    frames.txts.inside_bottom_text:SetPoint("BOTTOM", frames.icon_frame, "BOTTOM", 0, 0);
+    frames.txts.inside_bottom_text:SetTextColor(effect_color("crit"));
+
+    frames.txts.inside_left_text = frames.icon_frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
+    frames.txts.inside_left_text.size = 9;
+    frames.txts.inside_left_text:SetPoint("LEFT", frames.icon_frame, "LEFT", 2, 0);
+    frames.txts.inside_left_text:SetTextColor(effect_color("spell_rank"));
+
+    frames.txts.top_right_text = frames.icon_frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
+    frames.txts.top_right_text.size = 9;
+    frames.txts.top_right_text:SetPoint("LEFT", frames.icon_frame, "TOP", 2, 4);
+    frames.txts.top_right_text:SetTextColor(effect_color("effect_per_sec"));
+
+    frames.txts.top_text = frames.icon_frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
+    frames.txts.top_text.size = 9;
+    frames.txts.top_text:SetPoint("CENTER", frames.icon_frame, "TOP", 0, 4);
+    frames.txts.top_text:SetTextColor(effect_color("effect_per_sec"));
+
+    frames.txts.top_left_text = frames.icon_frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
+    frames.txts.top_left_text.size = 9;
+    frames.txts.top_left_text:SetPoint("RIGHT", frames.icon_frame, "TOP", -2, 4);
+    frames.txts.top_left_text:SetTextColor(effect_color("avoidance_info"));
+
+    frames.txts.bottom_right_text = frames.icon_frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
+    frames.txts.bottom_right_text.size = 9;
+    frames.txts.bottom_right_text:SetPoint("LEFT", frames.icon_frame, "BOTTOM", 2, -4);
+    frames.txts.bottom_right_text:SetTextColor(effect_color("effect_per_cost"));
+
+    frames.txts.bottom_left_text = frames.icon_frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
+    frames.txts.bottom_left_text.size = 9;
+    frames.txts.bottom_left_text:SetPoint("RIGHT", frames.icon_frame, "BOTTOM", -2, -4);
+    frames.txts.bottom_left_text:SetTextColor(effect_color("time_until_oom"));
+
+    for _, v in pairs(frames.txts) do
+        v:SetFont(font, v.size, "OUTLINE");
+    end
+
+    return frames;
+end
+
+local currently_casting_frames;
+
+local function currently_casting_config_mode_spell_id()
+
+    if sc.class == sc.classes.mage then
+        return sc.spids.fireball;
+    elseif sc.class == sc.classes.druid then
+        return sc.spids.regrowth;
+    elseif sc.class == sc.classes.priest then
+        return sc.spids.holy_fire;
+    elseif sc.class == sc.classes.shaman then
+        return sc.spids.flame_shock;
+    elseif sc.class == sc.classes.warlock then
+        return sc.spids.immolate;
+    elseif sc.class == sc.classes.rogue then
+        return sc.spids.sinister_strike;
+    elseif sc.class == sc.classes.paladin then
+        return sc.spids.holy_light;
+    elseif sc.class == sc.classes.warrior then
+        return sc.spids.overpower;
+    elseif sc.class == sc.classes.hunter then
+        return sc.spids.aimed_shot;
+    end
+    return sc.auto_attack_spell_id;
+end
+
+local overlay_effects_update_id = 0;
+local loadout, effects;
+
+local function update_currently_casting_frame(frame, spell, info, stats)
+
+    if config.settings.overlay_disable_currently_casting_info and
+        not currently_casting_frame_parent.config_mode then
+        return;
+    end
+    frame.icon_texture:SetTexture(GetSpellTexture(spell.base_id));
+    local texts = frame.txts;
+
+    if bit.band(spell.flags, spell_flags.eval) == 0 then
+        for _, v in pairs(texts) do
+            v:SetText("");
+        end
+
+        if spell.rank > 0 then
+            texts.inside_left_text:SetText(tostring(spell.rank));
+        else
+            texts.inside_left_text:SetText("");
+        end
+        return;
+    end
+
+    local crit_p;
+    local normal_hit_p;
+    local dr_p;
+    if spell.periodic then
+        crit_p = info.ot_crit1;
+        normal_hit_p = info.ot_hit_normal1;
+        if spell.periodic.school1 == sc.schools.physical then
+            dr_p = stats.armor_dr_ot;
+        else
+            dr_p = stats.target_avg_resi_ot;
+        end
+
+        if info.ot_min_noncrit_if_hit1 ~= info.ot_max_noncrit_if_hit1 then
+            texts.left_top_text:SetText(string.format("%.0f x %.0f-%.0f",
+                info.ot_ticks1, info.ot_min_noncrit_if_hit1/info.ot_ticks1, info.ot_max_noncrit_if_hit1/info.ot_ticks1)
+            );
+        else
+            texts.left_top_text:SetText(string.format("%.0f x %.1f",
+                info.ot_ticks1, info.ot_min_noncrit_if_hit1/info.ot_ticks1)
+            );
+        end
+        if crit_p ~= 0 then
+            if info.ot_min_crit_if_hit1 ~= info.ot_max_crit_if_hit1 then
+                texts.left_bottom_text:SetText(string.format("%.0f x %.0f-%.0f",
+                    info.ot_ticks1, info.ot_min_crit_if_hit1/info.ot_ticks1, info.ot_max_crit_if_hit1/info.ot_ticks1)
+                );
+            else
+                texts.left_bottom_text:SetText(string.format("%.0f x %.1f",
+                    info.ot_ticks1, info.ot_min_crit_if_hit1/info.ot_ticks1)
+                );
+            end
+        else
+            texts.left_bottom_text:SetText("");
+        end
+    else
+        texts.left_top_text:SetText("");
+        texts.left_bottom_text:SetText("");
+    end
+    if spell.direct then
+        crit_p = info.crit1;
+        normal_hit_p = info.hit_normal1;
+        if spell.direct.school1 == sc.schools.physical then
+            dr_p = stats.armor_dr_ot;
+        else
+            dr_p = stats.target_avg_resi_ot;
+        end
+
+        if info.min_noncrit_if_hit1 ~= info.max_noncrit_if_hit1 then
+            texts.right_top_text:SetText(string.format("%.0f-%.0f",
+                info.min_noncrit_if_hit1, info.max_noncrit_if_hit1)
+            );
+        else
+            texts.right_top_text:SetText(string.format("%.1f",
+                info.min_noncrit_if_hit1)
+            );
+        end
+        if crit_p ~= 0 then
+            if info.min_crit_if_hit1 ~= info.max_crit_if_hit1 then
+                texts.right_bottom_text:SetText(string.format("%.0f-%.0f",
+                    info.min_crit_if_hit1, info.max_crit_if_hit1)
+                );
+            else
+                texts.right_bottom_text:SetText(string.format("%.1f",
+                    info.min_crit_if_hit1)
+                );
+            end
+        else
+            texts.right_bottom_text:SetText("");
+        end
+    else
+        texts.right_top_text:SetText("");
+        texts.right_bottom_text:SetText("");
+    end
+
+    if normal_hit_p ~= 1 then
+        texts.inside_top_text:SetText(string.format("%.1f%%", 100*normal_hit_p));
+    else
+        texts.inside_top_text:SetText("");
+    end
+    if crit_p ~= 0 then
+        texts.inside_bottom_text:SetText(string.format("%.1f%%", 100*crit_p));
+    else
+        texts.inside_bottom_text:SetText("");
+    end
+
+    if dr_p ~= 0 then
+        texts.top_text:SetText("");
+        texts.top_left_text:SetText(string.format("%.1f%%", 100*dr_p));
+        texts.top_right_text:SetText(format_number(info.effect_per_sec, 1));
+    else
+        texts.top_left_text:SetText("");
+        texts.top_right_text:SetText("");
+        texts.top_text:SetText(format_number(info.effect_per_sec, 1));
+    end
+
+    texts.bottom_left_text:SetText(format_dur(info.time_until_oom));
+    texts.bottom_right_text:SetText(format_number(info.effect_per_cost, 2));
+end
+
+local function update_currently_casting()
+
+    for _, v in pairs(currently_casting_frames) do
+
+        local k = v.spell_id;
+        if spells[k] then
+
+            local spell = spells[k];
+            local info, stats;
+            if bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
+
+                if spells[k].healing_version and config.settings.general_prio_heal then
+                    spell = spells[k].healing_version;
+                end
+
+                info, stats = calc_spell_eval(spell, loadout, effects, eval_flags, k);
+                cast_until_oom(info, spell, stats, loadout, effects);
+            end
+            update_currently_casting_frame(v, spell, info, stats);
+            v.icon_frame:Show();
+        else
+            v.icon_frame:Hide();
+        end
+    end
+end
+
+local function currently_casting_new_spell(spell_id)
+    if config.settings.overlay_disable_currently_casting_info and
+        not currently_casting_frame_parent.config_mode then
+
+        return;
+    end
+    if config.settings.overlay_disable then
+        loadout, _, effects = update_loadout_and_effects();
+    end
+
+    -- update immediately the current casting frame
+
+    local new, old;
+    if overlay.currently_casting_active == overlay.currently_casting_f1 then
+        new = overlay.currently_casting_f2;
+        old = overlay.currently_casting_f1;
+    else
+        new = overlay.currently_casting_f1;
+        old = overlay.currently_casting_f2;
+    end
+
+    new.spell_id = spell_id;
+
+    update_currently_casting();
+
+    new.icon_frame:SetPoint("CENTER", 0, new.icon_frame.slide_offset);
+    old.icon_frame:SetPoint("CENTER", 0, 0);
+    new.icon_frame:SetAlpha(0);
+    old.icon_frame:SetAlpha(1);
+    new.icon_frame.animating = true;
+    old.icon_frame.animating = true;
+    new.icon_frame.anim_new_spell:Play();
+    old.icon_frame.anim_old_spell:Play();
+
+    if new.spell_id ~= 0  then
+        new.icon_frame:Show();
+    end
+    if old.spell_id ~= 0  then
+        old.icon_frame:Show();
+    end
+    overlay.currently_casting_active = new;
+end
+
+local function init_currently_casting_frames()
+    overlay.currently_casting_f1 = create_currently_casting_frame();
+    overlay.currently_casting_f2 = create_currently_casting_frame();
+
+    overlay.currently_casting_active = overlay.currently_casting_f1;
+
+    currently_casting_frames = {overlay.currently_casting_f1, overlay.currently_casting_f2};
+
+    __sc_frame.overlay_frame:SetScript("OnShow", function()
+        currently_casting_frame_parent.config_mode = true;
+        currently_casting_frame_parent.border:Show();
+        if config.settings.overlay_disable_currently_casting_info then
+            currently_casting_frame_parent.border.disabled_txt:Show();
+        else
+            currently_casting_frame_parent.border.disabled_txt:Hide();
+        end
+        currently_casting_frame_parent.border:Show();
+        currently_casting_frame_parent.border.flash:Play();
+        currently_casting_frame_parent:SetMovable(true);
+        currently_casting_frame_parent:EnableMouse(true);
+        currently_casting_new_spell(currently_casting_config_mode_spell_id());
+    end);
+    __sc_frame.overlay_frame:SetScript("OnHide", function()
+        currently_casting_new_spell(0);
+        currently_casting_frame_parent.border.flash:Stop();
+        currently_casting_frame_parent:SetMovable(false);
+        currently_casting_frame_parent:EnableMouse(false);
+        currently_casting_frame_parent.border.disabled_txt:Hide();
+        currently_casting_frame_parent.border:Hide();
+        overlay.currently_casting_f1.icon_frame:Hide();
+        overlay.currently_casting_f2.icon_frame:Hide();
+        currently_casting_frame_parent.config_mode = false;
+    end);
+end
+
 local special_action_bar_changed_id = 0;
 
 local function update_spell_icons(loadout, effects, eval_flags)
@@ -843,16 +1254,15 @@ local function overlay_eval_flags()
     return eval_flags;
 end
 
-local overlay_effects_update_id = 0;
-
 local function update_overlay()
 
-    local loadout, effects_before, effects, update_id;
+    --local loadout, effects_before, effects, update_id;
+    local effects_before, update_id;
     local updated = true;
     local eval_flags = overlay_eval_flags();
 
     local spells_frame_open = __sc_frame:IsShown() and __sc_frame.spells_frame:IsShown();
-    local calc_frame_open =  __sc_frame:IsShown() and __sc_frame.calculator_frame:IsShown();
+    local calc_frame_open = __sc_frame:IsShown() and __sc_frame.calculator_frame:IsShown();
 
     if not config.settings.overlay_disable then
         if not calc_frame_open then
@@ -868,9 +1278,17 @@ local function update_overlay()
 
     if updated then
         if calc_frame_open then
-            sc.ui.update_calc_list(loadout, effects_before, effects, eval_flags);
+            if config.settings.overlay_disable then
+                sc.ui.update_calc_list(nil, nil, nil, eval_flags);
+            else
+                sc.ui.update_calc_list(loadout, effects_before, effects, eval_flags);
+            end
         elseif spells_frame_open then
-            sc.ui.update_spells_frame(loadout, effects, eval_flags);
+            if config.settings.overlay_disable then
+                sc.ui.update_spells_frame(nil, nil, eval_flags);
+            else
+                sc.ui.update_spells_frame(loadout, effects, eval_flags);
+            end
         end
 
         if not config.settings.overlay_disable then
@@ -888,29 +1306,36 @@ local function update_overlay()
     --    end
     --end
 
-    --local k = sc.core.currently_casting_spell_id;
 
-    --if spells[k] and bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
-    --    cache_spell(spells[k], k, loadout, effects, eval_flags);
-    --    if spells[k].healing_version then
-    --        cache_spell(spells[k].healing_version, k, loadout, effects, eval_flags);
-    --    end
-    --end
+    if not config.settings.overlay_disable_currently_casting_info then
 
+        if config.settings.overlay_disable then
+
+            -- action bar overlay disabled, need to update loadout
+            loadout, _, effects, update_id = update_loadout_and_effects();
+            updated = update_id > overlay_effects_update_id;
+            overlay_effects_update_id = update_id;
+        end
+        if updated then
+            update_currently_casting();
+        end
+    end
 end
 
-overlay.spell_book_frames            = spell_book_frames;
-overlay.action_id_frames             = action_id_frames;
-overlay.setup_action_bars            = setup_action_bars;
-overlay.update_overlay               = update_overlay;
-overlay.update_icon_overlay_settings = update_icon_overlay_settings;
-overlay.reassign_overlay_icon        = reassign_overlay_icon;
-overlay.clear_overlays               = clear_overlays;
-overlay.old_rank_warning_traversal   = old_rank_warning_traversal;
-overlay.overlay_eval_flags           = overlay_eval_flags;
-overlay.overlay_reconfig             = overlay_reconfig;
+overlay.spell_book_frames               = spell_book_frames;
+overlay.action_id_frames                = action_id_frames;
+overlay.setup_action_bars               = setup_action_bars;
+overlay.update_overlay                  = update_overlay;
+overlay.update_icon_overlay_settings    = update_icon_overlay_settings;
+overlay.reassign_overlay_icon           = reassign_overlay_icon;
+overlay.clear_overlays                  = clear_overlays;
+overlay.old_rank_warning_traversal      = old_rank_warning_traversal;
+overlay.overlay_eval_flags              = overlay_eval_flags;
+overlay.overlay_reconfig                = overlay_reconfig;
+overlay.init_currently_casting_frames   = init_currently_casting_frames;
+overlay.currently_casting_new_spell     = currently_casting_new_spell;
+overlay.currently_casting_frame_parent  = currently_casting_frame_parent;
 
 sc.overlay = overlay;
-
 sc.ext.spell_cache = spell_cache;
 

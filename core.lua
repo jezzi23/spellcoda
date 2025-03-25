@@ -3,7 +3,6 @@ local _, sc                    = ...;
 local spells                    = sc.spells;
 local spell_flags               = sc.spell_flags;
 
-local font                      = sc.ui.font;
 local load_sw_ui                = sc.ui.load_sw_ui;
 local create_sw_base_ui         = sc.ui.create_sw_base_ui;
 local sw_activate_tab           = sc.ui.sw_activate_tab;
@@ -34,7 +33,7 @@ sc.core                         = core;
 core.addon_name                 = "SpellCoda";
 
 local version_major             = 0;
-local version_minor             = 1;
+local version_minor             = 2;
 local version_build             = sc.addon_build_id;
 
 core.version_id                 = version_build + version_minor*1000 + version_major*1000000;
@@ -57,12 +56,7 @@ core.addon_message_on_update    = false;
 core.old_ranks_checks_needed    = true;
 core.rescan_action_bar_needed   = false;
 
-
 core.beacon_snapshot_time       = -1000;
-core.currently_casting_spell_id = 0;
-core.cast_expire_timer          = 0;
-core.action_id_of_wand          = 0;
-
 local addon_msg_sc_id = "__SpellCoda";
 
 local function generated_data_is_outdated(loaded_version, gen_version)
@@ -104,12 +98,73 @@ local function client_age_days()
     return diff_days;
 end
 
-local function set_current_casting_spell(spell_id)
-    if spells[spell_id] and bit.band(spells[spell_id].flags, spell_flags.eval) ~= 0 then
-        core.cast_expire_timer = math.max(2.5, 2 * spells[spell_id].cast_time);
-        core.currently_casting_spell_id = spell_id;
+local currently_casting_spell_id        = 0;
+local currently_casting_noexpire        = false;
+local currently_casting_channel         = true;
+local currently_casting_expire_timer    = 0;
+local currently_casting_waiting_on_anim = false;
+local currently_casting_expiration      = 3;
+
+local function currently_casting_enqueue(spell_id)
+
+    if sc.overlay.currently_casting_f1.animating then
+        currently_casting_waiting_on_anim = true;
     else
-        core.currently_casting_spell_id = 0;
+        sc.overlay.currently_casting_new_spell(spell_id);
+        currently_casting_waiting_on_anim = false;
+    end
+    currently_casting_spell_id = spell_id;
+end
+
+local function set_current_casting_spell(spell_id)
+
+    if spells[spell_id] and
+        (not config.settings.overlay_currently_casting_only_eval or
+        bit.band(spells[spell_id].flags, spell_flags.eval) ~= 0) then
+
+        currently_casting_expire_timer = currently_casting_expiration;
+        if currently_casting_spell_id ~= spell_id then
+            currently_casting_enqueue(spell_id);
+        end
+        currently_casting_spell_id = spell_id;
+    end
+end
+
+local auto_repeat_spells_tracking = {};
+for _, v in pairs({"attack", "shoot", "auto_shot"}) do
+    if sc.spids[v] then
+        table.insert(auto_repeat_spells_tracking, sc.spids[v]);
+    end
+end
+
+local function spell_tracking(dt)
+    currently_casting_expire_timer = currently_casting_expire_timer - dt;
+    if currently_casting_noexpire then
+        return;
+    end
+    if currently_casting_expire_timer < 0.0 then
+
+        -- degrade to autorepeat or 0
+        local is_repeating = false;
+        for _, id in pairs(auto_repeat_spells_tracking) do
+            if IsCurrentSpell(id) then
+                is_repeating = true;
+                set_current_casting_spell(id);
+                break;
+            end
+        end
+
+        if not is_repeating then
+
+            if currently_casting_spell_id ~= 0 then
+                currently_casting_enqueue(0);
+            end
+            currently_casting_spell_id = 0;
+        end
+    end
+
+    if currently_casting_waiting_on_anim then
+        currently_casting_enqueue(currently_casting_spell_id);
     end
 end
 
@@ -120,26 +175,50 @@ local event_dispatch = {
                 core.beacon_snapshot_time = core.addon_running_time;
             end
             set_current_casting_spell(spell_id);
+            if not currently_casting_channel then
+                currently_casting_noexpire = false;
+            end
         end
     end,
     ["UNIT_SPELLCAST_CHANNEL_START"] = function(_, caster, _, spell_id)
         if caster == "player" then
             set_current_casting_spell(spell_id);
+            currently_casting_noexpire = true;
+            currently_casting_channel = true;
         end
     end,
     ["UNIT_SPELLCAST_CHANNEL_STOP"] = function(_, caster, _, spell_id)
         if caster == "player" then
-            core.currently_casting_spell_id = 0;
+            currently_casting_noexpire = false;
+            currently_casting_channel = false;
+            currently_casting_expire_timer = currently_casting_expiration;
         end
     end,
     ["UNIT_SPELLCAST_START"] = function(self, caster, _, spell_id)
         if caster == "player" then
             set_current_casting_spell(spell_id);
+            currently_casting_noexpire = true;
         end
     end,
     ["UNIT_SPELLCAST_STOP"] = function(self, caster, _, spell_id)
         if caster == "player" then
-            core.currently_casting_spell_id = 0;
+            currently_casting_noexpire = false;
+            currently_casting_expire_timer = currently_casting_expiration;
+        end
+    end,
+    ["UNIT_SPELLCAST_FAILED"] = function(self, caster, _, spell_id)
+        if caster == "player" then
+            currently_casting_noexpire = false;
+            currently_casting_expire_timer = currently_casting_expiration;
+        end
+    end,
+    ["START_AUTOREPEAT_SPELL"] = function(self, arg1, arg2, arg4)
+        currently_casting_noexpire = false;
+        for _, id in pairs(auto_repeat_spells_tracking) do
+            if IsCurrentSpell(id) then
+                set_current_casting_spell(id);
+                return;
+            end
         end
     end,
     ["ADDON_LOADED"] = function(_, arg)
@@ -149,17 +228,18 @@ local event_dispatch = {
             set_active_settings();
             set_active_loadout(__sc_p_char.active_loadout);
             load_sw_ui();
+            sc.overlay.init_currently_casting_frames();
             activate_settings();
             activate_loadout_config();
             update_profile_frame()
             update_loadout_frame();
         end
-
     end,
     ["PLAYER_LOGOUT"] = function()
         save_config();
     end,
     ["PLAYER_LOGIN"] = function()
+
         -- force setup action bar to hook scroll script
         -- even if overlays are disabled
         sc.overlay.setup_action_bars();
@@ -177,8 +257,7 @@ local event_dispatch = {
                 HideUIPanel(CharacterFrame);
             end
         end
-        sc.ui.add_spell_book_button();
-        sc.ui.add_to_options();
+        sc.ui.post_login_load();
         C_ChatInfo.RegisterAddonMessagePrefix(addon_msg_sc_id);
         if core.__sw__debug__ or core.__sw__test_all_codepaths or core.__sw__test_all_spells then
             print("WARNING: SC DEBUG TOOLS ARE ON!!!");
@@ -319,26 +398,8 @@ local event_dispatch_client_exceptions = {
 core.event_dispatch = event_dispatch;
 core.event_dispatch_client_exceptions = event_dispatch_client_exceptions;
 
-
-
-local pname = UnitName("player");
-
-local function spell_tracking(dt)
-    core.cast_expire_timer = core.cast_expire_timer - dt;
-    if core.cast_expire_timer < 0.0 then
-        core.currently_casting_spell_id = 0;
-    end
-
-    if core.action_id_of_wand ~= 0 then
-        if IsAutoRepeatAction(core.action_id_of_wand) then
-            set_current_casting_spell(5019);
-        elseif core.currently_casting_spell_id == 5019 then
-            core.currently_casting_spell_id = 0;
-        end
-    end
-end
-
 local timestamp = 0.0;
+local pname = UnitName("player");
 
 local function main_update()
     local dt = 1.0 / sc.config.settings.overlay_update_freq;
@@ -455,94 +516,6 @@ GameTooltip:HookScript("OnShow", function(self)
     on_show_tooltip(self);
 end);
 
-
--- add addon to Addons list under Interface
-if InterfaceOptions_AddCategory then
-    local addon_interface_panel = CreateFrame("FRAME");
-    addon_interface_panel.name = "SpellCoda";
-    InterfaceOptions_AddCategory(addon_interface_panel);
-
-
-    local y_offset = -20;
-    local x_offset = 20;
-
-    local str = "";
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("SpellCoda - Version " .. core.version);
-
-    y_offset = y_offset - 15;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("Project Page: https://www.curseforge.com/wow/addons/spellcoda");
-
-    y_offset = y_offset - 15;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("Author: jezzi23");
-
-    y_offset = y_offset - 30;
-
-    addon_interface_panel.open___sc_frame_button =
-        CreateFrame("Button", "sw_addon_interface_open_frame_button", addon_interface_panel, "UIPanelButtonTemplate");
-
-    addon_interface_panel.open___sc_frame_button:SetPoint("TOPLEFT", x_offset, y_offset);
-    addon_interface_panel.open___sc_frame_button:SetWidth(150);
-    addon_interface_panel.open___sc_frame_button:SetHeight(25);
-    addon_interface_panel.open___sc_frame_button:SetText("Open Addon Frame");
-    addon_interface_panel.open___sc_frame_button:SetScript("OnClick", function()
-        sw_activate_tab(1);
-    end);
-
-    y_offset = y_offset - 30;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("Or type any of the following:");
-
-    y_offset = y_offset - 15;
-    x_offset = x_offset + 15;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("/sc");
-
-    y_offset = y_offset - 15;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("/sc conf");
-
-    y_offset = y_offset - 15;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("/sc loadouts");
-
-    y_offset = y_offset - 15;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("/sc calc");
-
-    y_offset = y_offset - 15;
-    x_offset = x_offset - 15;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("Hard reset: /sc reset");
-end
 
 local function command(arg)
     arg = string.lower(arg);

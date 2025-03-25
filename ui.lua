@@ -19,9 +19,8 @@ local update_loadout_and_effects_diffed_from_ui = sc.loadouts.update_loadout_and
 local update_loadout_and_effects                = sc.loadouts.update_loadout_and_effects;
 local active_loadout                            = sc.loadouts.active_loadout
 
-local stats_for_spell                           = sc.calc.stats_for_spell;
-local spell_info                                = sc.calc.spell_info;
 local spell_diff                                = sc.calc.spell_diff;
+local calc_spell_eval                           = sc.calc.calc_spell_eval;
 
 local buff_category                             = sc.buffs.buff_category;
 local buffs                                     = sc.buffs.buffs;
@@ -37,9 +36,10 @@ local __sc_frame = {};
 local icon_overlay_font = "Interface\\AddOns\\SpellCoda\\font\\Oswald-Bold.ttf";
 local role_icons = "Interface\\LFGFrame\\UI-LFG-ICON-ROLES";
 local font = "GameFontHighlightSmall";
-local libstub_data_broker = LibStub("LibDataBroker-1.1", true)
-local libstub_icon = libstub_data_broker and LibStub("LibDBIcon-1.0", true)
+local libstub_data_broker = LibStub("LibDataBroker-1.1", true);
+local libstub_icon = libstub_data_broker and LibStub("LibDBIcon-1.0", true);
 local libstub_launcher;
+local libDD = LibStub("LibUIDropDownMenu-4.0", true);
 
 local function display_spell_diff(i, calc_list, diff, frame)
     if not calc_list[i] then
@@ -466,9 +466,6 @@ local spell_browser_active_sort_key = spell_browser_sort_keys.lvl;
 -- meant to happen only the first time
 local spell_browser_scroll_to_lvl = true;
 
-local stats = {};
-local info = {};
-
 local function filtered_spell_view(spell_ids, name_filter, loadout, effects, eval_flags)
 
     local lvl = active_loadout().lvl;
@@ -549,8 +546,7 @@ local function filtered_spell_view(spell_ids, name_filter, loadout, effects, eva
             filtered[i].dpc = 0;
             filtered[i].hpc = 0;
             if bit.band(spells[id].flags, spell_flags.eval) ~= 0 then
-                stats_for_spell(stats, spells[id], loadout, effects, eval_flags);
-                spell_info(info, spells[id], stats, loadout, effects, eval_flags);
+                local info = calc_spell_eval(spells[id], loadout, effects, eval_flags, id);
                 filtered[i].effect_per_sec = info.effect_per_sec;
                 filtered[i].effect_per_cost = info.effect_per_cost;
                 if bit.band(spells[id].flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 then
@@ -569,8 +565,7 @@ local function filtered_spell_view(spell_ids, name_filter, loadout, effects, eva
                 end
                 filtered[i].is_dual = true;
 
-                stats_for_spell(stats, spells[id].healing_version, loadout, effects, eval_flags);
-                spell_info(info, spells[id].healing_version, stats, loadout, effects, eval_flags);
+                local info = calc_spell_eval(spells[id].healing_version, loadout, effects, eval_flags, id);
                 filtered[i].effect_per_sec = info.effect_per_sec;
                 filtered[i].effect_per_cost = info.effect_per_cost;
                 filtered[i].hps = info.effect_per_sec;
@@ -970,21 +965,22 @@ local function create_sw_ui_spells_frame()
 
     -- Sorted by dropdown
     __sc_frame.spells_frame.sort_by =
-        CreateFrame("Button", "__sc_frame_spells_frame_sort_by", __sc_frame.spells_frame, "UIDropDownMenuTemplate");
+        --CreateFrame("Button", "__sc_frame_spells_frame_sort_by", __sc_frame.spells_frame, "UIDropDownMenuTemplate");
+        libDD:Create_UIDropDownMenu("__sc_frame_spells_frame_sort_by", __sc_frame.spells_frame);
     __sc_frame.spells_frame.sort_by:SetPoint("TOPLEFT", 150, __sc_frame.spells_frame.y_offset+6);
     __sc_frame.spells_frame.sort_by.init_func = function()
 
-        UIDropDownMenu_SetText(__sc_frame.spells_frame.sort_by, "Order by "..spell_browser_sort_options[spell_browser_active_sort_key]);
-        UIDropDownMenu_Initialize(__sc_frame.spells_frame.sort_by, function()
+        libDD:UIDropDownMenu_SetText(__sc_frame.spells_frame.sort_by, "Order by "..spell_browser_sort_options[spell_browser_active_sort_key]);
+        libDD:UIDropDownMenu_Initialize(__sc_frame.spells_frame.sort_by, function()
 
-            UIDropDownMenu_SetWidth(__sc_frame.spells_frame.sort_by, 160);
+            libDD:UIDropDownMenu_SetWidth(__sc_frame.spells_frame.sort_by, 160);
 
             for k, v in pairs(spell_browser_sort_options) do
-                UIDropDownMenu_AddButton({
+                libDD:UIDropDownMenu_AddButton({
                         text = v;
                         checked = k == spell_browser_active_sort_key;
                         func = function()
-                            UIDropDownMenu_SetText(__sc_frame.spells_frame.sort_by, "Order by "..spell_browser_sort_options[k]);
+                            libDD:UIDropDownMenu_SetText(__sc_frame.spells_frame.sort_by, "Order by "..spell_browser_sort_options[k]);
                             spell_browser_active_sort_key = k;
                             update_spells_frame(nil, nil, nil, true);
                             __sc_frame.spells_frame.slider:SetValue(1);
@@ -998,14 +994,15 @@ local function create_sw_ui_spells_frame()
 
     -- Filter dropdown
     __sc_frame.spells_frame.filter =
-        CreateFrame("Button", "__sc_frame_spells_frame_filter", __sc_frame.spells_frame, "UIDropDownMenuTemplate");
+        --CreateFrame("Button", "__sc_frame_spells_frame_filter", __sc_frame.spells_frame, "UIDropDownMenuTemplate");
+        libDD:Create_UIDropDownMenu("__sc_frame_spells_frame_filter", __sc_frame.spells_frame);
     __sc_frame.spells_frame.filter:SetPoint("TOPLEFT", 340, __sc_frame.spells_frame.y_offset+6);
     __sc_frame.spells_frame.filter.init_func = function()
 
-        UIDropDownMenu_SetText(__sc_frame.spells_frame.filter, "Includes");
-        UIDropDownMenu_Initialize(__sc_frame.spells_frame.filter, function()
+        libDD:UIDropDownMenu_SetText(__sc_frame.spells_frame.filter, "Includes");
+        libDD:UIDropDownMenu_Initialize(__sc_frame.spells_frame.filter, function()
 
-            UIDropDownMenu_SetWidth(__sc_frame.spells_frame.filter, 80);
+            libDD:UIDropDownMenu_SetWidth(__sc_frame.spells_frame.filter, 80);
 
             for _, v in pairs(spell_filter_listing) do
                 local txt = v.disp;
@@ -1018,7 +1015,7 @@ local function create_sw_ui_spells_frame()
                 end
                 local is_checked = config.settings[v.id];
 
-                UIDropDownMenu_AddButton({
+                libDD:UIDropDownMenu_AddButton({
                         text = txt,
                         checked = is_checked,
                         func = function(self)
@@ -1039,27 +1036,7 @@ local function create_sw_ui_spells_frame()
             end
         end);
     end;
-
     __sc_frame.spells_frame.filter.init_func();
-
-    --local f = CreateFrame("Button", nil, __sc_frame.spells_frame, "UIPanelButtonTemplate");
-    --f:SetSize(25, 25);
-    --f:SetPoint("TOPRIGHT", __sc_frame.spells_frame, 0, __sc_frame.spells_frame.y_offset+6);
-    --local tex = f:CreateTexture(nil, "ARTWORK");
-    --tex:SetTexture("Interface\\Buttons\\UI-RefreshButton");
-    --tex:SetSize(12, 12);
-    --tex:SetPoint("CENTER", f, "CENTER", 0, 0);
-    --f:SetScript("OnClick", function()
-    --    update_spells_frame();
-    --end);
-    --f:SetScript("OnEnter", function(self)
-    --    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    --    GameTooltip:SetText("Refresh")
-    --    GameTooltip:Show()
-    --end);
-    --f:SetScript("OnLeave", function()
-    --    GameTooltip:Hide()
-    --end);
 
     __sc_frame.spells_frame.y_offset = __sc_frame.spells_frame.y_offset - 25;
     -- Headers
@@ -1216,15 +1193,17 @@ local function create_sw_ui_spells_frame()
         cost:SetPoint("TOPLEFT", acquisition_x_offset, __sc_frame.spells_frame.y_offset+1);
 
         -- spell option dropdown
-        local spell_options = CreateFrame("Button", "__sc_frame_spells_frame_dropdown"..i, __sc_frame.spells_frame, "UIDropDownMenuTemplate");
+        local spell_options =
+            --CreateFrame("Button", "__sc_frame_spells_frame_dropdown"..i, __sc_frame.spells_frame, "UIDropDownMenuTemplate");
+            libDD:Create_UIDropDownMenu("__sc_frame_spells_frame_dropdown"..i, __sc_frame.spells_frame);
         spell_options:SetPoint("TOPLEFT", dropdown_x_offset, __sc_frame.spells_frame.y_offset+15);
         spell_options.init_func = function()
 
-            UIDropDownMenu_Initialize(spell_options, function()
+            libDD:UIDropDownMenu_Initialize(spell_options, function()
 
-                UIDropDownMenu_SetWidth(spell_options, 15);
+                libDD:UIDropDownMenu_SetWidth(spell_options, 15);
 
-                UIDropDownMenu_AddButton({
+                libDD:UIDropDownMenu_AddButton({
                         text = "Add/remove to spell ignore list",
                         func = function(self)
                             if config.settings.spells_ignore_list[spell_options.__spid] then
@@ -1236,7 +1215,7 @@ local function create_sw_ui_spells_frame()
                         end,
                     }
                 );
-                UIDropDownMenu_AddButton({
+                libDD:UIDropDownMenu_AddButton({
                         text = "Add to calculator list",
                         func = function()
 
@@ -1253,17 +1232,16 @@ local function create_sw_ui_spells_frame()
             end);
         end;
         spell_options.init_func();
-        local dropdown_button = _G[spell_options:GetName().."Button"];
-        dropdown_button:SetSize(20, 20);
-        spell_options:Hide();
-
+        spell_options.Button:SetSize(20, 20);
+        spell_options.Button:Hide();
+        spell_options.Text:Hide();
 
         local f = CreateFrame("Button", nil, __sc_frame.spells_frame, "UIPanelButtonTemplate");
         f:SetText(":");
         f:SetSize(15, 15);
         f:SetPoint("TOPLEFT", dropdown_x_offset, __sc_frame.spells_frame.y_offset+3);
         f:SetScript("OnClick", function()
-            _G["__sc_frame_spells_frame_dropdown"..i.."Button"]:Click();
+            libDD:ToggleDropDownMenu(1, nil, spell_options, spell_options, 0, 0)
         end);
 
         local ignore_line_f = __sc_frame.spells_frame:CreateTexture(nil, "OVERLAY")
@@ -2020,8 +1998,72 @@ local function create_sw_ui_overlay_frame()
             color = v.color,
             optional_evaluation = v.optional_evaluation,
         }
-
     end
+
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 15;
+    local div = __sc_frame.overlay_frame:CreateTexture(nil, "ARTWORK")
+    div:SetColorTexture(0.5, 0.5, 0.5, 0.6);
+    div:SetHeight(1);
+    div:SetPoint("TOPLEFT", __sc_frame.overlay_frame, "TOPLEFT", 0, __sc_frame.overlay_frame.y_offset);
+    div:SetPoint("TOPRIGHT", __sc_frame.overlay_frame, "TOPRIGHT", 0, __sc_frame.overlay_frame.y_offset);
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 5;
+
+    f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(GameFontNormal);
+    f_txt:SetPoint("TOPLEFT", 0, __sc_frame.overlay_frame.y_offset);
+    f_txt:SetText("Spell cast info frame");
+    f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
+
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 15;
+
+    multi_row_checkbutton(
+        {
+            {
+                id = "overlay_disable_currently_casting_info",
+                txt = "Disable currently casting spell frame",
+                func = function(self)
+                    if self:GetChecked() then
+                        sc.overlay.currently_casting_frame_parent.border.disabled_txt:Show();
+                    else
+                        sc.overlay.currently_casting_frame_parent.border.disabled_txt:Hide();
+                    end
+                end
+            },
+            {
+                id = "overlay_currently_casting_only_eval",
+                txt = "Only show for evaluable spells",
+            },
+        },
+        __sc_frame.overlay_frame, 1, icon_checkbox_func);
+
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 10;
+    f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_currently_casting_info_scale", __sc_frame.overlay_frame, "UISliderTemplate");
+    f._type = slider_frame_type;
+    f:SetOrientation('HORIZONTAL');
+    f:SetPoint("TOPLEFT", 250, __sc_frame.overlay_frame.y_offset+4);
+    f:SetMinMaxValues(0.1, 3.0);
+    f:SetWidth(175)
+    f:SetHeight(20)
+    f:SetValueStep(0.05);
+
+    f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
+    f_txt:SetFontObject(GameFontNormal)
+    f_txt:SetTextColor(1.0, 1.0, 1.0);
+    f_txt:SetPoint("TOPLEFT", 15, __sc_frame.overlay_frame.y_offset)
+    f_txt:SetText("Scale")
+
+    f.val_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
+    f.val_txt:SetFontObject(font)
+    f.val_txt:SetPoint("TOPLEFT", 430, __sc_frame.overlay_frame.y_offset)
+    f.val_txt:SetText(string.format("%.1f", 0));
+
+    f:SetScript("OnValueChanged", function(self, val)
+        config.settings.overlay_currently_casting_info_scale = val;
+        self.val_txt:SetText(string.format("%.2f", val))
+        sc.overlay.currently_casting_f1.icon_frame:SetScale(val);
+        sc.overlay.currently_casting_f2.icon_frame:SetScale(val);
+        sc.overlay.currently_casting_frame_parent.border:SetScale(val);
+    end);
 end
 
 local function create_sw_ui_calculator_frame()
@@ -2220,46 +2262,47 @@ local function create_sw_ui_calculator_frame()
 
     -- sim type button
     __sc_frame.calculator_frame.sim_type_button = 
-        CreateFrame("Button", "__sc_frame_setting_calc_fight_type", __sc_frame.calculator_frame, "UIDropDownMenuTemplate");
+        --CreateFrame("Button", "__sc_frame_setting_calc_fight_type", __sc_frame.calculator_frame, "UIDropDownMenuTemplate");
+        libDD:Create_UIDropDownMenu("__sc_frame_setting_calc_fight_type", __sc_frame.calculator_frame);
 
     __sc_frame.calculator_frame.sim_type_button._type = "DropDownMenu";
     __sc_frame.calculator_frame.sim_type_button:SetPoint("TOPRIGHT", 10, __sc_frame.calculator_frame.y_offset);
     __sc_frame.calculator_frame.sim_type_button.init_func = function()
-        UIDropDownMenu_Initialize(__sc_frame.calculator_frame.sim_type_button, function()
+        libDD:UIDropDownMenu_Initialize(__sc_frame.calculator_frame.sim_type_button, function()
             
             if config.settings.calc_fight_type == fight_types.repeated_casts then
-                UIDropDownMenu_SetText(__sc_frame.calculator_frame.sim_type_button, "Repeated casts");
+                libDD:UIDropDownMenu_SetText(__sc_frame.calculator_frame.sim_type_button, "Repeated casts");
                 __sc_frame.calculator_frame.spell_diff_header_center:SetText("Per sec");
                 __sc_frame.calculator_frame.spell_diff_header_right:SetText("Effect");
             elseif config.settings.calc_fight_type == fight_types.cast_until_oom then
-                UIDropDownMenu_SetText(__sc_frame.calculator_frame.sim_type_button, "Cast until OOM");
+                libDD:UIDropDownMenu_SetText(__sc_frame.calculator_frame.sim_type_button, "Cast until OOM");
                 __sc_frame.calculator_frame.spell_diff_header_center:SetText("Effect");
                 __sc_frame.calculator_frame.spell_diff_header_right:SetText("Duration (sec)");
             end
-            UIDropDownMenu_SetWidth(__sc_frame.calculator_frame.sim_type_button, 130);
+            libDD:UIDropDownMenu_SetWidth(__sc_frame.calculator_frame.sim_type_button, 130);
 
-            UIDropDownMenu_AddButton(
+            libDD:UIDropDownMenu_AddButton(
                 {
                     text = "Repeated cast",
                     checked = config.settings.calc_fight_type == fight_types.repeated_casts,
                     func = function()
 
                         config.settings.calc_fight_type = fight_types.repeated_casts;
-                        UIDropDownMenu_SetText(__sc_frame.calculator_frame.sim_type_button, "Repeated casts");
+                        libDD:UIDropDownMenu_SetText(__sc_frame.calculator_frame.sim_type_button, "Repeated casts");
                         __sc_frame.calculator_frame.spell_diff_header_center:SetText("Per sec");
                         __sc_frame.calculator_frame.spell_diff_header_right:SetText("Effect");
                         update_calc_list();
                     end
                 }
             );
-            UIDropDownMenu_AddButton(
+            libDD:UIDropDownMenu_AddButton(
                 {
                     text = "Cast until OOM",
                     checked = config.settings.calc_fight_type == fight_types.cast_until_oom,
                     func = function()
 
                         config.settings.calc_fight_type = fight_types.cast_until_oom;
-                        UIDropDownMenu_SetText(__sc_frame.calculator_frame.sim_type_button, "Cast until OOM");
+                        libDD:UIDropDownMenu_SetText(__sc_frame.calculator_frame.sim_type_button, "Cast until OOM");
                         __sc_frame.calculator_frame.spell_diff_header_center:SetText("Effect");
                         __sc_frame.calculator_frame.spell_diff_header_right:SetText("Duration (sec)");
                         update_calc_list();
@@ -2274,8 +2317,6 @@ local function create_sw_ui_calculator_frame()
     f:SetText("Abilities can be added from Spells tab");
     f:SetTextColor(1.0,  1.0,  1.0);
     __sc_frame.calculator_frame.spells_add_tip = f;
-
-    __sc_frame.calculator_frame.sim_type_button:SetText("Simulation type");
 
     __sc_frame.calculator_frame.y_offset = __sc_frame.calculator_frame.y_offset - 17;
     __sc_frame.calculator_frame.y_offset = __sc_frame.calculator_frame.y_offset - 17;
@@ -2324,16 +2365,17 @@ local function create_sw_ui_loadout_frame()
     f_txt:SetText("Active loadout");
     f_txt:SetTextColor(1.0, 1.0, 1.0);
 
-    f = CreateFrame("Button", nil, __sc_frame.loadout_frame, "UIDropDownMenuTemplate");
+    f = --CreateFrame("Button", nil, __sc_frame.loadout_frame, "UIDropDownMenuTemplate");
+        libDD:Create_UIDropDownMenu("__sc_frame_loadout_frame_loadout_dropdown", __sc_frame.loadout_frame);
     f:SetPoint("TOPLEFT", x_pad + 80, __sc_frame.loadout_frame.y_offset+7);
     f.init_func = function()
-        UIDropDownMenu_SetText(__sc_frame.loadout_frame.loadout_dropdown, config.loadout.name);
-        UIDropDownMenu_Initialize(__sc_frame.loadout_frame.loadout_dropdown, function()
+        libDD:UIDropDownMenu_SetText(__sc_frame.loadout_frame.loadout_dropdown, config.loadout.name);
+        libDD:UIDropDownMenu_Initialize(__sc_frame.loadout_frame.loadout_dropdown, function()
 
-            UIDropDownMenu_SetWidth(__sc_frame.loadout_frame.loadout_dropdown, 100);
+            libDD:UIDropDownMenu_SetWidth(__sc_frame.loadout_frame.loadout_dropdown, 100);
 
             for k, v in pairs(__sc_p_char.loadouts) do
-                UIDropDownMenu_AddButton({
+                libDD:UIDropDownMenu_AddButton({
                         text = v.name,
                         checked = __sc_p_char.active_loadout == k,
                         func = function()
@@ -3238,22 +3280,23 @@ local function create_sw_ui_profile_frame()
     f_txt:SetTextColor(1.0, 1.0, 1.0);
 
     __sc_frame.profile_frame.primary_spec = 
-        CreateFrame("Button", "__sc_frame_profile_main_spec", __sc_frame.profile_frame, "UIDropDownMenuTemplate");
+        --CreateFrame("Button", "__sc_frame_profile_main_spec", __sc_frame.profile_frame, "UIDropDownMenuTemplate");
+        libDD:Create_UIDropDownMenu("__sc_frame_profile_main_spec", __sc_frame.profile_frame);
     __sc_frame.profile_frame.primary_spec:SetPoint("TOPLEFT", 170, __sc_frame.profile_frame.y_offset+6);
     __sc_frame.profile_frame.primary_spec.init_func = function()
 
-        UIDropDownMenu_SetText(__sc_frame.profile_frame.primary_spec, __sc_p_char.main_spec_profile);
-        UIDropDownMenu_Initialize(__sc_frame.profile_frame.primary_spec, function()
+        libDD:UIDropDownMenu_SetText(__sc_frame.profile_frame.primary_spec, __sc_p_char.main_spec_profile);
+        libDD:UIDropDownMenu_Initialize(__sc_frame.profile_frame.primary_spec, function()
 
-            UIDropDownMenu_SetWidth(__sc_frame.profile_frame.primary_spec, 130);
+            libDD:UIDropDownMenu_SetWidth(__sc_frame.profile_frame.primary_spec, 130);
 
             for k, _ in pairs(__sc_p_acc.profiles) do
-                UIDropDownMenu_AddButton({
+                libDD:UIDropDownMenu_AddButton({
                         text = k,
                         checked = __sc_p_char.main_spec_profile == k,
                         func = function()
                             __sc_p_char.main_spec_profile = k;
-                            UIDropDownMenu_SetText(__sc_frame.profile_frame.primary_spec, k);
+                            libDD:UIDropDownMenu_SetText(__sc_frame.profile_frame.primary_spec, k);
                             update_profile_frame();
                         end
                     }
@@ -3277,23 +3320,24 @@ local function create_sw_ui_profile_frame()
     f_txt:SetTextColor(1.0, 1.0, 1.0);
 
     __sc_frame.profile_frame.second_spec = 
-        CreateFrame("Button", "__sc_frame_profile_second_spec", __sc_frame.profile_frame, "UIDropDownMenuTemplate");
+        --CreateFrame("Button", "__sc_frame_profile_second_spec", __sc_frame.profile_frame, "UIDropDownMenuTemplate");
+        libDD:Create_UIDropDownMenu("__sc_frame_profile_second_spec", __sc_frame.profile_frame);
     __sc_frame.profile_frame.second_spec:SetPoint("TOPLEFT", 170, __sc_frame.profile_frame.y_offset+6);
     __sc_frame.profile_frame.second_spec.init_func = function()
 
-        UIDropDownMenu_SetText(__sc_frame.profile_frame.second_spec, __sc_p_char.second_spec_profile);
-        UIDropDownMenu_Initialize(__sc_frame.profile_frame.second_spec, function()
+        libDD:UIDropDownMenu_SetText(__sc_frame.profile_frame.second_spec, __sc_p_char.second_spec_profile);
+        libDD:UIDropDownMenu_Initialize(__sc_frame.profile_frame.second_spec, function()
 
-            UIDropDownMenu_SetWidth(__sc_frame.profile_frame.second_spec, 130);
+            libDD:UIDropDownMenu_SetWidth(__sc_frame.profile_frame.second_spec, 130);
 
             for k, _ in pairs(__sc_p_acc.profiles) do
 
-                UIDropDownMenu_AddButton({
+                libDD:UIDropDownMenu_AddButton({
                         text = k,
                         checked = __sc_p_char.second_spec_profile == k,
                         func = function()
                             __sc_p_char.second_spec_profile = k;
-                            UIDropDownMenu_SetText(__sc_frame.profile_frame.second_spec, k);
+                            libDD:UIDropDownMenu_SetText(__sc_frame.profile_frame.second_spec, k);
                             update_profile_frame();
                         end
                     }
@@ -3707,6 +3751,7 @@ local function create_sw_base_ui()
     end);
     __sc_frame.tabs[i] = btn;
     __sc_frame.tabs[i].frame_to_open = __sc_frame.settings_frame;
+
 end
 
 local function load_sw_ui()
@@ -3858,6 +3903,12 @@ local function add_to_options()
     Settings.RegisterAddOnCategory(category)
 end
 
+local function post_login_load()
+    -- some things must be done after PLAYER_LOGIN event
+    add_spell_book_button();
+    add_to_options();
+end
+
 ui.font                                 = font;
 ui.load_sw_ui                           = load_sw_ui;
 ui.icon_overlay_font                    = icon_overlay_font;
@@ -3870,8 +3921,7 @@ ui.update_buffs_frame                   = update_buffs_frame;
 ui.update_profile_frame                 = update_profile_frame;
 ui.update_loadout_frame                 = update_loadout_frame;
 ui.update_spells_frame                  = update_spells_frame;
-ui.add_spell_book_button                = add_spell_book_button;
-ui.add_to_options                       = add_to_options;
+ui.post_login_load                      = post_login_load;
 ui.forced_buffs_lname_to_id             = forced_buffs_lname_to_id;
 
 sc.ui = ui;

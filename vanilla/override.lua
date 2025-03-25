@@ -231,7 +231,6 @@ elseif sc.class == sc.classes.warlock then
 elseif sc.class == sc.classes.rogue then
     -- rogue has a few spells with AP coef not found in game client
     for _, v in pairs(rank_seqs[spids.rupture]) do
-        spells[v].periodic.per_cp_dur = 2;
         spells[v].periodic.coef_ap_by_cp = {0.01, 0.02, 0.03, 0.03, 0.03}; -- scuffed scaling
     end
     for _, v in pairs(rank_seqs[spids.eviscerate]) do
@@ -242,6 +241,9 @@ elseif sc.class == sc.classes.rogue then
     end
     for _, v in pairs(rank_seqs[spids.garrote_2]) do
         spells[v].periodic.coef_ap_min = 0.03;
+    end
+    for _, v in pairs(rank_seqs[spids.slice_and_dice]) do
+        spells[v].periodic.per_cp_dur = 3;
     end
 
     spells[spids.fan_of_knives].direct.flags =
@@ -329,10 +331,14 @@ elseif sc.class == sc.classes.warrior then
     });
 elseif sc.class == sc.classes.hunter then
 
-end
-
--- Remove eval from wands while broken
-if spells[5019] then
-    spells[5019].flags = bit.band(spells[5019].flags, bit.bnot(spell_flags.eval));
+    if spids.shoot_bow then
+        spells[spids.shoot_bow].flags = bit.band(spells[spids.shoot_bow].flags, bit.bnot(spell_flags.eval));
+    end
+    if spids.shoot_gun then
+        spells[spids.shoot_bow].flags = bit.band(spells[spids.shoot_bow].flags, bit.bnot(spell_flags.eval));
+    end
+    if spids.shoot_crossbow then
+        spells[spids.shoot_bow].flags = bit.band(spells[spids.shoot_bow].flags, bit.bnot(spell_flags.eval));
+    end
 end
 
