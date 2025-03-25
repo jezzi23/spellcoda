@@ -101,7 +101,7 @@ sc.spells = {
 			per_lvl = 0,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0, comp_flags.applies_mh, comp_flags.applies_oh, comp_flags.white),
+			flags = bit.bor(0, comp_flags.applies_mh, comp_flags.applies_oh),
 		},
 		cast_time = 0,
 		cost = 0,
@@ -7796,7 +7796,7 @@ local set_effects = {
 	},
 	[457532] = {
 			{"aura_pts_flat", -1, 0.099999994, {16280,16279,16278,16257,16277,}, 0, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[467814] = {
 			{"ability", "effect_mod", 0.19999999, {1064,421,}, 0, 0},
@@ -7860,7 +7860,7 @@ local enchant_effects = {
 	},
 	[457532] = {
 			{"aura_pts_flat", -1, 0.099999994, {16280,16279,16278,16257,16277,}, 0, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[467814] = {
 			{"ability", "effect_mod", 0.19999999, {1064,421,}, 0, 0},

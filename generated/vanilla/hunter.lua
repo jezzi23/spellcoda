@@ -186,7 +186,7 @@ sc.spells = {
 			per_lvl = 0,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0, comp_flags.applies_mh, comp_flags.applies_oh, comp_flags.white),
+			flags = bit.bor(0, comp_flags.applies_mh, comp_flags.applies_oh),
 		},
 		cast_time = 0,
 		cost = 0,
@@ -5612,7 +5612,7 @@ sc.class_buffs = {
 	},
 	[19591] = {
 			{"raw", "phys_crit", 0, nil, 32, 0},
-			{"by_school", "crit", 0, {1,}, 2, 1},
+			{"by_school", "crit", 0, {1,2,3,4,5,6,7,}, 32, 1},
 	},
 	[14322] = {
 			{"raw", "rap_flat", 110, nil, 2, 0},
@@ -8873,7 +8873,7 @@ local passives = {
 			{"raw", "melee_haste", 0, nil, 33, 11},
 			{"raw", "cast_haste", 0, nil, 0, 12},
 			{"raw", "phys_crit", 0, nil, 32, 13},
-			{"by_school", "crit", 0, {1,}, 2, 14},
+			{"by_school", "crit", 0, {1,2,3,4,5,6,7,}, 32, 14},
 	},
 	[416189] = {
 			{"by_attr", "stat_flat", 0, {3,}, 2, 0},
@@ -8884,7 +8884,7 @@ local passives = {
 			{"raw", "melee_haste", 0, nil, 33, 11},
 			{"raw", "cast_haste", 0, nil, 0, 12},
 			{"raw", "phys_crit", 0, nil, 32, 13},
-			{"by_school", "crit", 0, {1,}, 2, 14},
+			{"by_school", "crit", 0, {1,2,3,4,5,6,7,}, 32, 14},
 			{"by_attr", "stat_flat", 0, {4,}, 2, 15},
 			{"raw", "mp5_flat", 0, nil, 0, 16},
 	},

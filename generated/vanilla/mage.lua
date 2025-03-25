@@ -131,7 +131,7 @@ sc.spells = {
 			per_lvl = 0,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0, comp_flags.applies_mh, comp_flags.applies_oh, comp_flags.white),
+			flags = bit.bor(0, comp_flags.applies_mh, comp_flags.applies_oh),
 		},
 		cast_time = 0,
 		cost = 0,
@@ -5445,7 +5445,7 @@ sc.class_buffs = {
 			{"by_school", "sp_dmg_flat", 100, {3,}, 66, 1},
 	},
 	[428741] = {
-			{"by_school", "crit", 0.049999997, {3,}, 2, 2},
+			{"by_school", "crit", 0.049999997, {1,2,3,4,5,6,7,}, 32, 2},
 	},
 	[432069] = {
 			{"by_school", "dmg_mod", -0.5, {3,5,}, 1, 0},
@@ -5533,7 +5533,7 @@ local class_hostile_buffs = {
 			{"by_school", "sp_dmg_flat", 200, {1,2,3,4,5,6,7,}, 64, 0},
 	},
 	[12579] = {
-			{"by_school", "crit", 0.02, {5,}, 0, 0},
+			{"by_school", "crit_forced", 0.02, {5,}, 0, 0},
 	},
 	[460338] = {
 			{"by_school", "sp_dmg_flat", 30, {2,3,}, 0, 2},
@@ -8604,7 +8604,7 @@ local enchant_effects = {
 			{"aura_pts", 2, 0.19999999, {400735,}, 0, 1},
 	},
 	[412286] = {
-			{"by_school", "crit", 0.14999999, {3,}, 2, 0},
+			{"by_school", "crit", 0.14999999, {1,2,3,4,5,6,7,}, 32, 0},
 	},
 	[456402] = {
 			{"aura_pts_flat", 1, 0.14999999, {22783,6117,22782,}, 0, 0},

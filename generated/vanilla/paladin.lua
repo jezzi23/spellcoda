@@ -120,7 +120,7 @@ sc.spells = {
 			per_lvl = 0,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0, comp_flags.applies_mh, comp_flags.applies_oh, comp_flags.white),
+			flags = bit.bor(0, comp_flags.applies_mh, comp_flags.applies_oh),
 		},
 		cast_time = 0,
 		cost = 0,
@@ -3695,7 +3695,7 @@ sc.talent_effects = {
 			{"wpn_subclass", "phys_crit", 0.03, {173555}, 40, 0},
 	},
 	[5926] = {
-			{"by_school", "crit", 0.04, {2,}, 2, 0},
+			{"by_school", "crit", 0.04, {2,}, 32, 0},
 	},
 	[20120] = {
 			{"wpn_subclass", "phys_crit", 0.04, {173555}, 40, 0},
@@ -3707,7 +3707,7 @@ sc.talent_effects = {
 			{"wpn_subclass", "phys_mod", 0.099999994, {43153}, 9, 0},
 	},
 	[25829] = {
-			{"by_school", "crit", 0.049999997, {2,}, 2, 0},
+			{"by_school", "crit", 0.049999997, {2,}, 32, 0},
 	},
 	[20245] = {
 			{"ability", "base_mod", 0.19999999, {19742,25894,}, 0, 0},
@@ -3763,7 +3763,7 @@ sc.talent_effects = {
 			{"wpn_subclass", "phys_mod", 0.06, {43153}, 9, 0},
 	},
 	[5923] = {
-			{"by_school", "crit", 0.01, {2,}, 2, 0},
+			{"by_school", "crit", 0.01, {2,}, 32, 0},
 	},
 	[20057] = {
 			{"by_school", "threat", -0.17999999, {1,2,}, 0, 1},
@@ -3798,7 +3798,7 @@ sc.talent_effects = {
 			{"by_attr", "stat_mod", 0.04, {1,}, 32, 0},
 	},
 	[5924] = {
-			{"by_school", "crit", 0.02, {2,}, 2, 0},
+			{"by_school", "crit", 0.02, {2,}, 32, 0},
 	},
 	[20104] = {
 			{"ability", "cost_mod", -0.12, {20165,407798,20375,21084,20154,}, 0, 0},
@@ -3828,7 +3828,7 @@ sc.talent_effects = {
 			{"by_attr", "stat_mod", 0.06, {1,}, 32, 0},
 	},
 	[5925] = {
-			{"by_school", "crit", 0.03, {2,}, 2, 0},
+			{"by_school", "crit", 0.03, {2,}, 32, 0},
 	},
 	[20225] = {
 			{"ability", "base_mod", 0.06, {407798,21084,20154,}, 0, 0},
@@ -7186,7 +7186,7 @@ local enchant_effects = {
 			{"ability", "effect_mod", 0.5, {879,415068,}, 0, 1},
 	},
 	[429142] = {
-			{"by_school", "crit", 0.17999999, {2,}, 2, 0},
+			{"by_school", "crit", 0.17999999, {2,}, 32, 0},
 	},
 	[467506] = {
 			{"ability", "crit", 0.049999997, {20473,25914,}, 0, 0},

@@ -1,6 +1,6 @@
 -- THIS FILE IS GENERATED
 local _, sc = ...;
-sc.addon_build_id = 1018;
+sc.addon_build_id = 1019;
 sc.client_name_src = "wow_classic_era";
 sc.client_version_src = "1.15.6.59415";
 _, sc.class = UnitClass("player");
@@ -110,7 +110,7 @@ sc.spell_flags = {
 	no_threat = bit.lshift(1, 19),
 	behind_target = bit.lshift(1, 20),
 	uses_all_power = bit.lshift(1, 21),
-	entire_channel_missable = bit.lshift(1, 22),
+	alias = bit.lshift(1, 22),
 };
 sc.comp_flags = {
 	cant_crit = bit.lshift(1, 0),
@@ -122,14 +122,13 @@ sc.comp_flags = {
 	applies_mh = bit.lshift(1, 6),
 	applies_oh = bit.lshift(1, 7),
 	applies_ranged = bit.lshift(1, 8),
-	white = bit.lshift(1, 9),
-	full_oh = bit.lshift(1, 10),
-	normalized_weapon = bit.lshift(1, 11),
-	heal_to_full = bit.lshift(1, 12),
-	no_active_defense = bit.lshift(1, 13),
-	no_attack = bit.lshift(1, 14),
-	native_jumps = bit.lshift(1, 15),
-	jump_amp_as_per_extra_power = bit.lshift(1, 16),
+	full_oh = bit.lshift(1, 9),
+	normalized_weapon = bit.lshift(1, 10),
+	heal_to_full = bit.lshift(1, 11),
+	no_active_defense = bit.lshift(1, 12),
+	no_attack = bit.lshift(1, 13),
+	native_jumps = bit.lshift(1, 14),
+	jump_amp_as_per_extra_power = bit.lshift(1, 15),
 };
 sc.aura_flags = {
 	mul = bit.lshift(1, 0),

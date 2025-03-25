@@ -167,7 +167,7 @@ sc.spells = {
 			per_lvl = 0,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0, comp_flags.applies_mh, comp_flags.applies_oh, comp_flags.white),
+			flags = bit.bor(0, comp_flags.applies_mh, comp_flags.applies_oh),
 		},
 		cast_time = 0,
 		cost = 0,
@@ -6032,7 +6032,7 @@ sc.class_buffs = {
 			{"raw", "phys_dmg_flat", -3, nil, 0, 0},
 	},
 	[468540] = {
-			{"by_school", "crit", 0.099999994, {1,2,3,4,5,6,7,}, 2, 0},
+			{"by_school", "crit", 0.099999994, {1,2,3,4,5,6,7,}, 32, 0},
 			{"raw", "phys_crit", 0.099999994, nil, 32, 1},
 	},
 	[11707] = {
@@ -9239,7 +9239,7 @@ local set_effects = {
 	},
 	[457549] = {
 			{"raw", "phys_crit", 0.02, nil, 32, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[26118] = {
 			{"ability", "effect_mod", 0.049999997, {7814,3110,}, 0, 0},
@@ -9290,7 +9290,7 @@ local enchant_effects = {
 	},
 	[457549] = {
 			{"raw", "phys_crit", 0.02, nil, 32, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[403511] = {
 			{"ability", "extra_tick_time_flat", -2, {1120,}, 0, 4},

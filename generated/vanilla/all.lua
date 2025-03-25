@@ -1,6 +1,7 @@
 -- THIS FILE IS GENERATED
 local _, sc = ...;
 sc.auto_attack_spell_id = 6603;
+sc.auto_wand_spell_id = 5019;
 sc.player_buffs = {
 	[6192] = {
 			{"raw", "ap_flat", 55, nil, 2, 0},
@@ -62,7 +63,7 @@ sc.player_buffs = {
 	},
 	[29846] = {
 			{"raw", "phys_crit", 0.03, nil, 32, 0},
-			{"by_school", "crit", 0.03, {1,}, 2, 1},
+			{"by_school", "crit", 0.03, {1,2,3,4,5,6,7,}, 32, 1},
 	},
 	[413685] = {
 			{"by_school", "dmg_mod", 0.049999997, {1,3,4,5,6,7,}, 1, 0},
@@ -191,7 +192,7 @@ sc.player_buffs = {
 	},
 	[29338] = {
 			{"raw", "phys_crit", 0.03, nil, 32, 0},
-			{"by_school", "crit", 0.03, {1,}, 2, 1},
+			{"by_school", "crit", 0.03, {1,2,3,4,5,6,7,}, 32, 1},
 	},
 	[11328] = {
 			{"by_attr", "stat_flat", 15, {2,}, 2, 0},
@@ -241,7 +242,7 @@ sc.player_buffs = {
 			{"by_attr", "stat_flat", -10, {1,}, 2, 0},
 	},
 	[355363] = {
-			{"by_school", "crit", 0.099999994, {1,2,3,4,5,6,7,}, 2, 0},
+			{"by_school", "crit", 0.099999994, {1,2,3,4,5,6,7,}, 32, 0},
 			{"raw", "ap_flat", 140, nil, 2, 1},
 			{"raw", "phys_crit", 0.049999997, nil, 32, 2},
 			{"raw", "rap_flat", 140, nil, 2, 3},
@@ -493,10 +494,10 @@ sc.player_buffs = {
 			{"by_attr", "stat_flat", -6, {5,}, 2, 1},
 	},
 	[22820] = {
-			{"by_school", "crit", 0.03, {4,}, 2, 0},
+			{"by_school", "crit", 0.03, {1,2,3,4,5,6,7,}, 32, 0},
 	},
 	[468461] = {
-			{"by_school", "crit", 0.099999994, {2,}, 2, 0},
+			{"by_school", "crit", 0.099999994, {2,}, 32, 0},
 	},
 	[1214298] = {
 			{"by_school", "dmg_mod", 0.099999994, {2,}, 1, 0},
@@ -740,7 +741,7 @@ sc.player_buffs = {
 	[15366] = {
 			{"raw", "phys_crit", 0.049999997, nil, 32, 0},
 			{"by_attr", "stat_flat", 15, {1,2,3,4,5,}, 2, 1},
-			{"by_school", "crit", 0.049999997, {4,}, 2, 2},
+			{"by_school", "crit", 0.049999997, {1,2,3,4,5,6,7,}, 32, 2},
 	},
 	[8113] = {
 			{"by_attr", "stat_flat", 7, {5,}, 2, 0},
@@ -820,7 +821,7 @@ sc.player_buffs = {
 			{"raw", "melee_haste", 1, nil, 33, 2},
 	},
 	[24498] = {
-			{"by_school", "crit", 0.099999994, {2,}, 2, 0},
+			{"by_school", "crit", 0.099999994, {2,}, 32, 0},
 	},
 	[5515] = {
 			{"raw", "melee_haste", 0.19999999, nil, 33, 0},
@@ -1093,7 +1094,7 @@ sc.player_buffs = {
 			{"raw", "cast_haste", -0.5, nil, 0, 0},
 	},
 	[430952] = {
-			{"by_school", "crit", 0.01, {7,}, 2, 0},
+			{"by_school", "crit", 0.01, {1,2,3,4,5,6,7,}, 32, 0},
 	},
 	[25697] = {
 			{"raw", "mp5_flat", 735, nil, 0, 1},
@@ -1416,7 +1417,7 @@ sc.player_buffs = {
 			{"raw", "melee_haste", -0.11, nil, 33, 1},
 	},
 	[473387] = {
-			{"by_school", "crit", 0.099999994, {1,2,3,4,5,6,7,}, 2, 0},
+			{"by_school", "crit", 0.099999994, {1,2,3,4,5,6,7,}, 32, 0},
 			{"raw", "ap_flat", 140, nil, 2, 1},
 			{"raw", "phys_crit", 0.049999997, nil, 32, 2},
 			{"raw", "rap_flat", 140, nil, 2, 3},
@@ -1464,7 +1465,7 @@ sc.player_buffs = {
 	},
 	[16460] = {
 			{"raw", "phys_crit", -0.049999997, nil, 32, 0},
-			{"by_school", "crit", -0.049999997, {1,}, 2, 1},
+			{"by_school", "crit", -0.049999997, {1,2,3,4,5,6,7,}, 32, 1},
 	},
 	[10371] = {
 			{"raw", "melee_haste", -0.25, nil, 33, 0},
@@ -1543,7 +1544,7 @@ sc.player_buffs = {
 			{"creature", "dmg_mod", 0.39999998, {8,}, 1, 0},
 	},
 	[428741] = {
-			{"by_school", "crit", 0.049999997, {3,}, 2, 2},
+			{"by_school", "crit", 0.049999997, {1,2,3,4,5,6,7,}, 32, 2},
 	},
 	[12686] = {
 			{"raw", "ap_flat", 20, nil, 2, 0},
@@ -1630,7 +1631,7 @@ sc.player_buffs = {
 			{"by_school", "sp_dmg_flat", 191, {6,7,}, 2, 0},
 	},
 	[468540] = {
-			{"by_school", "crit", 0.099999994, {1,2,3,4,5,6,7,}, 2, 0},
+			{"by_school", "crit", 0.099999994, {1,2,3,4,5,6,7,}, 32, 0},
 			{"raw", "phys_crit", 0.099999994, nil, 32, 1},
 	},
 	[5917] = {
@@ -1643,7 +1644,7 @@ sc.player_buffs = {
 			{"raw", "phys_dmg_flat", -22, nil, 0, 0},
 	},
 	[461475] = {
-			{"by_school", "crit", 0.049999997, {1,2,3,4,5,6,7,}, 2, 0},
+			{"by_school", "crit", 0.049999997, {1,2,3,4,5,6,7,}, 32, 0},
 			{"raw", "ap_flat", 3, nil, 2, 1},
 			{"raw", "phys_crit", 0.049999997, nil, 32, 2},
 			{"raw", "rap_flat", 3, nil, 2, 3},
@@ -1964,7 +1965,7 @@ sc.player_buffs = {
 	[473399] = {
 			{"raw", "phys_crit", 0.049999997, nil, 32, 0},
 			{"by_attr", "stat_flat", 15, {1,2,3,4,5,}, 2, 1},
-			{"by_school", "crit", 0.049999997, {4,}, 2, 2},
+			{"by_school", "crit", 0.049999997, {1,2,3,4,5,6,7,}, 32, 2},
 	},
 	[370767] = {
 			{"raw", "cast_haste", 0.099999994, nil, 0, 2},
@@ -1998,7 +1999,7 @@ sc.player_buffs = {
 			{"by_attr", "stat_mod", -0.5, {1,}, 32, 2},
 	},
 	[28142] = {
-			{"by_school", "crit", 0.02, {7,}, 2, 0},
+			{"by_school", "crit", 0.02, {1,2,3,4,5,6,7,}, 32, 0},
 	},
 	[26258] = {
 			{"by_school", "dmg_mod", 2, {1,2,3,4,5,6,7,}, 1, 1},
@@ -2273,7 +2274,7 @@ sc.player_buffs = {
 			{"raw", "melee_haste", 0.5, nil, 33, 1},
 	},
 	[438536] = {
-			{"by_school", "crit", 0.04, {1,}, 2, 0},
+			{"by_school", "crit", 0.04, {1,2,3,4,5,6,7,}, 32, 0},
 			{"by_school", "sp_dmg_flat", 42, {1,2,3,4,5,6,7,}, 2, 1},
 			{"raw", "healing_power_flat", 42, nil, 2, 2},
 			{"raw", "melee_haste", 0.099999994, nil, 33, 3},
@@ -2643,7 +2644,7 @@ sc.player_buffs = {
 			{"raw", "melee_haste", 0.29999998, nil, 33, 0},
 	},
 	[438537] = {
-			{"by_school", "crit", 0.04, {1,}, 2, 0},
+			{"by_school", "crit", 0.04, {1,2,3,4,5,6,7,}, 32, 0},
 			{"by_school", "sp_dmg_flat", 42, {1,2,3,4,5,6,7,}, 2, 1},
 			{"raw", "healing_power_flat", 42, nil, 2, 2},
 			{"raw", "melee_haste", 0.099999994, nil, 33, 3},
@@ -2796,7 +2797,7 @@ sc.player_buffs = {
 	},
 	[23964] = {
 			{"raw", "phys_crit", 0.099999994, nil, 32, 0},
-			{"by_school", "crit", 0.099999994, {2,}, 2, 1},
+			{"by_school", "crit", 0.099999994, {1,2,3,4,5,6,7,}, 32, 1},
 	},
 	[9128] = {
 			{"raw", "ap_flat", 4, nil, 2, 0},
@@ -3157,13 +3158,13 @@ sc.player_buffs = {
 			{"raw", "rap_flat", 30, nil, 2, 3},
 	},
 	[22888] = {
-			{"by_school", "crit", 0.099999994, {1,2,3,4,5,6,7,}, 2, 0},
+			{"by_school", "crit", 0.099999994, {1,2,3,4,5,6,7,}, 32, 0},
 			{"raw", "ap_flat", 140, nil, 2, 1},
 			{"raw", "phys_crit", 0.049999997, nil, 32, 2},
 			{"raw", "rap_flat", 140, nil, 2, 3},
 	},
 	[24907] = {
-			{"by_school", "crit", 0.03, {4,}, 2, 0},
+			{"by_school", "crit", 0.03, {1,2,3,4,5,6,7,}, 32, 0},
 	},
 	[14872] = {
 			{"raw", "melee_haste", 0.5, nil, 33, 0},
@@ -3268,7 +3269,7 @@ sc.player_buffs = {
 	},
 	[469208] = {
 			{"raw", "phys_crit", 0.01, nil, 32, 0},
-			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[11549] = {
 			{"raw", "ap_flat", 85, nil, 2, 0},
@@ -3409,7 +3410,7 @@ sc.player_buffs = {
 			{"raw", "melee_haste", 1, nil, 33, 1},
 	},
 	[1219558] = {
-			{"by_school", "crit", 0.02, {7,}, 2, 0},
+			{"by_school", "crit", 0.02, {1,2,3,4,5,6,7,}, 32, 0},
 	},
 	[13847] = {
 			{"raw", "phys_crit", 1, nil, 32, 0},
@@ -3765,7 +3766,7 @@ sc.player_buffs = {
 	},
 	[19591] = {
 			{"raw", "phys_crit", 0, nil, 32, 0},
-			{"by_school", "crit", 0, {1,}, 2, 1},
+			{"by_school", "crit", 0, {1,2,3,4,5,6,7,}, 32, 1},
 	},
 	[8269] = {
 			{"raw", "phys_dmg_flat", 50, nil, 0, 0},
@@ -3900,7 +3901,7 @@ sc.player_buffs = {
 	},
 	[24865] = {
 			{"raw", "phys_crit", 0.03, nil, 32, 0},
-			{"by_school", "crit", 0.03, {2,}, 2, 1},
+			{"by_school", "crit", 0.03, {1,2,3,4,5,6,7,}, 32, 1},
 	},
 	[17687] = {
 			{"raw", "melee_haste", 0.29999998, nil, 97, 0},
@@ -4004,7 +4005,7 @@ sc.player_buffs = {
 			{"raw", "ap_flat", 200, nil, 2, 0},
 			{"raw", "rap_flat", 200, nil, 2, 1},
 			{"by_attr", "stat_mod", 0.14999999, {3,}, 32, 2},
-			{"by_school", "crit", 0.03, {4,}, 2, 3},
+			{"by_school", "crit", 0.03, {1,2,3,4,5,6,7,}, 32, 3},
 	},
 	[19850] = {
 			{"raw", "mp5_flat", 15, nil, 0, 0},
@@ -4086,7 +4087,7 @@ sc.player_buffs = {
 	[468387] = {
 			{"by_school", "dmg_mod", 0.099999994, {1,2,3,4,5,6,7,}, 1, 0},
 			{"raw", "heal_mod", 0.099999994, nil, 1, 1},
-			{"by_school", "crit", 0.099999994, {2,3,4,5,6,7,}, 2, 2},
+			{"by_school", "crit", 0.099999994, {2,3,4,5,6,7,}, 32, 2},
 	},
 	[27675] = {
 			{"by_school", "sp_dmg_flat", 100, {1,2,3,4,5,6,7,}, 2, 0},
@@ -4820,7 +4821,7 @@ sc.hostile_buffs = {
 			{"by_school", "target_res_flat", 0, {1,}, 0, 0},
 	},
 	[12579] = {
-			{"by_school", "crit", 0.02, {5,}, 0, 0},
+			{"by_school", "crit_forced", 0.02, {5,}, 0, 0},
 	},
 	[16511] = {
 			{"wpn_subclass", "phys_dmg_flat", 3, {173555}, 72, 2},
@@ -5407,18 +5408,24 @@ sc.set_bonuses = {
 	[490] = {{2,21625},{3,21894},},
 	[469] = {{3,7597},},
 	[1781] = {{3,436239},},
+	[485] = {{3,18384},},
 	[1585] = {{2,436239},},
 	[483] = {{3,7597},},
-	[442] = {{2,7597},},
+	[488] = {{3,18384},},
+	[442] = {{2,7597},{2,18384},},
 	[489] = {{3,7598},},
+	[470] = {{3,18384},},
 	[471] = {{3,7597},},
 	[468] = {{3,7597},},
 	[487] = {{3,7597},},
 	[1666] = {{6,450608},},
+	[421] = {{3,18382},},
 	[467] = {{3,7597},},
 	[1791] = {{2,21625},{3,21894},},
+	[472] = {{3,18384},},
 	[1588] = {{3,21364},},
 	[1] = {{5,7597},},
+	[473] = {{3,18384},},
 	[484] = {{3,7597},},
 };
 sc.items = {
@@ -10781,7 +10788,7 @@ sc.item_effects = {
 	},
 	[1223262] = {
 			{"raw", "phys_crit", 0.03, nil, 32, 0},
-			{"by_school", "crit", 0.03, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.03, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[1220651] = {
 			{"raw", "ap_flat", 592, nil, 2, 0},
@@ -11167,7 +11174,7 @@ sc.item_effects = {
 			{"by_school", "sp_dmg_flat", 19, {1,2,3,4,5,6,7,}, 2, 1},
 	},
 	[1223455] = {
-			{"by_school", "crit", 0.03, {2,3,4,5,6,7,}, 2, 0},
+			{"by_school", "crit", 0.03, {2,3,4,5,6,7,}, 32, 0},
 	},
 	[23727] = {
 			{"by_school", "spell_hit", 0.01, {1,2,3,4,5,6,7,}, 2, 0},
@@ -11229,7 +11236,7 @@ sc.item_effects = {
 			{"wpn_subclass", "skill_flat", 7, {32768}, 10, 0},
 	},
 	[23440] = {
-			{"by_school", "crit", 0.5, {6,}, 2, 0},
+			{"by_school", "crit", 0.5, {6,}, 32, 0},
 	},
 	[25717] = {
 			{"by_school", "target_res_flat", -300, {3,}, 0, 0},
@@ -11349,7 +11356,7 @@ sc.item_effects = {
 			{"raw", "ap_flat", 59, nil, 2, 0},
 	},
 	[18384] = {
-			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 2, 0},
+			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 32, 0},
 	},
 	[26228] = {
 			{"raw", "healing_power_flat", 121, nil, 2, 0},
@@ -11358,7 +11365,7 @@ sc.item_effects = {
 			{"raw", "healing_power_flat", 77, nil, 2, 0},
 	},
 	[18382] = {
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 0},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 0},
 	},
 	[9304] = {
 			{"by_school", "sp_dmg_flat", 16, {5,}, 2, 0},
@@ -11375,7 +11382,7 @@ sc.item_effects = {
 	},
 	[448324] = {
 			{"raw", "phys_crit", 0.02, nil, 32, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[18028] = {
 			{"by_school", "sp_dmg_flat", 54, {6,}, 2, 0},
@@ -11449,10 +11456,10 @@ sc.item_effects = {
 			{"raw", "ap_flat", 600, nil, 2, 1},
 	},
 	[461953] = {
-			{"by_school", "crit", 0.02, {2,}, 2, 0},
+			{"by_school", "crit", 0.02, {2,}, 32, 0},
 	},
 	[24852] = {
-			{"by_school", "crit", 0.01, {4,}, 2, 0},
+			{"by_school", "crit", 0.01, {4,}, 32, 0},
 	},
 	[21635] = {
 			{"raw", "mp5_flat", 12, nil, 0, 0},
@@ -11486,7 +11493,7 @@ sc.item_effects = {
 			{"raw", "rap_flat", 34, nil, 2, 0},
 	},
 	[23434] = {
-			{"by_school", "crit", 0.5, {1,}, 2, 0},
+			{"by_school", "crit", 0.5, {1,2,3,4,5,6,7,}, 32, 0},
 	},
 	[17493] = {
 			{"by_school", "sp_dmg_flat", 44, {1,2,3,4,5,6,7,}, 2, 0},
@@ -11507,7 +11514,7 @@ sc.item_effects = {
 			{"wpn_subclass", "skill_flat", 40, {128}, 10, 0},
 	},
 	[28142] = {
-			{"by_school", "crit", 0.02, {7,}, 2, 0},
+			{"by_school", "crit", 0.02, {1,2,3,4,5,6,7,}, 32, 0},
 	},
 	[7681] = {
 			{"raw", "healing_power_flat", 15, nil, 2, 0},
@@ -11521,7 +11528,7 @@ sc.item_effects = {
 	},
 	[436239] = {
 			{"raw", "phys_crit", 0.01, nil, 32, 0},
-			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[9343] = {
 			{"by_school", "sp_dmg_flat", 14, {1,2,3,4,5,6,7,}, 2, 0},
@@ -11944,7 +11951,7 @@ sc.item_effects = {
 			{"by_school", "sp_dmg_flat", 30, {6,}, 2, 0},
 	},
 	[23433] = {
-			{"by_school", "crit", 0.5, {2,3,4,5,6,7,}, 2, 0},
+			{"by_school", "crit", 0.5, {2,3,4,5,6,7,}, 32, 0},
 	},
 	[28264] = {
 			{"by_school", "sp_dmg_flat", 46, {1,2,3,4,5,6,7,}, 2, 0},
@@ -12121,7 +12128,7 @@ sc.item_effects = {
 			{"by_school", "sp_dmg_flat", 16, {1,2,3,4,5,6,7,}, 2, 1},
 	},
 	[1219558] = {
-			{"by_school", "crit", 0.02, {7,}, 2, 0},
+			{"by_school", "crit", 0.02, {1,2,3,4,5,6,7,}, 32, 0},
 	},
 	[21512] = {
 			{"by_school", "sp_dmg_flat", 20, {2,}, 2, 0},
@@ -12527,7 +12534,7 @@ sc.set_effects = {
 	},
 	[456546] = {
 			{"raw", "phys_crit", 0.02, nil, 32, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[9263] = {
 			{"by_attr", "stat_flat", 14, {5,}, 2, 0},
@@ -12537,24 +12544,24 @@ sc.set_effects = {
 			{"raw", "healing_power_flat", 6, nil, 2, 1},
 	},
 	[18384] = {
-			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 2, 0},
+			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 32, 0},
 	},
 	[9121] = {
 			{"by_attr", "stat_flat", 10, {1,}, 2, 0},
 	},
 	[18382] = {
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 0},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 0},
 	},
 	[448324] = {
 			{"raw", "phys_crit", 0.02, nil, 32, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[428490] = {
 			{"by_school", "threat", 0.5, {}, 0, 0},
 	},
 	[457323] = {
 			{"raw", "phys_crit", 0.02, nil, 32, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[435974] = {
 			{"by_attr", "stat_flat", -5, {3,}, 2, 0},
@@ -12586,14 +12593,14 @@ sc.set_effects = {
 	},
 	[457549] = {
 			{"raw", "phys_crit", 0.02, nil, 32, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[23545] = {
 			{"by_school", "threat", -0.14999999, {1,2,3,4,5,6,7,}, 0, 0},
 	},
 	[436239] = {
 			{"raw", "phys_crit", 0.01, nil, 32, 0},
-			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[14384] = {
 			{"by_attr", "stat_flat", 20, {2,}, 2, 0},
@@ -12619,7 +12626,7 @@ sc.set_effects = {
 			{"by_school", "sp_dmg_flat", 7, {4,}, 2, 0},
 	},
 	[21092] = {
-			{"by_school", "crit", 0.02, {2,}, 2, 0},
+			{"by_school", "crit", 0.02, {2,}, 32, 0},
 	},
 	[429865] = {
 			{"by_attr", "stat_flat", 12, {1,}, 2, 0},
@@ -12644,7 +12651,7 @@ sc.set_effects = {
 	},
 	[456489] = {
 			{"raw", "phys_crit", 0.02, nil, 32, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[7503] = {
 			{"by_attr", "stat_flat", 5, {3,}, 2, 0},
@@ -12660,7 +12667,7 @@ sc.set_effects = {
 			{"raw", "healing_power_flat", 15, nil, 2, 1},
 	},
 	[23570] = {
-			{"by_school", "crit", 0.03, {4,}, 2, 0},
+			{"by_school", "crit", 0.03, {4,}, 32, 0},
 	},
 	[9142] = {
 			{"raw", "ap_flat", 14, nil, 2, 0},
@@ -12768,7 +12775,7 @@ sc.set_effects = {
 	},
 	[457530] = {
 			{"raw", "phys_crit", 0.02, nil, 32, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[30772] = {
 			{"raw", "ap_flat", 40, nil, 2, 0},
@@ -12792,7 +12799,7 @@ sc.set_effects = {
 	},
 	[457322] = {
 			{"raw", "phys_crit", 0.02, nil, 32, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[467550] = {
 			{"raw", "healing_power_flat", 44, nil, 2, 0},
@@ -12806,13 +12813,13 @@ sc.set_effects = {
 			{"raw", "rap_flat", 20, nil, 2, 1},
 	},
 	[449933] = {
-			{"by_school", "crit", 0.03, {2,}, 2, 0},
+			{"by_school", "crit", 0.03, {2,}, 32, 0},
 	},
 	[21636] = {
 			{"raw", "mp5_flat", 12, nil, 0, 0},
 	},
 	[457532] = {
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[14047] = {
 			{"by_school", "sp_dmg_flat", 23, {1,2,3,4,5,6,7,}, 2, 0},
@@ -13305,7 +13312,7 @@ sc.enchant_effects = {
 	},
 	[1220596] = {
 			{"raw", "phys_crit", 0.01, nil, 32, 0},
-			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[17988] = {
 			{"by_school", "sp_dmg_flat", 24, {4,}, 2, 0},
@@ -13462,7 +13469,7 @@ sc.enchant_effects = {
 			{"raw", "healing_power_flat", 18, nil, 2, 0},
 	},
 	[412286] = {
-			{"by_school", "crit", 0.14999999, {3,}, 2, 0},
+			{"by_school", "crit", 0.14999999, {1,2,3,4,5,6,7,}, 32, 0},
 	},
 	[9265] = {
 			{"by_attr", "stat_flat", 14, {3,}, 2, 0},
@@ -13694,7 +13701,7 @@ sc.enchant_effects = {
 	},
 	[456546] = {
 			{"raw", "phys_crit", 0.02, nil, 32, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[7500] = {
 			{"by_attr", "stat_flat", 6, {5,}, 2, 0},
@@ -13846,7 +13853,7 @@ sc.enchant_effects = {
 	},
 	[457323] = {
 			{"raw", "phys_crit", 0.02, nil, 32, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[7702] = {
 			{"by_school", "sp_dmg_flat", 9, {5,}, 2, 0},
@@ -13913,7 +13920,7 @@ sc.enchant_effects = {
 			{"by_attr", "stat_flat", 38, {3,}, 2, 0},
 	},
 	[429142] = {
-			{"by_school", "crit", 0.17999999, {2,}, 2, 0},
+			{"by_school", "crit", 0.17999999, {2,}, 32, 0},
 	},
 	[14389] = {
 			{"by_attr", "stat_flat", 25, {2,}, 2, 0},
@@ -14066,7 +14073,7 @@ sc.enchant_effects = {
 	},
 	[457549] = {
 			{"raw", "phys_crit", 0.02, nil, 32, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[7681] = {
 			{"raw", "healing_power_flat", 15, nil, 2, 0},
@@ -14209,7 +14216,7 @@ sc.enchant_effects = {
 	[1220735] = {
 			{"by_school", "sp_dmg_flat", 15, {1,2,3,4,5,6,7,}, 2, 0},
 			{"raw", "healing_power_flat", 15, nil, 2, 1},
-			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 2, 2},
+			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 32, 2},
 			{"raw", "phys_crit", 0.01, nil, 32, 3},
 	},
 	[7598] = {
@@ -14574,7 +14581,7 @@ sc.enchant_effects = {
 	[1214006] = {
 			{"by_school", "sp_dmg_flat", 45, {1,2,3,4,5,6,7,}, 2, 0},
 			{"raw", "healing_power_flat", 45, nil, 2, 1},
-			{"by_school", "crit", 0.01, {4,}, 2, 2},
+			{"by_school", "crit", 0.01, {1,2,3,4,5,6,7,}, 32, 2},
 	},
 	[17998] = {
 			{"by_school", "sp_dmg_flat", 41, {4,}, 2, 0},
@@ -14653,7 +14660,7 @@ sc.enchant_effects = {
 	[25113] = {
 			{"by_school", "sp_dmg_flat", 36, {1,2,3,4,5,6,7,}, 2, 0},
 			{"raw", "healing_power_flat", 36, nil, 2, 1},
-			{"by_school", "crit", 0.01, {4,}, 2, 2},
+			{"by_school", "crit", 0.01, {1,2,3,4,5,6,7,}, 32, 2},
 	},
 	[7549] = {
 			{"wpn_subclass", "skill_flat", 1, {2}, 10, 0},
@@ -14695,7 +14702,7 @@ sc.enchant_effects = {
 	[471402] = {
 			{"by_school", "sp_dmg_flat", 36, {1,2,3,4,5,6,7,}, 2, 0},
 			{"raw", "healing_power_flat", 36, nil, 2, 1},
-			{"by_school", "crit", 0.01, {4,}, 2, 2},
+			{"by_school", "crit", 0.01, {1,2,3,4,5,6,7,}, 32, 2},
 	},
 	[9105] = {
 			{"by_attr", "stat_flat", 9, {4,}, 2, 0},
@@ -14851,7 +14858,7 @@ sc.enchant_effects = {
 			{"raw", "phys_crit", 0.01, nil, 32, 1},
 			{"raw", "ap_flat", 26, nil, 2, 2},
 			{"raw", "rap_flat", 26, nil, 2, 3},
-			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 2, 4},
+			{"by_school", "crit", 0.01, {2,3,4,5,6,7,}, 32, 4},
 	},
 	[18013] = {
 			{"by_school", "sp_dmg_flat", 33, {6,}, 2, 0},
@@ -14929,7 +14936,7 @@ sc.enchant_effects = {
 	[29468] = {
 			{"by_school", "sp_dmg_flat", 15, {1,2,3,4,5,6,7,}, 2, 0},
 			{"raw", "healing_power_flat", 15, nil, 2, 1},
-			{"by_school", "crit", 0.01, {1,}, 2, 2},
+			{"by_school", "crit", 0.01, {1,2,3,4,5,6,7,}, 32, 2},
 	},
 	[9103] = {
 			{"by_attr", "stat_flat", 8, {1,}, 2, 0},
@@ -15101,7 +15108,7 @@ sc.enchant_effects = {
 	},
 	[457530] = {
 			{"raw", "phys_crit", 0.02, nil, 32, 0},
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[25067] = {
 			{"raw", "healing_power_flat", 30, nil, 2, 0},
@@ -15473,7 +15480,7 @@ sc.enchant_effects = {
 			{"by_school", "sp_dmg_flat", 17, {5,}, 2, 0},
 	},
 	[457532] = {
-			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 2, 1},
+			{"by_school", "crit", 0.02, {2,3,4,5,6,7,}, 32, 1},
 	},
 	[17684] = {
 			{"by_school", "sp_dmg_flat", 39, {3,}, 2, 0},
@@ -21986,7 +21993,7 @@ sc.passives = {
 			{"raw", "melee_haste", 0, nil, 33, 11},
 			{"raw", "cast_haste", 0, nil, 0, 12},
 			{"raw", "phys_crit", 0, nil, 32, 13},
-			{"by_school", "crit", 0, {1,}, 2, 14},
+			{"by_school", "crit", 0, {1,2,3,4,5,6,7,}, 32, 14},
 	},
 	[416189] = {
 			{"by_attr", "stat_flat", 0, {3,}, 2, 0},
@@ -21997,7 +22004,7 @@ sc.passives = {
 			{"raw", "melee_haste", 0, nil, 33, 11},
 			{"raw", "cast_haste", 0, nil, 0, 12},
 			{"raw", "phys_crit", 0, nil, 32, 13},
-			{"by_school", "crit", 0, {1,}, 2, 14},
+			{"by_school", "crit", 0, {1,2,3,4,5,6,7,}, 32, 14},
 			{"by_attr", "stat_flat", 0, {4,}, 2, 15},
 			{"raw", "mp5_flat", 0, nil, 0, 16},
 	},
