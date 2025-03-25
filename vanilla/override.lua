@@ -243,6 +243,9 @@ elseif sc.class == sc.classes.rogue then
     for _, v in pairs(rank_seqs[spids.garrote_2]) do
         spells[v].periodic.coef_ap_min = 0.03;
     end
+    for _, v in pairs(rank_seqs[spids.slice_and_dice]) do
+        spells[v].periodic.per_cp_dur = 3;
+    end
 
     spells[spids.fan_of_knives].direct.flags =
         bit.bor(spells[spids.fan_of_knives].direct.flags, comp_flags.applies_oh, comp_flags.full_oh);

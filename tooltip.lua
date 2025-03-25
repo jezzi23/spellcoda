@@ -361,12 +361,12 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         spell = spell.healing_version;
     end
 
-    local info, stats = calc_spell_eval(spell, loadout, effects_finalized, eval_flags);
+    local info, stats = calc_spell_eval(spell, loadout, effects_finalized, eval_flags, spell_id);
     cast_until_oom(info, spell, stats, loadout, effects_finalized, true);
 
     local stats_eval, stat_normalize_to;
     if bit.band(eval_flags, evaluation_flags.stat_weights) ~= 0 then
-        stats_eval, stat_normalize_to = stat_weights(info, spell, loadout, effects_base, eval_flags);
+        stats_eval, stat_normalize_to = stat_weights(info, spell, loadout, effects_base, eval_flags, spell_id);
     end
 
     if info.expected_direct ~= 0 and info.expected_ot ~= 0 then
@@ -462,6 +462,10 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         elseif bit.band(eval_flags, evaluation_flags.isolate_periodic) ~= 0 then
             scrollable_eval_mode_txt = append_to_txt_delimitered(scrollable_eval_mode_txt, "Periodic");
         end
+    end
+    if spell.alias == sc.auto_attack_spell_id then
+        scrollable_eval_mode_txt = append_to_txt_delimitered(scrollable_eval_mode_txt,
+            string.format("Auto attack gained over %.0fs", stats.dur_ot));
     end
     if eval_combo_pts then
         scrollable_eval_mode_txt = append_to_txt_delimitered(scrollable_eval_mode_txt,
@@ -564,7 +568,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
     end
 
     local display_direct_avoidance = spell.direct and
-        bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 and
+        bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb, spell_flags.alias)) == 0 and
         bit.band(eval_flags, evaluation_flags.isolate_periodic) == 0;
 
     if config.settings.tooltip_display_avoidance_info and
@@ -841,7 +845,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
     end
 
     if config.settings.tooltip_display_avoidance_info and
-        bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 and
+        bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb, spell_flags.alias)) == 0 and
         spell.periodic and
         bit.band(eval_flags, evaluation_flags.isolate_direct) == 0 and
         (not display_direct_avoidance or

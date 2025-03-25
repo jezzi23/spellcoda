@@ -19,9 +19,8 @@ local update_loadout_and_effects_diffed_from_ui = sc.loadouts.update_loadout_and
 local update_loadout_and_effects                = sc.loadouts.update_loadout_and_effects;
 local active_loadout                            = sc.loadouts.active_loadout
 
-local stats_for_spell                           = sc.calc.stats_for_spell;
-local spell_info                                = sc.calc.spell_info;
 local spell_diff                                = sc.calc.spell_diff;
+local calc_spell_eval                           = sc.calc.calc_spell_eval;
 
 local buff_category                             = sc.buffs.buff_category;
 local buffs                                     = sc.buffs.buffs;
@@ -466,9 +465,6 @@ local spell_browser_active_sort_key = spell_browser_sort_keys.lvl;
 -- meant to happen only the first time
 local spell_browser_scroll_to_lvl = true;
 
-local stats = {};
-local info = {};
-
 local function filtered_spell_view(spell_ids, name_filter, loadout, effects, eval_flags)
 
     local lvl = active_loadout().lvl;
@@ -549,8 +545,7 @@ local function filtered_spell_view(spell_ids, name_filter, loadout, effects, eva
             filtered[i].dpc = 0;
             filtered[i].hpc = 0;
             if bit.band(spells[id].flags, spell_flags.eval) ~= 0 then
-                stats_for_spell(stats, spells[id], loadout, effects, eval_flags);
-                spell_info(info, spells[id], stats, loadout, effects, eval_flags);
+                local info = calc_spell_eval(spells[id], loadout, effects, eval_flags, id);
                 filtered[i].effect_per_sec = info.effect_per_sec;
                 filtered[i].effect_per_cost = info.effect_per_cost;
                 if bit.band(spells[id].flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 then
@@ -569,8 +564,7 @@ local function filtered_spell_view(spell_ids, name_filter, loadout, effects, eva
                 end
                 filtered[i].is_dual = true;
 
-                stats_for_spell(stats, spells[id].healing_version, loadout, effects, eval_flags);
-                spell_info(info, spells[id].healing_version, stats, loadout, effects, eval_flags);
+                local info = calc_spell_eval(spells[id].healing_version, loadout, effects, eval_flags, id);
                 filtered[i].effect_per_sec = info.effect_per_sec;
                 filtered[i].effect_per_cost = info.effect_per_cost;
                 filtered[i].hps = info.effect_per_sec;
@@ -2038,7 +2032,6 @@ local function create_sw_ui_overlay_frame()
 
     __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 15;
 
-
     multi_row_checkbutton(
         {
             {
@@ -2051,6 +2044,10 @@ local function create_sw_ui_overlay_frame()
                         sc.overlay.currently_casting_frame_parent.border.disabled_txt:Hide();
                     end
                 end
+            },
+            {
+                id = "overlay_currently_casting_only_eval",
+                txt = "Only show for evaluable spells",
             },
         },
         __sc_frame.overlay_frame, 1, icon_checkbox_func);

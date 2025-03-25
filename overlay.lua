@@ -621,7 +621,7 @@ local function update_spell_icon_frame(frame_info, spell, spell_id, loadout, eff
         local spell_effect, stats;
 
         if bit.band(spell.flags, spell_flags.eval) ~= 0 then
-            spell_effect, stats = calc_spell_eval(spell, loadout, effects, eval_flags);
+            spell_effect, stats = calc_spell_eval(spell, loadout, effects, eval_flags, spell_id);
             cast_until_oom(spell_effect, spell, stats, loadout, effects);
 
             for i = 1, 3 do
@@ -949,6 +949,19 @@ local function update_currently_casting_frame(frame, spell, info, stats)
     frame.icon_texture:SetTexture(GetSpellTexture(spell.base_id));
     local texts = frame.txts;
 
+    if bit.band(spell.flags, spell_flags.eval) == 0 then
+        for _, v in pairs(texts) do
+            v:SetText("");
+        end
+
+        if spell.rank > 0 then
+            texts.inside_left_text:SetText(tostring(spell.rank));
+        else
+            texts.inside_left_text:SetText("");
+        end
+        return;
+    end
+
     local crit_p;
     local normal_hit_p;
     local dr_p;
@@ -1044,11 +1057,6 @@ local function update_currently_casting_frame(frame, spell, info, stats)
         texts.top_text:SetText(format_number(info.effect_per_sec, 1));
     end
 
-    if spell.rank > 0 then
-        texts.inside_left_text:SetText(tostring(spell.rank));
-    else
-        texts.inside_left_text:SetText("");
-    end
     texts.bottom_left_text:SetText(format_dur(info.time_until_oom));
     texts.bottom_right_text:SetText(format_number(info.effect_per_cost, 2));
 end
@@ -1058,20 +1066,19 @@ local function update_currently_casting()
     for _, v in pairs(currently_casting_frames) do
 
         local k = v.spell_id;
-        if spells[k] and
-            bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
+        if spells[k] then
 
+            local spell = spells[k];
             local info, stats;
-            local spell;
+            if bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
 
-            if spells[k].healing_version and config.settings.general_prio_heal then
-                spell = spells[k].healing_version;
-            else
-                spell = spells[k];
+                if spells[k].healing_version and config.settings.general_prio_heal then
+                    spell = spells[k].healing_version;
+                end
+
+                info, stats = calc_spell_eval(spell, loadout, effects, eval_flags, k);
+                cast_until_oom(info, spell, stats, loadout, effects);
             end
-
-            info, stats = calc_spell_eval(spell, loadout, effects, eval_flags);
-            cast_until_oom(info, spell, stats, loadout, effects);
             update_currently_casting_frame(v, spell, info, stats);
             v.icon_frame:Show();
         else

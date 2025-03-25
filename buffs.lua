@@ -250,8 +250,8 @@ local function get_buff_by_lname(loadout, unit, lname, only_self_buff, require_o
 end
 
 local function get_buff(loadout, unit, id, only_self_buff, require_ownership)
-    if unit == "" then
-        local buff = loadout.dynamic_buffs[unit][lname];
+    if unit ~= "" then
+        local buff = loadout.dynamic_buffs[unit][id];
         if buff and (not require_ownership or buff.player_owned) then
             return buff.id;
         end

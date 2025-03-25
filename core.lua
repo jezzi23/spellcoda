@@ -119,7 +119,10 @@ end
 
 local function set_current_casting_spell(spell_id)
 
-    if spells[spell_id] and bit.band(spells[spell_id].flags, spell_flags.eval) ~= 0 then
+    if spells[spell_id] and
+        (not config.settings.overlay_currently_casting_only_eval or
+        bit.band(spells[spell_id].flags, spell_flags.eval) ~= 0) then
+
         currently_casting_expire_timer = currently_casting_expiration;
         if currently_casting_spell_id ~= spell_id then
             currently_casting_enqueue(spell_id);
