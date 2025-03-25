@@ -33,7 +33,7 @@ sc.core                         = core;
 core.addon_name                 = "SpellCoda";
 
 local version_major             = 0;
-local version_minor             = 1;
+local version_minor             = 2;
 local version_build             = sc.addon_build_id;
 
 core.version_id                 = version_build + version_minor*1000 + version_major*1000000;
@@ -223,34 +223,22 @@ local event_dispatch = {
     end,
     ["ADDON_LOADED"] = function(_, arg)
         if arg == "SpellCoda" then
-            --load_config();
-            --core.active_spec = GetActiveTalentGroup();
-            --set_active_settings();
-            --set_active_loadout(__sc_p_char.active_loadout);
-            --load_sw_ui();
-            --sc.overlay.init_currently_casting_frames();
-            --activate_settings();
-            --activate_loadout_config();
-            --update_profile_frame()
-            --update_loadout_frame();
+            load_config();
+            core.active_spec = GetActiveTalentGroup();
+            set_active_settings();
+            set_active_loadout(__sc_p_char.active_loadout);
+            load_sw_ui();
+            sc.overlay.init_currently_casting_frames();
+            activate_settings();
+            activate_loadout_config();
+            update_profile_frame()
+            update_loadout_frame();
         end
     end,
     ["PLAYER_LOGOUT"] = function()
         save_config();
     end,
     ["PLAYER_LOGIN"] = function()
-
-        load_config();
-        core.active_spec = GetActiveTalentGroup();
-        set_active_settings();
-        set_active_loadout(__sc_p_char.active_loadout);
-        load_sw_ui();
-        sc.overlay.init_currently_casting_frames();
-        activate_settings();
-        activate_loadout_config();
-        update_profile_frame()
-        update_loadout_frame();
-
 
         -- force setup action bar to hook scroll script
         -- even if overlays are disabled

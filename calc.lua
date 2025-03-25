@@ -1023,7 +1023,8 @@ local function spell_stats_periodic(stats, spell, loadout, effects, eval_flags)
         *
         (1.0 + (effects.ability.extra_dur[bid] or 0.0));
 
-    if bit.band(spell.flags, spell_flags.finishing_move_dur) ~= 0 and periodic.per_cp_dur then
+    if bit.band(spell.flags, bit.bor(spell_flags.finishing_move_dur, spell_flags.finishing_move_dmg)) ~= 0 and
+        periodic.per_cp_dur then
 
         stats.dur_ot = stats.dur_ot + periodic.per_cp_dur * stats.combo_pts;
     end
@@ -1811,7 +1812,7 @@ local function periodic_info(info, spell, loadout, stats, effects, eval_flags)
         base_tick_min = base_tick_min + periodic.per_resource * stats.combo_pts;
         base_tick_max = base_tick_max + periodic.per_resource * stats.combo_pts;
     end
-    if bit.band(spell.flags, spell_flags.finishing_move_dur) ~= 0 and not periodic.per_cp_dur then
+    if bit.band(spell.flags, bit.bor(spell_flags.finishing_move_dur, spell_flags.finishing_move_dmg)) ~= 0 and not periodic.per_cp_dur then
         -- finishing move with assigned periodic.per_cp_dur has already been added,
         -- this is the other case
         info.ot_dur1 = info.ot_dur1 + info.ot_tick_time1 * stats.combo_pts;

@@ -773,7 +773,7 @@ end);
 
 border.disabled_txt = border:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
 border.disabled_txt:SetPoint("TOP", 0, -10);
-border.disabled_txt:SetText("Currently casting spell info disabled");
+border.disabled_txt:SetText("DISABLED: Currently casting spell info");
 
 currently_casting_frame_parent.border = border;
 

@@ -3,11 +3,14 @@
 ## Notes: All things spells!
 ## SavedVariablesPerCharacter: __sc_p_char
 ## SavedVariables: __sc_p_acc
+## OptionalDeps: LibStub, CallbackHandler-1.0, LibUIDropDownMenu
 
 lib/LibStub/Libstub.lua
 lib/CallbackHandler-1.0/CallbackHandler-1.0.xml
 lib/LibDataBroker-1.1/LibDataBroker-1.1.lua
 lib/LibDBIcon-1.0/LibDBIcon-1.0.lua
+lib/LibUIDropDownMenu/LibUIDropDownMenu.xml
+lib/LibUIDropDownMenu/LibUIDropDownMenu.lua
 
 generated/vanilla/defs.lua
 generated/vanilla/localized_defs.lua

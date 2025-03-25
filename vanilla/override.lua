@@ -231,7 +231,6 @@ elseif sc.class == sc.classes.warlock then
 elseif sc.class == sc.classes.rogue then
     -- rogue has a few spells with AP coef not found in game client
     for _, v in pairs(rank_seqs[spids.rupture]) do
-        spells[v].periodic.per_cp_dur = 2;
         spells[v].periodic.coef_ap_by_cp = {0.01, 0.02, 0.03, 0.03, 0.03}; -- scuffed scaling
     end
     for _, v in pairs(rank_seqs[spids.eviscerate]) do
