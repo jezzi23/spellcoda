@@ -988,7 +988,6 @@ local function create_sw_ui_spells_frame()
             end
         end);
     end;
-    __sc_frame.spells_frame.sort_by.init_func();
 
     -- Filter dropdown
     __sc_frame.spells_frame.filter =
@@ -1034,7 +1033,6 @@ local function create_sw_ui_spells_frame()
         end);
     end;
 
-    __sc_frame.spells_frame.filter.init_func();
 
     --local f = CreateFrame("Button", nil, __sc_frame.spells_frame, "UIPanelButtonTemplate");
     --f:SetSize(25, 25);
@@ -1246,7 +1244,7 @@ local function create_sw_ui_spells_frame()
                 );
             end);
         end;
-        spell_options.init_func();
+        --spell_options.init_func();
         local dropdown_button = _G[spell_options:GetName().."Button"];
         dropdown_button:SetSize(20, 20);
         spell_options:Hide();
@@ -3765,6 +3763,7 @@ local function create_sw_base_ui()
     end);
     __sc_frame.tabs[i] = btn;
     __sc_frame.tabs[i].frame_to_open = __sc_frame.settings_frame;
+
 end
 
 local function load_sw_ui()
@@ -3916,6 +3915,18 @@ local function add_to_options()
     Settings.RegisterAddOnCategory(category)
 end
 
+local function post_login_load()
+    -- some things must be done after PLAYER_LOGIN event
+    add_spell_book_button();
+    add_to_options();
+
+    __sc_frame.spells_frame.sort_by.init_func();
+    __sc_frame.spells_frame.filter.init_func();
+    for k, v in pairs(__sc_frame.spells_frame.scroll_view) do
+        v.dropdown_menu.init_func();
+    end
+end
+
 ui.font                                 = font;
 ui.load_sw_ui                           = load_sw_ui;
 ui.icon_overlay_font                    = icon_overlay_font;
@@ -3928,8 +3939,7 @@ ui.update_buffs_frame                   = update_buffs_frame;
 ui.update_profile_frame                 = update_profile_frame;
 ui.update_loadout_frame                 = update_loadout_frame;
 ui.update_spells_frame                  = update_spells_frame;
-ui.add_spell_book_button                = add_spell_book_button;
-ui.add_to_options                       = add_to_options;
+ui.post_login_load                      = post_login_load;
 ui.forced_buffs_lname_to_id             = forced_buffs_lname_to_id;
 
 sc.ui = ui;

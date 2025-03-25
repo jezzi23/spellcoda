@@ -3,7 +3,6 @@ local _, sc                    = ...;
 local spells                    = sc.spells;
 local spell_flags               = sc.spell_flags;
 
-local font                      = sc.ui.font;
 local load_sw_ui                = sc.ui.load_sw_ui;
 local create_sw_base_ui         = sc.ui.create_sw_base_ui;
 local sw_activate_tab           = sc.ui.sw_activate_tab;
@@ -224,22 +223,35 @@ local event_dispatch = {
     end,
     ["ADDON_LOADED"] = function(_, arg)
         if arg == "SpellCoda" then
-            load_config();
-            core.active_spec = GetActiveTalentGroup();
-            set_active_settings();
-            set_active_loadout(__sc_p_char.active_loadout);
-            load_sw_ui();
-            sc.overlay.init_currently_casting_frames();
-            activate_settings();
-            activate_loadout_config();
-            update_profile_frame()
-            update_loadout_frame();
+            --load_config();
+            --core.active_spec = GetActiveTalentGroup();
+            --set_active_settings();
+            --set_active_loadout(__sc_p_char.active_loadout);
+            --load_sw_ui();
+            --sc.overlay.init_currently_casting_frames();
+            --activate_settings();
+            --activate_loadout_config();
+            --update_profile_frame()
+            --update_loadout_frame();
         end
     end,
     ["PLAYER_LOGOUT"] = function()
         save_config();
     end,
     ["PLAYER_LOGIN"] = function()
+
+        load_config();
+        core.active_spec = GetActiveTalentGroup();
+        set_active_settings();
+        set_active_loadout(__sc_p_char.active_loadout);
+        load_sw_ui();
+        sc.overlay.init_currently_casting_frames();
+        activate_settings();
+        activate_loadout_config();
+        update_profile_frame()
+        update_loadout_frame();
+
+
         -- force setup action bar to hook scroll script
         -- even if overlays are disabled
         sc.overlay.setup_action_bars();
@@ -257,8 +269,7 @@ local event_dispatch = {
                 HideUIPanel(CharacterFrame);
             end
         end
-        sc.ui.add_spell_book_button();
-        sc.ui.add_to_options();
+        sc.ui.post_login_load();
         C_ChatInfo.RegisterAddonMessagePrefix(addon_msg_sc_id);
         if core.__sw__debug__ or core.__sw__test_all_codepaths or core.__sw__test_all_spells then
             print("WARNING: SC DEBUG TOOLS ARE ON!!!");
@@ -517,94 +528,6 @@ GameTooltip:HookScript("OnShow", function(self)
     on_show_tooltip(self);
 end);
 
-
--- add addon to Addons list under Interface
-if InterfaceOptions_AddCategory then
-    local addon_interface_panel = CreateFrame("FRAME");
-    addon_interface_panel.name = "SpellCoda";
-    InterfaceOptions_AddCategory(addon_interface_panel);
-
-
-    local y_offset = -20;
-    local x_offset = 20;
-
-    local str = "";
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("SpellCoda - Version " .. core.version);
-
-    y_offset = y_offset - 15;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("Project Page: https://www.curseforge.com/wow/addons/spellcoda");
-
-    y_offset = y_offset - 15;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("Author: jezzi23");
-
-    y_offset = y_offset - 30;
-
-    addon_interface_panel.open___sc_frame_button =
-        CreateFrame("Button", "sw_addon_interface_open_frame_button", addon_interface_panel, "UIPanelButtonTemplate");
-
-    addon_interface_panel.open___sc_frame_button:SetPoint("TOPLEFT", x_offset, y_offset);
-    addon_interface_panel.open___sc_frame_button:SetWidth(150);
-    addon_interface_panel.open___sc_frame_button:SetHeight(25);
-    addon_interface_panel.open___sc_frame_button:SetText("Open Addon Frame");
-    addon_interface_panel.open___sc_frame_button:SetScript("OnClick", function()
-        sw_activate_tab(1);
-    end);
-
-    y_offset = y_offset - 30;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("Or type any of the following:");
-
-    y_offset = y_offset - 15;
-    x_offset = x_offset + 15;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("/sc");
-
-    y_offset = y_offset - 15;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("/sc conf");
-
-    y_offset = y_offset - 15;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("/sc loadouts");
-
-    y_offset = y_offset - 15;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("/sc calc");
-
-    y_offset = y_offset - 15;
-    x_offset = x_offset - 15;
-
-    str = addon_interface_panel:CreateFontString(nil, "OVERLAY");
-    str:SetFontObject(font);
-    str:SetPoint("TOPLEFT", x_offset, y_offset);
-    str:SetText("Hard reset: /sc reset");
-end
 
 local function command(arg)
     arg = string.lower(arg);

@@ -202,9 +202,6 @@ local function try_register_frame(action_id, frame_name)
         local spell_id = spell_id_of_action(action_id);
         if spell_id ~= 0 then
             active_overlays[action_id] = spell_id;
-            --if spell_id == 5019 then
-            --    sc.core.action_id_of_wand = action_id;
-            --end
         else
             active_overlays[action_id] = nil;
         end
@@ -329,9 +326,6 @@ local function reassign_overlay_icon_spell(action_id, spell_id)
             active_overlays[action_id] = spell_id;
         end
         action_id_frames[action_id].spell_id = spell_id;
-        --if spell_id == 5019 then
-        --    sc.core.action_id_of_wand = action_id;
-        --end
     end
 end
 
