@@ -1912,38 +1912,6 @@ local function create_sw_ui_overlay_frame()
     __sc_frame.overlay_frame.num_overlay_components_toggled = 0;
     __sc_frame.overlay_frame.num_overlay_special_toggled = 0;
 
-    local icon_checkbox_func = function(self)
-
-        local checked = self:GetChecked();
-        if checked then
-
-            __sc_frame.overlay_frame.num_overlay_components_toggled = __sc_frame.overlay_frame.num_overlay_components_toggled + 1;
-        else
-            __sc_frame.overlay_frame.num_overlay_components_toggled = __sc_frame.overlay_frame.num_overlay_components_toggled - 1;
-        end
-
-        if __sc_frame.overlay_frame.num_overlay_components_toggled > 3 then
-            checked = false;
-            self:SetChecked(false);
-            __sc_frame.overlay_frame.num_overlay_components_toggled = 3;
-        end
-        config.settings[self._settings_id] = checked;
-
-        sc.core.update_action_bar_needed = true;
-    end;
-
-    --local special_overlay_component_func = function(self)
-
-    --    icon_checkbox_func(self);
-    --    local checked = self:GetChecked();
-
-    --    if checked then
-    --        __sc_frame.overlay_frame.num_overlay_special_toggled = __sc_frame.overlay_frame.num_overlay_special_toggled + 1;
-    --    else
-    --        __sc_frame.overlay_frame.num_overlay_special_toggled = __sc_frame.overlay_frame.num_overlay_special_toggled - 1;
-    --    end
-    --end
-
     local overlay_components = {
         {
             id = "overlay_display_normal",
@@ -2041,6 +2009,26 @@ local function create_sw_ui_overlay_frame()
         },
     };
 
+    local icon_checkbox_func = function(self)
+
+        local checked = self:GetChecked();
+        if checked then
+
+            __sc_frame.overlay_frame.num_overlay_components_toggled = __sc_frame.overlay_frame.num_overlay_components_toggled + 1;
+        else
+            __sc_frame.overlay_frame.num_overlay_components_toggled = __sc_frame.overlay_frame.num_overlay_components_toggled - 1;
+        end
+
+        if __sc_frame.overlay_frame.num_overlay_components_toggled > 3 then
+            checked = false;
+            self:SetChecked(false);
+            __sc_frame.overlay_frame.num_overlay_components_toggled = 3;
+        end
+        config.settings[self._settings_id] = checked;
+
+        sc.core.update_action_bar_needed = true;
+    end;
+
     multi_row_checkbutton(overlay_components, __sc_frame.overlay_frame, 2, icon_checkbox_func);
 
     __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 15;
@@ -2087,7 +2075,7 @@ local function create_sw_ui_overlay_frame()
                 txt = "Only show for evaluable spells",
             },
         },
-        __sc_frame.overlay_frame, 1, icon_checkbox_func);
+        __sc_frame.overlay_frame, 1);
 
     __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 10;
     f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_currently_casting_info_scale", __sc_frame.overlay_frame, "UISliderTemplate");

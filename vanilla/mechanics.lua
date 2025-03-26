@@ -104,7 +104,7 @@ local class_stats_spell = (function()
                     0,
                     proc,
                     spell_lname(lookups.overload),
-                    dummy_value(lookups.overload, 0)/proc
+                    0.01*dummy_value(lookups.overload, 0)/proc
                 );
             end
 
