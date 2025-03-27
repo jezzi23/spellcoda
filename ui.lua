@@ -1894,13 +1894,6 @@ local function create_sw_ui_overlay_frame()
 
     __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 25;
 
-    local div = __sc_frame.overlay_frame:CreateTexture(nil, "ARTWORK")
-    div:SetColorTexture(0.5, 0.5, 0.5, 0.6);
-    div:SetHeight(1);
-    div:SetPoint("TOPLEFT", __sc_frame.overlay_frame, "TOPLEFT", 0, __sc_frame.overlay_frame.y_offset);
-    div:SetPoint("TOPRIGHT", __sc_frame.overlay_frame, "TOPRIGHT", 0, __sc_frame.overlay_frame.y_offset);
-    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 5;
-
     f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
     f_txt:SetPoint("TOPLEFT", 0, __sc_frame.overlay_frame.y_offset);

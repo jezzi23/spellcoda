@@ -2106,7 +2106,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 else
                     tooltip:AddDoubleLine(string.format("  %s %s", spell_texture_str, diff.disp), " ");
                 end
-            elseif diff.id == 75 then -- hunter ranged auto attack
+            elseif diff.id == spids.auto_shot or diff.id == spids.shoot then -- hunter ranged auto attack
                 if cmp_slots[item_fits_in_slot] == slots.RangedSlot then
                     tooltip:AddDoubleLine(string.format("  |T%s:16:16:0:0|t  %s", tt.new_item.tex, diff.disp), " ");
                 else

@@ -296,7 +296,7 @@ end
 local function stats_crit_mod(bid, comp, spell, loadout, effects)
 
     local base_crit_mod = 0.5;
-    if comp.school1 == schools.physical then
+    if comp.school1 == schools.physical and bid ~= auto_wand_spell_id then
         base_crit_mod = 1.0;
     end
 
