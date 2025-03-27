@@ -281,6 +281,37 @@ local event_dispatch = {
             print(core.addon_name..": detected client and addon data mismatch. Consider checking for an update.");
         end
 
+        -- temporary popup for first time using SpellCoda,
+        -- delete this at some point including special case in config on key "swc_to_sc_transition_popup_shown"
+        if not __sc_p_acc.swc_to_sc_transition_popup_shown then
+            local frame = CreateFrame("Frame", "__sc__transition_popup", UIParent, "DialogBoxFrame")
+            frame:SetSize(400, 200);
+            frame:SetPoint("CENTER", 0, 100);
+
+            local icon = frame:CreateTexture(nil, "ARTWORK");
+            icon:SetSize(32, 32);
+            icon:SetPoint("TOPLEFT", 12, -12);
+            icon:SetTexture("Interface\\Icons\\spell_fire_elementaldevastation");
+
+            local text = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight");
+            text:SetPoint("TOPLEFT", 25, -60);
+            text:SetPoint("RIGHT", -10, 0);
+            text:SetJustifyH("LEFT");
+            text:SetJustifyV("TOP");
+            text:SetText("|cFFFF0000StatWeightsClassic|r has been largely overhauled and renamed\nto |cFFFF0000SpellCoda|r. All classes are now implemented.\n\nInteract with |cFFFF0000SpellCoda|r by typing:\n\n   |cFF00FF00/spellcoda|r");
+
+            __sc__transition_popupButton:SetSize(180, 24);
+            __sc__transition_popupButton:SetPoint("BOTTOM", 0, 20);
+            __sc__transition_popupButton:SetText("Okay! Don't show again");
+            __sc__transition_popupButton:SetNormalFontObject("GameFontNormal");
+            __sc__transition_popupButton:SetDisabledFontObject("GameFontDisable");
+            __sc__transition_popupButton:SetHighlightFontObject("GameFontHighlight");
+            __sc__transition_popupButton:SetScript("OnClick", function()
+                __sc_p_acc.swc_to_sc_transition_popup_shown = true;
+                frame:Hide();
+            end)
+            frame:Show()
+        end
     end,
     ["ACTIONBAR_SLOT_CHANGED"] = function(_, slot)
         if not core.sw_addon_loaded or config.settings.overlay_disable then
