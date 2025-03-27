@@ -480,7 +480,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         end
     end
 
-    if info.aoe_to_single_ratio > 1 then
+    if info.expected_st ~= 0 and info.aoe_to_single_ratio > 1 then
         if info.expected ~= info.expected_st then
             scrollable_eval_mode_txt = append_to_txt_delimitered(scrollable_eval_mode_txt, "Optimistic effect");
         else
@@ -512,7 +512,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             end
         end
 
-        if info.aoe_to_single_ratio > 1 then
+        if info.expected_st ~= 0 and info.aoe_to_single_ratio > 1 then
             if info.expected ~= info.expected_st then
                 evaluation_options = append_to_txt_delimitered(evaluation_options, "ALT for 1.00x effect");
             else
@@ -925,7 +925,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 add_line(
                     tooltip,
                     string.format("%s%s:", effect, hit_str),
-                    string.format("%.1f over %.1fs (%.1f,%.1f,%.1f every %.1fs x %.0f)",
+                    string.format("%.1f over %.1fs (%.1f;%.1f;%.1f every %.1fs x %.0f)",
                         info.ot_min_noncrit_if_hit1,
                         info.ot_dur1,
                         (0.5 * dmg_wo_sp + dmg_from_sp) / info.ot_ticks1,
@@ -942,7 +942,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 add_line(
                     tooltip,
                     string.format("%s%s:", effect, hit_str),
-                    string.format("%.1f over %.1fs (%.1f,%.1f,%.1f every %.1fs x %.0f)",
+                    string.format("%.1f over %.1fs (%.1f;%.1f;%.1f every %.1fs x %.0f)",
                         info.ot_min_noncrit_if_hit1,
                         info.ot_dur1,
                         ((2 / 3) * dmg_wo_sp + dmg_from_sp) / info.ot_ticks1,
@@ -958,7 +958,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 add_line(
                     tooltip,
                     string.format("%s:", effect),
-                    string.format("%.1f over %.0fs (%.1f, %.1f, %.1f, %.1f, %.1f, %.1f, %.1f every %.1fs x %.0f)",
+                    string.format("%.1f over %.0fs (%.1f;%.1f;%.1f;%.1f;%.1f;%.1f;%.1f every %.1fs x %.0f)",
                         info.ot_min_noncrit_if_hit1,
                         info.ot_dur1,
                         ((3 * 0.1425 + 1.0) * heal_wo_sp + heal_from_sp) / info.ot_ticks1,
@@ -1147,7 +1147,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             extra_info_multi = extra_info_multi .. string.format("ISB debuff uptime %.1f%%", 100 * isb_uptime);
         end
 
-        if info.aoe_to_single_ratio > 1 then
+        if info.expected_st ~= 0 and info.aoe_to_single_ratio > 1 then
             if extra_info_st == "" then
                 extra_info_st = "1.00x effect";
             else
@@ -1284,8 +1284,8 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         add_line(
             tooltip,
             string.format("%s until OOM:", effect),
-            string.format("%.1f (%.1f casts, %.1f sec)",
-                info.effect_until_oom,
+            string.format("%s (%.1f casts, %.1f sec)",
+                format_number(info.effect_until_oom, 1),
                 info.num_casts_until_oom,
                 info.time_until_oom),
             effect_color("normal")
@@ -2106,7 +2106,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 else
                     tooltip:AddDoubleLine(string.format("  %s %s", spell_texture_str, diff.disp), " ");
                 end
-            elseif diff.id == 75 then -- hunter ranged auto attack
+            elseif diff.id == spids.auto_shot or diff.id == spids.shoot then -- hunter ranged auto attack
                 if cmp_slots[item_fits_in_slot] == slots.RangedSlot then
                     tooltip:AddDoubleLine(string.format("  |T%s:16:16:0:0|t  %s", tt.new_item.tex, diff.disp), " ");
                 else

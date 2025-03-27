@@ -33,7 +33,6 @@ local ui = {};
 
 local __sc_frame = {};
 
-local icon_overlay_font = "Interface\\AddOns\\SpellCoda\\font\\Oswald-Bold.ttf";
 local role_icons = "Interface\\LFGFrame\\UI-LFG-ICON-ROLES";
 local font = "GameFontHighlightSmall";
 local libstub_data_broker = LibStub("LibDataBroker-1.1", true);
@@ -1661,6 +1660,68 @@ local function create_sw_ui_tooltip_frame()
     f_txt:SetWordWrap(true);
 end
 
+local fonts = {
+    "Fonts\\FRIZQT__.TTF",
+    "Fonts\\ARIALN.TTF",
+    "Fonts\\MORPHEUS.TTF",
+    "Fonts\\SKURRI.TTF",
+    "Fonts\\2002.TTF",
+    "Interface\\AddOns\\SpellCoda\\font\\Oswald-Bold.ttf",
+};
+
+local font_dropdowns = {};
+for _, font_path in ipairs(fonts) do
+    font_dropdowns[#font_dropdowns + 1] = {font_path, "OUTLINE"};
+    font_dropdowns[#font_dropdowns + 1] = {font_path, "THICKOUTLINE"};
+end
+
+local function create_font_dropdown(parent_frame, dropdown_name, font_config_key, callback_fn)
+    local dropdown_frame = libDD:Create_UIDropDownMenu(dropdown_name, parent_frame);
+
+    dropdown_frame._type = "DropDownMenu";
+
+    dropdown_frame.init_func = function()
+        libDD:UIDropDownMenu_Initialize(dropdown_frame, function()
+
+            for k, v in pairs(font_dropdowns) do
+                local txt = (v[1]:match("([^\\]+)$") or v[1]).."   0123456789  " .. v[2];
+                local font_object = CreateFont("__sc_font_dropdown_font_"..k);
+                font_object:SetFont(v[1], 12, v[2]);
+
+                local btn = {
+                    text = txt,
+                    fontObject = font_object,
+                    checked = false,
+                    func = function(self)
+                        self.checked = true;
+                        libDD:UIDropDownMenu_SetText(dropdown_frame, txt);
+                        config.settings[font_config_key][1] = v[1];
+                        config.settings[font_config_key][2] = v[2];
+                        callback_fn();
+                    end;
+                };
+
+                if config.settings[font_config_key][1] == v[1] and config.settings[font_config_key][2] == v[2] then
+                    libDD:UIDropDownMenu_SetText(dropdown_frame, txt);
+                    btn.checked = true;
+                    callback_fn();
+                end
+
+                libDD:UIDropDownMenu_AddButton(btn);
+            end
+        end);
+
+        -- Configure dropdown appearance
+        libDD:UIDropDownMenu_SetWidth(dropdown_frame, 200);
+        libDD:UIDropDownMenu_SetButtonWidth(dropdown_frame, 224);
+        libDD:UIDropDownMenu_JustifyText(dropdown_frame, "LEFT");
+
+    end;
+
+    return dropdown_frame;
+end;
+
+
 local function create_sw_ui_overlay_frame()
 
     local f, f_txt;
@@ -1783,28 +1844,6 @@ local function create_sw_ui_overlay_frame()
 
 
         sc.overlay.overlay_reconfig();
-        --sc.loadouts.force_update = true;
-        --sc.core.update_action_bar_needed = true;
-        --for _, v in pairs(sc.overlay.spell_book_frames) do
-        --    if v.frame then
-        --        local spell_name = v.frame.SpellName:GetText();
-        --        local spell_rank_name = v.frame.SpellSubName:GetText();
-        --        local _, _, _, _, _, _, id = GetSpellInfo(spell_name, spell_rank_name);
-        --        for i = 1, 3 do
-        --            v.overlay_frames[i]:SetFont(
-        --                icon_overlay_font, val, "THICKOUTLINE");
-        --        end
-        --    end
-        --end
-        --for _, v in pairs(sc.overlay.action_id_frames) do
-        --    if v.frame then
-        --        for i = 1, 3 do
-        --            v.overlay_frames[i]:SetFont(
-        --                icon_overlay_font, val, "THICKOUTLINE");
-        --        end
-        --    end
-        --end
-
     end);
 
     __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 25;
@@ -1833,20 +1872,27 @@ local function create_sw_ui_overlay_frame()
     f:SetScript("OnValueChanged", function(self, val)
         config.settings.overlay_offset = val;
         self.val_txt:SetText(string.format("%.1f", val))
-        --sc.core.update_action_bar_needed = true;
-        --sc.core.update_action_bar_needed = true;
-        --sc.loadouts.force_update = true;
         sc.overlay.overlay_reconfig();
-        --sc.overlay.update_icon_overlay_settings();
     end);
 
-    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 20;
-    local div = __sc_frame.overlay_frame:CreateTexture(nil, "ARTWORK")
-    div:SetColorTexture(0.5, 0.5, 0.5, 0.6);
-    div:SetHeight(1);
-    div:SetPoint("TOPLEFT", __sc_frame.overlay_frame, "TOPLEFT", 0, __sc_frame.overlay_frame.y_offset);
-    div:SetPoint("TOPRIGHT", __sc_frame.overlay_frame, "TOPRIGHT", 0, __sc_frame.overlay_frame.y_offset);
-    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 5;
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 30;
+
+
+    f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
+    f_txt:SetFontObject(GameFontNormal)
+    f_txt:SetTextColor(1.0, 1.0, 1.0);
+    f_txt:SetPoint("TOPLEFT", 15, __sc_frame.overlay_frame.y_offset);
+    f_txt:SetText("Font");
+
+    local overlay_font_dropdown_f = create_font_dropdown(
+        __sc_frame.overlay_frame,
+        "__sc_frame_setting_overlay_font",
+        "overlay_font",
+        sc.overlay.overlay_reconfig
+    );
+    overlay_font_dropdown_f:SetPoint("TOPLEFT", 232, __sc_frame.overlay_frame.y_offset+6);
+
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 25;
 
     f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
@@ -1858,38 +1904,6 @@ local function create_sw_ui_overlay_frame()
 
     __sc_frame.overlay_frame.num_overlay_components_toggled = 0;
     __sc_frame.overlay_frame.num_overlay_special_toggled = 0;
-
-    local icon_checkbox_func = function(self)
-
-        local checked = self:GetChecked();
-        if checked then
-
-            __sc_frame.overlay_frame.num_overlay_components_toggled = __sc_frame.overlay_frame.num_overlay_components_toggled + 1;
-        else
-            __sc_frame.overlay_frame.num_overlay_components_toggled = __sc_frame.overlay_frame.num_overlay_components_toggled - 1;
-        end
-
-        if __sc_frame.overlay_frame.num_overlay_components_toggled > 3 then
-            checked = false;
-            self:SetChecked(false);
-            __sc_frame.overlay_frame.num_overlay_components_toggled = 3;
-        end
-        config.settings[self._settings_id] = checked;
-
-        sc.core.update_action_bar_needed = true;
-    end;
-
-    --local special_overlay_component_func = function(self)
-
-    --    icon_checkbox_func(self);
-    --    local checked = self:GetChecked();
-
-    --    if checked then
-    --        __sc_frame.overlay_frame.num_overlay_special_toggled = __sc_frame.overlay_frame.num_overlay_special_toggled + 1;
-    --    else
-    --        __sc_frame.overlay_frame.num_overlay_special_toggled = __sc_frame.overlay_frame.num_overlay_special_toggled - 1;
-    --    end
-    --end
 
     local overlay_components = {
         {
@@ -1988,6 +2002,26 @@ local function create_sw_ui_overlay_frame()
         },
     };
 
+    local icon_checkbox_func = function(self)
+
+        local checked = self:GetChecked();
+        if checked then
+
+            __sc_frame.overlay_frame.num_overlay_components_toggled = __sc_frame.overlay_frame.num_overlay_components_toggled + 1;
+        else
+            __sc_frame.overlay_frame.num_overlay_components_toggled = __sc_frame.overlay_frame.num_overlay_components_toggled - 1;
+        end
+
+        if __sc_frame.overlay_frame.num_overlay_components_toggled > 3 then
+            checked = false;
+            self:SetChecked(false);
+            __sc_frame.overlay_frame.num_overlay_components_toggled = 3;
+        end
+        config.settings[self._settings_id] = checked;
+
+        sc.core.update_action_bar_needed = true;
+    end;
+
     multi_row_checkbutton(overlay_components, __sc_frame.overlay_frame, 2, icon_checkbox_func);
 
     __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 15;
@@ -2034,7 +2068,7 @@ local function create_sw_ui_overlay_frame()
                 txt = "Only show for evaluable spells",
             },
         },
-        __sc_frame.overlay_frame, 1, icon_checkbox_func);
+        __sc_frame.overlay_frame, 1);
 
     __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 10;
     f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_currently_casting_info_scale", __sc_frame.overlay_frame, "UISliderTemplate");
@@ -2064,6 +2098,22 @@ local function create_sw_ui_overlay_frame()
         sc.overlay.currently_casting_f2.icon_frame:SetScale(val);
         sc.overlay.currently_casting_frame_parent.border:SetScale(val);
     end);
+
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 30;
+
+    f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
+    f_txt:SetFontObject(GameFontNormal)
+    f_txt:SetTextColor(1.0, 1.0, 1.0);
+    f_txt:SetPoint("TOPLEFT", 15, __sc_frame.overlay_frame.y_offset);
+    f_txt:SetText("Font");
+
+    local overlay_currently_casting_font_dropdown_f = create_font_dropdown(
+        __sc_frame.overlay_frame,
+        "__sc_frame_setting_overlay_currently_casting_font",
+        "overlay_currently_casting_font",
+        sc.overlay.set_currently_casting_frames_font
+    );
+    overlay_currently_casting_font_dropdown_f:SetPoint("TOPLEFT", 232, __sc_frame.overlay_frame.y_offset+6);
 end
 
 local function create_sw_ui_calculator_frame()
@@ -3757,6 +3807,23 @@ end
 local function load_sw_ui()
 
     if libstub_data_broker then
+        local tooltip_show_fn = function(tooltip)
+            tooltip:AddLine(sc.core.addon_name.." v"..sc.core.version);
+            tooltip:AddLine("|cFF9CD6DELeft click:|r Interact with addon");
+            tooltip:AddLine("|cFF9CD6DEMiddle click:|r Hide this button");
+            if config.settings.overlay_old_rank then
+                tooltip:AddLine("|cFF9CD6DERight click:|r |cFF00FF00(IS ON)|r Toggle old rank warning overlay");
+            else
+                tooltip:AddLine("|cFF9CD6DERight click:|r |cFFFF0000(IS OFF)|r Toggle old rank warning overlay");
+            end
+            tooltip:AddLine(" ");
+            tooltip:AddLine("|cFF9CD6DEAddon data generated from:|r");
+            tooltip:AddLine("    "..sc.client_name_src.." "..sc.client_version_src);
+            tooltip:AddLine("|cFF9CD6DECurrent client build:|r "..sc.client_version_loaded);
+            tooltip:AddLine("|cFF9CD6DEFactory reset (reloads UI):|r /sc reset");
+            tooltip:AddLine("https://www.curseforge.com/wow/addons/spellcoda");
+        end;
+
         libstub_launcher = libstub_data_broker:NewDataObject(sc.core.addon_name, {
             type = "launcher",
             icon = "Interface\\Icons\\spell_fire_elementaldevastation",
@@ -3769,6 +3836,8 @@ local function load_sw_ui()
                     if __sc_frame_setting_overlay_disable:GetChecked() then
                         __sc_frame_setting_overlay_disable:Click();
                     end
+                    libstub_icon.tooltip:ClearLines();
+                    tooltip_show_fn(libstub_icon.tooltip);
                 else
                     if __sc_frame:IsShown() then
                         __sc_frame:Hide();
@@ -3777,27 +3846,9 @@ local function load_sw_ui()
                     end
                 end
             end,
-            OnTooltipShow = function(tooltip)
-                tooltip:AddLine(sc.core.addon_name.." v"..sc.core.version);
-                tooltip:AddLine("|cFF9CD6DELeft click:|r Interact with addon");
-                tooltip:AddLine("|cFF9CD6DEMiddle click:|r Hide this button");
-                if config.settings.overlay_old_rank then
-                    tooltip:AddLine("|cFF9CD6DERight click:|r |cFF00FF00(IS ON)|r Toggle old rank warning overlay");
-                else
-                    tooltip:AddLine("|cFF9CD6DERight click:|r |cFFFF0000(IS OFF)|r Toggle old rank warning overlay");
-                end
-                tooltip:AddLine(" ");
-                tooltip:AddLine("|cFF9CD6DEAddon data generated from:|r");
-                tooltip:AddLine("    "..sc.client_name_src.." "..sc.client_version_src);
-                tooltip:AddLine("|cFF9CD6DECurrent client build:|r "..sc.client_version_loaded);
-                tooltip:AddLine("|cFF9CD6DEFactory reset (reloads UI):|r /sc reset");
-                tooltip:AddLine("https://www.curseforge.com/wow/addons/spellcoda");
-            end
-
+            OnTooltipShow = tooltip_show_fn
         });
-        if libstub_icon then
-            libstub_icon:Register(sc.core.addon_name, libstub_launcher, config.settings.libstub_icon_conf);
-        end
+        libstub_icon:Register(sc.core.addon_name, libstub_launcher, config.settings.libstub_icon_conf);
     end
 
     create_sw_ui_spells_frame();
@@ -3911,7 +3962,6 @@ end
 
 ui.font                                 = font;
 ui.load_sw_ui                           = load_sw_ui;
-ui.icon_overlay_font                    = icon_overlay_font;
 ui.create_sw_base_ui                    = create_sw_base_ui;
 ui.effects_from_ui                      = effects_from_ui;
 ui.display_spell_diff                   = display_spell_diff;

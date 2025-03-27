@@ -78,16 +78,18 @@ local default_settings     = {
     overlay_icon_top_clearance                      = false,
     overlay_icon_bottom_clearance                   = false,
 
+    overlay_update_freq                             = 3,
+    overlay_font                                    = {"Interface\\AddOns\\SpellCoda\\font\\Oswald-Bold.ttf", "THICKOUTLINE"},
+    overlay_font_size                               = 8,
+    overlay_offset                                  = 0.0,
+
     overlay_disable_currently_casting_info          = true,
     overlay_currently_casting_only_eval             = true,
     overlay_currently_casting_info_scale            = 1.0,
     overlay_currently_casting_info_region           = "CENTER",
     overlay_currently_casting_info_x                = 350,
     overlay_currently_casting_info_y                = 0,
-
-    overlay_update_freq                             = 3,
-    overlay_font_size                               = 8,
-    overlay_offset                                  = 0.0,
+    overlay_currently_casting_font                  = {"Fonts\\FRIZQT__.TTF", "OUTLINE"},
 
     -- profiles
     profiles_dual_spec                              = false,

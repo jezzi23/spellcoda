@@ -103,7 +103,8 @@ local function init_frame_overlay(frame_info)
         for i = 1, 3 do
             frame_info.overlay_frames[i] = frame_info.frame:CreateFontString(nil, "OVERLAY");
             frame_info.overlay_frames[i]:SetFont(
-                sc.ui.icon_overlay_font, config.settings.overlay_font_size, "THICKOUTLINE");
+                --sc.ui.icon_overlay_font, config.settings.overlay_font_size, "THICKOUTLINE");
+                config.settings.overlay_font[1], config.settings.overlay_font_size, config.settings.overlay_font[2]);
             frame_info.overlay_frames[i]:SetPoint(anchors[i], config.settings.overlay_offset + 1.0, offsets[i]);
         end
     end
@@ -122,7 +123,7 @@ local function overlay_reconfig()
         if spell_book_frames[i] then
             for j = 1, 3 do
                 spell_book_frames[i].overlay_frames[j]:SetFont(
-                    sc.ui.icon_overlay_font, config.settings.overlay_font_size, "THICKOUTLINE");
+                config.settings.overlay_font[1], config.settings.overlay_font_size, config.settings.overlay_font[2]);
                 spell_book_frames[i].overlay_frames[j]:SetPoint(anchors[j], config.settings.overlay_offset + 1.0, offsets[j]);
             end
         end
@@ -131,7 +132,7 @@ local function overlay_reconfig()
         if v.frame then
             for j = 1, 3 do
                 v.overlay_frames[j]:SetFont(
-                    sc.ui.icon_overlay_font, config.settings.overlay_font_size, "THICKOUTLINE");
+                config.settings.overlay_font[1], config.settings.overlay_font_size, config.settings.overlay_font[2]);
                 v.overlay_frames[j]:SetPoint(anchors[j], config.settings.overlay_offset + 1.0, offsets[j]);
             end
         end
@@ -835,9 +836,6 @@ local function create_currently_casting_frame()
     frames.icon_texture:SetAllPoints(frames.icon_frame);
     frames.icon_texture:SetTexture("Interface\\Icons\\Spell_Nature_Thorns");
 
-    local font = "Fonts\\FRIZQT__.TTF";
-    --font = "Interface\\AddOns\\SpellCoda\\font\\Oswald-Bold.ttf";
-
     frames.txts.right_top_text = frames.icon_frame:CreateFontString(nil, "OVERLAY");
     frames.txts.right_top_text.size = 13;
     frames.txts.right_top_text:SetPoint("BOTTOMLEFT", frames.icon_frame, "TOPRIGHT", 0, -15);
@@ -897,10 +895,6 @@ local function create_currently_casting_frame()
     frames.txts.bottom_left_text.size = 9;
     frames.txts.bottom_left_text:SetPoint("RIGHT", frames.icon_frame, "BOTTOM", -2, -4);
     frames.txts.bottom_left_text:SetTextColor(effect_color("time_until_oom"));
-
-    for _, v in pairs(frames.txts) do
-        v:SetFont(font, v.size, "OUTLINE");
-    end
 
     return frames;
 end
@@ -1124,6 +1118,20 @@ local function currently_casting_new_spell(spell_id)
     overlay.currently_casting_active = new;
 end
 
+local function set_currently_casting_frames_font()
+    for _, v in pairs(currently_casting_frames) do
+        for _, text in pairs(v.txts) do
+            text:SetFont(
+                config.settings.overlay_currently_casting_font[1],
+                text.size,
+                config.settings.overlay_currently_casting_font[2]
+            );
+        end
+
+        
+    end
+end
+
 local function init_currently_casting_frames()
     overlay.currently_casting_f1 = create_currently_casting_frame();
     overlay.currently_casting_f2 = create_currently_casting_frame();
@@ -1322,19 +1330,20 @@ local function update_overlay()
     end
 end
 
-overlay.spell_book_frames               = spell_book_frames;
-overlay.action_id_frames                = action_id_frames;
-overlay.setup_action_bars               = setup_action_bars;
-overlay.update_overlay                  = update_overlay;
-overlay.update_icon_overlay_settings    = update_icon_overlay_settings;
-overlay.reassign_overlay_icon           = reassign_overlay_icon;
-overlay.clear_overlays                  = clear_overlays;
-overlay.old_rank_warning_traversal      = old_rank_warning_traversal;
-overlay.overlay_eval_flags              = overlay_eval_flags;
-overlay.overlay_reconfig                = overlay_reconfig;
-overlay.init_currently_casting_frames   = init_currently_casting_frames;
-overlay.currently_casting_new_spell     = currently_casting_new_spell;
-overlay.currently_casting_frame_parent  = currently_casting_frame_parent;
+overlay.spell_book_frames                   = spell_book_frames;
+overlay.action_id_frames                    = action_id_frames;
+overlay.setup_action_bars                   = setup_action_bars;
+overlay.update_overlay                      = update_overlay;
+overlay.update_icon_overlay_settings        = update_icon_overlay_settings;
+overlay.reassign_overlay_icon               = reassign_overlay_icon;
+overlay.clear_overlays                      = clear_overlays;
+overlay.old_rank_warning_traversal          = old_rank_warning_traversal;
+overlay.overlay_eval_flags                  = overlay_eval_flags;
+overlay.overlay_reconfig                    = overlay_reconfig;
+overlay.init_currently_casting_frames       = init_currently_casting_frames;
+overlay.currently_casting_new_spell         = currently_casting_new_spell;
+overlay.currently_casting_frame_parent      = currently_casting_frame_parent;
+overlay.set_currently_casting_frames_font   = set_currently_casting_frames_font
 
 sc.overlay = overlay;
 sc.ext.spell_cache = spell_cache;
