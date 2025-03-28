@@ -165,8 +165,11 @@ local function load_persistent_data(persistent_data, template_data)
 
     -- purge obsolete settings
     for k, v in pairs(persistent_data) do
-        if template_data[k] == nil then
-            persistent_data[k] = nil;
+
+        if k ~= "swc_to_sc_transition_popup_shown" then -- TEMPORARY: delete this when popup is removed later on
+            if template_data[k] == nil then
+                persistent_data[k] = nil;
+            end
         end
     end
     -- load defaults for new settings
@@ -342,7 +345,7 @@ local function activate_loadout_config()
 end
 
 local function save_config()
-    --
+
     __sc_p_acc.version_saved = sc.core.version_id;
     __sc_p_char.version_saved = sc.core.version_id;
     if sc.core.use_acc_defaults then
