@@ -1,4 +1,4 @@
-name: Create release zip file from tagged versions
+name: Release Workflow
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
-      - name: SpellCoda must be name of top level dir containing addon
+      - name: Prepare SpellCoda directory
         run: |
           shopt -s extglob
           mkdir -p topdir
@@ -30,25 +30,13 @@ jobs:
         run: |
           zip -r ${{ steps.get_tag.outputs.TAG_NAME }}.zip SpellCoda/
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.get_tag.outputs.TAG_NAME }}
-          release_name: Release ${{ steps.get_tag.outputs.TAG_NAME }}
-          draft: false
-          prerelease: false
+          name: Release ${{ steps.get_tag.outputs.TAG_NAME }}
           generate_release_notes: true
-
-      - name: Upload release asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./${{ steps.get_tag.outputs.TAG_NAME }}.zip
-          asset_name: ${{ steps.get_tag.outputs.TAG_NAME }}.zip
-          asset_content_type: application/zip
-
+          files: |
+            ${{ steps.get_tag.outputs.TAG_NAME }}.zip
