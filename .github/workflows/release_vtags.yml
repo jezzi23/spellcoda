@@ -38,5 +38,6 @@ jobs:
           tag_name: ${{ steps.get_tag.outputs.TAG_NAME }}
           name: Release ${{ steps.get_tag.outputs.TAG_NAME }}
           generate_release_notes: true
+          draft: false
           files: |
             ${{ steps.get_tag.outputs.TAG_NAME }}.zip
