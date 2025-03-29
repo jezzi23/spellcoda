@@ -47,7 +47,7 @@ jobs:
           curl -X POST \
             -H "Content-Type: application/json" \
             -d '{
-              "content": "||@everyone|| A new release has been published!",
+              "content": "A new release has been published!",
               "embeds": [
                 {
                   "title": "Release ${{ steps.get_tag.outputs.TAG_NAME }}",
