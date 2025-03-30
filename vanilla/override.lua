@@ -283,10 +283,10 @@ elseif sc.class == sc.classes.paladin then
 		{"ability", "effect_mod_flat", 115, {spids.flash_of_light}, 0, 1},
     };
     -- Holy light and flash of light are treated as dummies in vanilla client data, coef missing
-    for _, v in pairs(rank_seqs[spids.holy_light]) do
+    for _, v in pairs(rank_seqs[spids.flash_of_light]) do
         spells[v].direct.coef = spell_coef_lvl_adjusted(0.429, spells[v].lvl_req);
     end
-    for _, v in pairs(rank_seqs[spids.flash_of_light]) do
+    for _, v in pairs(rank_seqs[spids.holy_light]) do
         spells[v].direct.coef = spell_coef_lvl_adjusted(0.714, spells[v].lvl_req);
     end
 
