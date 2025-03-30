@@ -155,6 +155,15 @@ local function apply_talents(loadout, effects)
 
         -- Testing all talents
         local applied = 0;
+        for k, _ in pairs(loadout.talents.pts) do
+            if sc.talent_ranks[k] then
+                loadout.talents.pts[k] = #sc.talent_ranks[k];
+            else
+                loadout.talents.pts[k] = 1;
+            end
+
+        end
+
         for _, v in pairs(sc.talent_ranks) do
             for _, i in pairs(v) do
                 apply_effect(effects, i, sc.talent_effects[i], true, 1);
