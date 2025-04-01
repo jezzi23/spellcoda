@@ -1190,7 +1190,7 @@ local class_stats_spell = (function()
                 -- clearcast
                 local pts = l_talents.pts[106];
                 if pts ~= 0 then
-                    stats.clearcast = stats.clearcast + 0.02 * pts;
+                    stats.clearcast_p = stats.clearcast_p + 0.02 * pts;
                 end
 
                 local pts = l_talents.pts[212];
