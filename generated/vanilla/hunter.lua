@@ -5533,9 +5533,6 @@ sc.class_buffs = {
 	[14319] = {
 			{"raw", "rap_flat", 50, nil, 2, 0},
 	},
-	[1213268] = {
-			{"raw", "ap_flat", 110, nil, 0, 1},
-	},
 	[25296] = {
 			{"raw", "rap_flat", 120, nil, 2, 0},
 	},
@@ -5546,9 +5543,6 @@ sc.class_buffs = {
 	[3043] = {
 			{"by_attr", "stat_flat", -20, {1,}, 2, 0},
 			{"by_attr", "stat_flat", -20, {2,}, 2, 1},
-	},
-	[14323] = {
-			{"raw", "ap_flat", 45, nil, 0, 1},
 	},
 	[415401] = {
 			{"ability", "crit", 0.02, {409552,409493,409593,437123,2643,19434,3044,19503,20736,409433,}, 0, 0},
@@ -5571,9 +5565,6 @@ sc.class_buffs = {
 	[13165] = {
 			{"raw", "rap_flat", 20, nil, 2, 0},
 	},
-	[1130] = {
-			{"raw", "ap_flat", 20, nil, 0, 1},
-	},
 	[415362] = {
 			{"ability", "effect_mod", 0.14999999, {1495,2973,415335,}, 0, 0},
 	},
@@ -5583,9 +5574,6 @@ sc.class_buffs = {
 	[409580] = {
 			{"by_attr", "stat_mod", 0.099999994, {1,2,3,4,5,}, 32, 0},
 	},
-	[14324] = {
-			{"raw", "ap_flat", 75, nil, 0, 1},
-	},
 	[17331] = {
 			{"raw", "cast_haste", -0.099999994, nil, 0, 0},
 			{"raw", "melee_haste", -0.11, nil, 33, 1},
@@ -5593,9 +5581,6 @@ sc.class_buffs = {
 	},
 	[428728] = {
 			{"raw", "melee_haste", 0.06, nil, 33, 0},
-	},
-	[14325] = {
-			{"raw", "ap_flat", 110, nil, 0, 1},
 	},
 	[19506] = {
 			{"raw", "rap_flat", 50, nil, 2, 0},
@@ -5633,6 +5618,21 @@ sc.class_buffs = {
 local class_hostile_buffs = {
 	[1218358] = {
 			{"by_school", "target_res_flat", -50, {1,}, 0, 1},
+	},
+	[1213268] = {
+			{"raw", "rap_flat", 110, nil, 0, 1},
+	},
+	[14323] = {
+			{"raw", "rap_flat", 45, nil, 0, 1},
+	},
+	[1130] = {
+			{"raw", "rap_flat", 20, nil, 0, 1},
+	},
+	[14324] = {
+			{"raw", "rap_flat", 75, nil, 0, 1},
+	},
+	[14325] = {
+			{"raw", "rap_flat", 110, nil, 0, 1},
 	},
 };
 for k, v in pairs(class_hostile_buffs) do sc.hostile_buffs[k] = v; end
