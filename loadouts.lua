@@ -655,7 +655,7 @@ local function effects_finalize_forced(loadout, effects)
 
     local crit_from_int = int_to_spell_crit(effects.by_attr.stat_flat[attr.intellect], loadout.lvl);
     for i = 1, 7 do
-        effects.by_school.crit[i] = effects.by_school.crit[i] + crit_from_int;
+        effects.by_school.crit_forced[i] = effects.by_school.crit_forced[i] + crit_from_int;
     end
 
     effects.raw.mana = 
