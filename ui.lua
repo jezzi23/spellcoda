@@ -2054,7 +2054,7 @@ local function create_sw_ui_overlay_frame()
         {
             {
                 id = "overlay_disable_currently_casting_info",
-                txt = "Disable currently casting spell frame",
+                txt = "Disable spell cast info frame",
                 func = function(self)
                     if self:GetChecked() then
                         sc.overlay.currently_casting_frame_parent.border.disabled_txt:Show();
@@ -2067,10 +2067,14 @@ local function create_sw_ui_overlay_frame()
                 id = "overlay_currently_casting_only_eval",
                 txt = "Only show for evaluable spells",
             },
+            {
+                id = "overlay_currently_casting_horizontal",
+                txt = "Horizontal animation",
+            },
         },
-        __sc_frame.overlay_frame, 1);
+        __sc_frame.overlay_frame, 2);
 
-    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 10;
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 25;
     f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_currently_casting_info_scale", __sc_frame.overlay_frame, "UISliderTemplate");
     f._type = slider_frame_type;
     f:SetOrientation('HORIZONTAL');

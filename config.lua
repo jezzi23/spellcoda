@@ -85,6 +85,7 @@ local default_settings     = {
 
     overlay_disable_currently_casting_info          = true,
     overlay_currently_casting_only_eval             = true,
+    overlay_currently_casting_horizontal            = false,
     overlay_currently_casting_info_scale            = 1.0,
     overlay_currently_casting_info_region           = "CENTER",
     overlay_currently_casting_info_x                = 350,

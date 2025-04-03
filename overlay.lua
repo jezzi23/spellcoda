@@ -29,8 +29,9 @@ local action_bar_frame_names = {};
 local action_id_frames = {};
 local spell_book_frames = {};
 local action_bar_addon_name = "Default";
-local externally_registered_spells = {};
 local overlay_component_id_to_overlay_slot_idx = {};
+local externally_registered_spells = {};
+local external_overlay_frames = {};
 
 local mana_cost_overlay, cast_speed_overlay, mana_restoration_overlay, threat_overlay;
 
@@ -47,6 +48,50 @@ sc.ext.unregister_spell = function(spell_id)
     if spells[spell_id] and externally_registered_spells[spell_id] then
         externally_registered_spells[spell_id] = math.max(0, externally_registered_spells[spell_id] - 1);
     end
+end
+
+
+local function init_frame_overlay(frame_info)
+
+    local offsets = {-3, -1.5, 0};
+    local anchors = {"TOP", "CENTER", "BOTTOM"};
+
+    if not frame_info.overlay_frames then
+        frame_info.overlay_frames = {};
+
+        for i = 1, 3 do
+            frame_info.overlay_frames[i] = frame_info.frame:CreateFontString(nil, "OVERLAY");
+            frame_info.overlay_frames[i]:SetFont(
+                config.settings.overlay_font[1], config.settings.overlay_font_size, config.settings.overlay_font[2]);
+            frame_info.overlay_frames[i]:SetPoint(anchors[i], config.settings.overlay_offset + 1.0, offsets[i]);
+        end
+    end
+end
+
+
+sc.ext.register_overlay_frame = function(frame, spell_id)
+
+    sc.loadouts.force_update = true;
+    if external_overlay_frames[frame] then
+        external_overlay_frames[frame].spell_id = spell_id;
+    else
+        external_overlay_frames[frame] = {frame = frame, spell_id = spell_id};
+        init_frame_overlay(external_overlay_frames[frame]);
+    end
+
+    for i = 1, 3 do
+        external_overlay_frames[frame].overlay_frames[i]:Hide();
+    end
+end
+
+sc.ext.unregister_overlay_frame = function(frame)
+
+    if external_overlay_frames[frame] and external_overlay_frames[frame].overlay_frames then
+        for i = 1, 3 do
+            external_overlay_frames[frame].overlay_frames[i]:Hide();
+        end
+    end
+    external_overlay_frames[frame] = nil;
 end
 
 local function check_old_rank(frame_info, spell_id, clvl)
@@ -90,22 +135,11 @@ local function old_rank_warning_traversal(clvl)
             end
         end
     end
-end
-
-local function init_frame_overlay(frame_info)
-
-    local offsets = {-3, -1.5, 0};
-    local anchors = {"TOP", "CENTER", "BOTTOM"};
-
-    if not frame_info.overlay_frames then
-        frame_info.overlay_frames = {};
-
-        for i = 1, 3 do
-            frame_info.overlay_frames[i] = frame_info.frame:CreateFontString(nil, "OVERLAY");
-            frame_info.overlay_frames[i]:SetFont(
-                --sc.ui.icon_overlay_font, config.settings.overlay_font_size, "THICKOUTLINE");
-                config.settings.overlay_font[1], config.settings.overlay_font_size, config.settings.overlay_font[2]);
-            frame_info.overlay_frames[i]:SetPoint(anchors[i], config.settings.overlay_offset + 1.0, offsets[i]);
+    for _, v in pairs(external_overlay_frames) do
+        if v.frame then
+            if spells[v.spell_id] then
+                check_old_rank(v, v.spell_id, clvl);
+            end
         end
     end
 end
@@ -137,6 +171,15 @@ local function overlay_reconfig()
             end
         end
     end
+    for _, v in pairs(external_overlay_frames) do
+        if v.frame then
+            for j = 1, 3 do
+                v.overlay_frames[j]:SetFont(
+                config.settings.overlay_font[1], config.settings.overlay_font_size, config.settings.overlay_font[2]);
+                v.overlay_frames[j]:SetPoint(anchors[j], config.settings.overlay_offset + 1.0, offsets[j]);
+            end
+        end
+    end
 end
 local function clear_overlays()
 
@@ -150,6 +193,15 @@ local function clear_overlays()
         end
     end
     for _, v in pairs(spell_book_frames) do
+        v.old_rank_marked = false;
+        if v.frame then
+            for i = 1, 3 do
+                v.overlay_frames[i]:SetText("");
+                v.overlay_frames[i]:Hide();
+            end
+        end
+    end
+    for _, v in pairs(external_overlay_frames) do
         v.old_rank_marked = false;
         if v.frame then
             for i = 1, 3 do
@@ -210,7 +262,6 @@ local function try_register_frame(action_id, frame_name)
         init_frame_overlay(action_id_frames[action_id]);
     end
 end
-
 
 local function scan_action_frames()
 
@@ -452,6 +503,15 @@ local function update_icon_overlay_settings()
         end
     end
     for _, v in pairs(action_id_frames) do
+        if v.frame then
+            for i = 1, 3 do
+                if not __sc_frame.overlay_frame.icon_overlay[i] then
+                    v.overlay_frames[i]:Hide();
+                end
+            end
+        end
+    end
+    for _, v in pairs(external_overlay_frames) do
         if v.frame then
             for i = 1, 3 do
                 if not __sc_frame.overlay_frame.icon_overlay[i] then
@@ -788,44 +848,66 @@ local function create_currently_casting_frame()
     frames.icon_frame = CreateFrame("Frame", nil, currently_casting_frame_parent);
     frames.icon_frame:SetPoint("CENTER", 0, 0);
     -- Create animation group for the transition
-    frames.icon_frame.anim_new_spell = frames.icon_frame:CreateAnimationGroup();
+    frames.icon_frame.anim_new_spell_vertical = frames.icon_frame:CreateAnimationGroup();
+    frames.icon_frame.anim_new_spell_horiz = frames.icon_frame:CreateAnimationGroup();
     frames.icon_frame.slide_offset = 100;
     frames.icon_frame.slide_dur = 0.3;
 
-    local slide_in = frames.icon_frame.anim_new_spell:CreateAnimation("Translation");
-    slide_in:SetDuration(frames.icon_frame.slide_dur);
-    slide_in:SetOffset(0, -frames.icon_frame.slide_offset);
-    slide_in:SetSmoothing("OUT");
+    local make_alpha_anim_fade_in = function(anim_group)
+        local fade_in = anim_group:CreateAnimation("Alpha");
+        fade_in:SetDuration(frames.icon_frame.slide_dur);
+        fade_in:SetFromAlpha(0);
+        fade_in:SetToAlpha(1);
+        fade_in:SetSmoothing("OUT");
+        anim_group:SetScript("OnFinished", function()
+            frames.icon_frame.animating = false;
+            frames.icon_frame:SetAlpha(1);
+            frames.icon_frame:SetPoint("CENTER", 0, 0);
+        end);
+    end;
+    local make_alpha_anim_fade_out = function(anim_group)
+        local fade_out = anim_group:CreateAnimation("Alpha");
+        fade_out:SetDuration(frames.icon_frame.slide_dur);
+        fade_out:SetFromAlpha(1);
+        fade_out:SetToAlpha(0);
+        fade_out:SetSmoothing("OUT");
+        anim_group:SetScript("OnFinished", function()
+            frames.icon_frame.animating = false;
+            frames.icon_frame:SetAlpha(0);
+            frames.icon_frame:ClearAllPoints();
+            frames.icon_frame:SetPoint("CENTER", 0, 0);
+        end);
 
-    local fade_in = frames.icon_frame.anim_new_spell:CreateAnimation("Alpha");
-    fade_in:SetDuration(frames.icon_frame.slide_dur);
-    fade_in:SetFromAlpha(0);
-    fade_in:SetToAlpha(1);
-    fade_in:SetSmoothing("OUT");
-    frames.icon_frame.anim_new_spell:SetScript("OnFinished", function()
-        frames.icon_frame.animating = false;
-        frames.icon_frame:SetAlpha(1);
-        frames.icon_frame:SetPoint("CENTER", 0, 0);
-    end);
+    end;
 
-    frames.icon_frame.anim_old_spell = frames.icon_frame:CreateAnimationGroup();
+    local slide_in_v = frames.icon_frame.anim_new_spell_vertical:CreateAnimation("Translation");
+    slide_in_v:SetDuration(frames.icon_frame.slide_dur);
+    slide_in_v:SetOffset(0, -frames.icon_frame.slide_offset);
+    slide_in_v:SetSmoothing("OUT");
 
-    local slide_out = frames.icon_frame.anim_old_spell:CreateAnimation("Translation");
-    slide_out:SetDuration(frames.icon_frame.slide_dur);
-    slide_out:SetOffset(0, -frames.icon_frame.slide_offset);
-    slide_out:SetSmoothing("OUT");
+    local slide_in_h = frames.icon_frame.anim_new_spell_horiz:CreateAnimation("Translation");
+    slide_in_h:SetDuration(frames.icon_frame.slide_dur);
+    slide_in_h:SetOffset(frames.icon_frame.slide_offset, 0);
+    slide_in_h:SetSmoothing("OUT");
 
-    local fade_out = frames.icon_frame.anim_old_spell:CreateAnimation("Alpha");
-    fade_out:SetDuration(frames.icon_frame.slide_dur);
-    fade_out:SetFromAlpha(1);
-    fade_out:SetToAlpha(0);
-    fade_out:SetSmoothing("OUT");
-    frames.icon_frame.anim_old_spell:SetScript("OnFinished", function()
-        frames.icon_frame.animating = false;
-        frames.icon_frame:SetAlpha(0);
-        frames.icon_frame:ClearAllPoints();
-        frames.icon_frame:SetPoint("CENTER", 0, 0);
-    end);
+    make_alpha_anim_fade_in(frames.icon_frame.anim_new_spell_vertical);
+    make_alpha_anim_fade_in(frames.icon_frame.anim_new_spell_horiz);
+
+    frames.icon_frame.anim_old_spell_vertical = frames.icon_frame:CreateAnimationGroup();
+    frames.icon_frame.anim_old_spell_horiz = frames.icon_frame:CreateAnimationGroup();
+
+    local slide_out_v = frames.icon_frame.anim_old_spell_vertical:CreateAnimation("Translation");
+    slide_out_v:SetDuration(frames.icon_frame.slide_dur);
+    slide_out_v:SetOffset(0, -frames.icon_frame.slide_offset);
+    slide_out_v:SetSmoothing("OUT");
+
+    local slide_out_h = frames.icon_frame.anim_old_spell_horiz:CreateAnimation("Translation");
+    slide_out_h:SetDuration(frames.icon_frame.slide_dur);
+    slide_out_h:SetOffset(frames.icon_frame.slide_offset, 0);
+    slide_out_h:SetSmoothing("OUT");
+
+    make_alpha_anim_fade_out(frames.icon_frame.anim_old_spell_vertical);
+    make_alpha_anim_fade_out(frames.icon_frame.anim_old_spell_horiz);
 
     frames.icon_frame:Hide();
     frames.icon_frame:SetAlpha(0);
@@ -1100,14 +1182,23 @@ local function currently_casting_new_spell(spell_id)
 
     update_currently_casting();
 
-    new.icon_frame:SetPoint("CENTER", 0, new.icon_frame.slide_offset);
+
     old.icon_frame:SetPoint("CENTER", 0, 0);
     new.icon_frame:SetAlpha(0);
     old.icon_frame:SetAlpha(1);
     new.icon_frame.animating = true;
     old.icon_frame.animating = true;
-    new.icon_frame.anim_new_spell:Play();
-    old.icon_frame.anim_old_spell:Play();
+    if config.settings.overlay_currently_casting_horizontal then
+        new.icon_frame:SetPoint("CENTER", -new.icon_frame.slide_offset, 0);
+
+        new.icon_frame.anim_new_spell_horiz:Play();
+        old.icon_frame.anim_old_spell_horiz:Play();
+    else
+        new.icon_frame:SetPoint("CENTER", 0, new.icon_frame.slide_offset);
+
+        new.icon_frame.anim_new_spell_vertical:Play();
+        old.icon_frame.anim_old_spell_vertical:Play();
+    end
 
     if new.spell_id ~= 0  then
         new.icon_frame:Show();
@@ -1250,6 +1341,12 @@ local function update_spell_icons(loadout, effects, eval_flags)
             if v.frame and v.spell_id and not spells[v.spell_id] then
                 update_non_evaluated_spell(v, v.spell_id, loadout, effects);
             end
+        end
+    end
+
+    for _, v in pairs(external_overlay_frames) do
+        if v.frame and v.frame:IsShown() and spells[v.spell_id] then
+            update_overlay_frame(v, loadout, effects, v.spell_id, eval_flags);
         end
     end
 end
