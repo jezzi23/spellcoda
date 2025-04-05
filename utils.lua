@@ -44,7 +44,7 @@ local function spell_cast_time(spell_id)
     if cast_time  then
         cast_time = cast_time/1000;
     end
-    if spells[spell_id] then
+    if spells[spell_id] and spells[spell_id].gcd > 0 then
         cast_time = cast_time or 0.0;
         cast_time = math.max(spells[spell_id].gcd, cast_time);
     end
@@ -134,7 +134,7 @@ local function format_number(val, max_accuracy_digits)
     elseif (abs_val < 1000.0 and max_accuracy_digits >= 1) then
         return string.format("%.1f", val);
     elseif (abs_val < 10000.0) then
-        return string.format("%d", 0.5+math.floor(val));
+        return string.format("%.0f", val);
     elseif (abs_val < 1000000.0) then
         return string.format("%.1fk", val/1000);
     elseif (abs_val < 10000000000.0) then

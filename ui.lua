@@ -1203,18 +1203,6 @@ local function create_sw_ui_spells_frame()
                 libDD:UIDropDownMenu_SetWidth(spell_options, 15);
 
                 libDD:UIDropDownMenu_AddButton({
-                        text = "Add/remove to spell ignore list",
-                        func = function(self)
-                            if config.settings.spells_ignore_list[spell_options.__spid] then
-                                config.settings.spells_ignore_list[spell_options.__spid] = nil;
-                            else
-                                config.settings.spells_ignore_list[spell_options.__spid] = 1;
-                            end
-                            update_spells_frame(nil, nil, nil, true);
-                        end,
-                    }
-                );
-                libDD:UIDropDownMenu_AddButton({
                         text = "Add to calculator list",
                         func = function()
 
@@ -1225,6 +1213,18 @@ local function create_sw_ui_spells_frame()
                                 update_calc_list();
                             end
 
+                        end,
+                    }
+                );
+                libDD:UIDropDownMenu_AddButton({
+                        text = "Add/remove to spell ignore list",
+                        func = function(self)
+                            if config.settings.spells_ignore_list[spell_options.__spid] then
+                                config.settings.spells_ignore_list[spell_options.__spid] = nil;
+                            else
+                                config.settings.spells_ignore_list[spell_options.__spid] = 1;
+                            end
+                            update_spells_frame(nil, nil, nil, true);
                         end,
                     }
                 );
@@ -1354,14 +1354,7 @@ local function create_sw_ui_tooltip_frame()
     __sc_frame.tooltip_frame.y_offset = __sc_frame.tooltip_frame.y_offset - 15;
     multi_row_checkbutton(tooltip_spell_checks, __sc_frame.tooltip_frame, 2);
 
-    __sc_frame.tooltip_frame.y_offset = __sc_frame.tooltip_frame.y_offset - 25;
-
-    local div = __sc_frame.tooltip_frame:CreateTexture(nil, "ARTWORK")
-    div:SetColorTexture(0.5, 0.5, 0.5, 0.6);
-    div:SetHeight(1);
-    div:SetPoint("TOPLEFT", __sc_frame.tooltip_frame, "TOPLEFT", 0, __sc_frame.tooltip_frame.y_offset);
-    div:SetPoint("TOPRIGHT", __sc_frame.tooltip_frame, "TOPRIGHT", 0, __sc_frame.tooltip_frame.y_offset);
-    __sc_frame.tooltip_frame.y_offset = __sc_frame.tooltip_frame.y_offset - 5;
+    __sc_frame.tooltip_frame.y_offset = __sc_frame.tooltip_frame.y_offset - 30;
 
     f_txt = __sc_frame.tooltip_frame:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
@@ -1636,7 +1629,7 @@ local function create_sw_ui_tooltip_frame()
         },
         {
             id = "tooltip_item_leveling_skill_normalize",
-            txt = "Use all weapon skills as clvl*5 when not maximum level",
+            txt = "Weapon comparison with skill as clvl*5 when not maximum level",
             tooltip = "More intuitive weapon upgrade results when leveling since lower weapon skill type is not punished",
         },
     };
@@ -1785,21 +1778,33 @@ local function create_sw_ui_overlay_frame()
                 sc.core.update_action_bar_needed = true;
             end,
         },
+        {
+            id = "overlay_no_decimals",
+            txt = "Never show decimals",
+            func = function(self)
+                if self:GetChecked() then
+                    sc.overlay.decimals_cap = 0;
+                else
+                    sc.overlay.decimals_cap = 3;
+                end
+            end,
+        },
     };
 
     multi_row_checkbutton(overlay_settings_checks, __sc_frame.overlay_frame, 2);
 
-    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 20;
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 25;
 
     local slider_frame_type = "Slider";
     f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_update_freq", __sc_frame.overlay_frame, "UISliderTemplate");
     f._type = slider_frame_type;
     f:SetOrientation('HORIZONTAL');
-    f:SetPoint("TOPLEFT", 250, __sc_frame.overlay_frame.y_offset+4);
+    f:SetPoint("TOPLEFT", 235, __sc_frame.overlay_frame.y_offset+4);
     f:SetMinMaxValues(1, 30)
     f:SetValueStep(1)
     f:SetWidth(175)
     f:SetHeight(20)
+    f:SetHitRectInsets(0, 0, 3, 3)
     f:SetScript("OnValueChanged", function(self, val)
         config.settings.overlay_update_freq = val;
         self.val_txt:SetText(string.format("%.1f Hz", val));
@@ -1813,19 +1818,19 @@ local function create_sw_ui_overlay_frame()
 
     f.val_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
     f.val_txt:SetFontObject(font)
-    f.val_txt:SetPoint("TOPLEFT", 430, __sc_frame.overlay_frame.y_offset)
-    f.val_txt:SetText(string.format("%.1f Hz", 3));
+    f.val_txt:SetPoint("TOPLEFT", 415, __sc_frame.overlay_frame.y_offset)
 
-    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 25;
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 21;
 
     f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_font_size", __sc_frame.overlay_frame, "UISliderTemplate");
     f._type = slider_frame_type;
     f:SetOrientation('HORIZONTAL');
-    f:SetPoint("TOPLEFT", 250, __sc_frame.overlay_frame.y_offset+4);
+    f:SetPoint("TOPLEFT", 235, __sc_frame.overlay_frame.y_offset+4);
     f:SetMinMaxValues(2, 24)
     f:SetValueStep(1)
     f:SetWidth(175)
     f:SetHeight(20)
+    f:SetHitRectInsets(0, 0, 3, 3)
 
     f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
     f_txt:SetFontObject(GameFontNormal)
@@ -1835,26 +1840,23 @@ local function create_sw_ui_overlay_frame()
 
     f.val_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
     f.val_txt:SetFontObject(font)
-    f.val_txt:SetPoint("TOPLEFT", 430, __sc_frame.overlay_frame.y_offset)
-    f.val_txt:SetText(string.format("%.2fx", 0.0));
+    f.val_txt:SetPoint("TOPLEFT", 415, __sc_frame.overlay_frame.y_offset)
     f:SetScript("OnValueChanged", function(self, val)
         config.settings.overlay_font_size = val;
-
         self.val_txt:SetText(string.format("%.2fx", config.settings.overlay_font_size));
-
-
         sc.overlay.overlay_reconfig();
     end);
 
-    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 25;
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 21;
     f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_offset", __sc_frame.overlay_frame, "UISliderTemplate");
     f._type = slider_frame_type;
     f:SetOrientation('HORIZONTAL');
-    f:SetPoint("TOPLEFT", 250, __sc_frame.overlay_frame.y_offset+4);
+    f:SetPoint("TOPLEFT", 235, __sc_frame.overlay_frame.y_offset+4);
     f:SetMinMaxValues(-15, 15);
     f:SetWidth(175)
     f:SetHeight(20)
     f:SetValueStep(0.1);
+    f:SetHitRectInsets(0, 0, 3, 3)
 
     f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
     f_txt:SetFontObject(GameFontNormal)
@@ -1865,17 +1867,42 @@ local function create_sw_ui_overlay_frame()
 
     f.val_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
     f.val_txt:SetFontObject(font)
-    f.val_txt:SetPoint("TOPLEFT", 430, __sc_frame.overlay_frame.y_offset)
-    f.val_txt:SetText(string.format("%.1f", 0));
+    f.val_txt:SetPoint("TOPLEFT", 415, __sc_frame.overlay_frame.y_offset)
 
-    f:SetValue(config.settings.overlay_offset);
     f:SetScript("OnValueChanged", function(self, val)
         config.settings.overlay_offset = val;
         self.val_txt:SetText(string.format("%.1f", val))
         sc.overlay.overlay_reconfig();
     end);
 
-    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 30;
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 21;
+    f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_vertical_margin_offset", __sc_frame.overlay_frame, "UISliderTemplate");
+    f._type = slider_frame_type;
+    f:SetOrientation('HORIZONTAL');
+    f:SetPoint("TOPLEFT", 235, __sc_frame.overlay_frame.y_offset+4);
+    f:SetMinMaxValues(-15, 15);
+    f:SetWidth(175)
+    f:SetHeight(20)
+    f:SetValueStep(0.1);
+    f:SetHitRectInsets(0, 0, 3, 3)
+
+    f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
+    f_txt:SetFontObject(GameFontNormal)
+    f_txt:SetTextColor(1.0, 1.0, 1.0);
+    f_txt:SetPoint("TOPLEFT", 15, __sc_frame.overlay_frame.y_offset)
+    f_txt:SetText("Vertical margin offset")
+
+    f.val_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
+    f.val_txt:SetFontObject(font)
+    f.val_txt:SetPoint("TOPLEFT", 415, __sc_frame.overlay_frame.y_offset)
+
+    f:SetScript("OnValueChanged", function(self, val)
+        config.settings.overlay_vertical_margin_offset = val;
+        self.val_txt:SetText(string.format("%.1f", val))
+        sc.overlay.overlay_reconfig();
+    end);
+
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 21;
 
 
     f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
@@ -1890,14 +1917,14 @@ local function create_sw_ui_overlay_frame()
         "overlay_font",
         sc.overlay.overlay_reconfig
     );
-    overlay_font_dropdown_f:SetPoint("TOPLEFT", 232, __sc_frame.overlay_frame.y_offset+6);
+    overlay_font_dropdown_f:SetPoint("TOPLEFT", 217, __sc_frame.overlay_frame.y_offset+6);
 
-    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 25;
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 20;
 
     f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
     f_txt:SetPoint("TOPLEFT", 0, __sc_frame.overlay_frame.y_offset);
-    f_txt:SetText("Spell overlay components (max 3)");
+    f_txt:SetText("Spell overlay components. Maximum 3");
     f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
 
     __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 15;
@@ -1918,14 +1945,25 @@ local function create_sw_ui_overlay_frame()
         },
         {
             id = "overlay_display_hit_chance",
-            txt = "Hit chance",
+            txt = "Normal hit chance",
             color = effect_colors.hit_chance,
-            tooltip = "Probability of not missing, parrying or dodging."
+            tooltip = "Probability of landing a normal hit"
         },
         {
             id = "overlay_display_crit_chance",
             txt = "Critical chance",
             color = effect_colors.crit
+        },
+        {
+            id = "overlay_display_miss_chance",
+            txt = "Miss chance",
+            color = effect_colors.avoidance_info,
+        },
+        {
+            id = "overlay_display_avoid_chance",
+            txt = "Avoid chance",
+            color = effect_colors.avoidance_info,
+            tooltip = "Probability of spell fully avoided (parried, dodged or miss)"
         },
         {
             id = "overlay_display_expected",
@@ -1962,26 +2000,30 @@ local function create_sw_ui_overlay_frame()
             id = "overlay_display_avg_cost",
             txt = "Expected cost",
             color = effect_colors.avg_cost,
+            tooltip = "Shown for computed spells",
             optional_evaluation = true,
         },
-        --{
-        --    id = "overlay_display_actual_cost",
-        --    txt = "Actual cost",
-        --    color = effect_colors.avg_cost,
-        --    optional_evaluation = true,
-        --},
+        {
+            id = "overlay_display_actual_cost",
+            txt = "Actual cost",
+            color = effect_colors.avg_cost,
+            tooltip = "Queried from ingame API - not computed",
+            optional_evaluation = true,
+        },
         {
             id = "overlay_display_avg_cast",
             txt = "Expected execution time",
             color = effect_colors.avg_cast,
+            tooltip = "Shown for computed spells",
             optional_evaluation = true,
         },
-        --{
-        --    id = "overlay_display_actual_cast",
-        --    txt = "Actual execution time",
-        --    color = effect_colors.avg_cast,
-        --    optional_evaluation = true,
-        --},
+        {
+            id = "overlay_display_actual_cast",
+            txt = "Actual cast time",
+            color = effect_colors.avg_cast,
+            tooltip = "Queried from ingame API - not computed, but capped at GCD",
+            optional_evaluation = true,
+        },
         {
             id = "overlay_display_effect_until_oom",
             txt = "Effect until OOM" ,
@@ -2024,7 +2066,7 @@ local function create_sw_ui_overlay_frame()
 
     multi_row_checkbutton(overlay_components, __sc_frame.overlay_frame, 2, icon_checkbox_func);
 
-    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 15;
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 10;
 
     __sc_frame.overlay_frame.overlay_components = {};
     for k, v in pairs(overlay_components) do
@@ -2078,11 +2120,12 @@ local function create_sw_ui_overlay_frame()
     f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_currently_casting_info_scale", __sc_frame.overlay_frame, "UISliderTemplate");
     f._type = slider_frame_type;
     f:SetOrientation('HORIZONTAL');
-    f:SetPoint("TOPLEFT", 250, __sc_frame.overlay_frame.y_offset+4);
+    f:SetPoint("TOPLEFT", 235, __sc_frame.overlay_frame.y_offset+4);
     f:SetMinMaxValues(0.1, 3.0);
     f:SetWidth(175)
     f:SetHeight(20)
     f:SetValueStep(0.05);
+    f:SetHitRectInsets(0, 0, 3, 3)
 
     f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
     f_txt:SetFontObject(GameFontNormal)
@@ -2092,7 +2135,7 @@ local function create_sw_ui_overlay_frame()
 
     f.val_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
     f.val_txt:SetFontObject(font)
-    f.val_txt:SetPoint("TOPLEFT", 430, __sc_frame.overlay_frame.y_offset)
+    f.val_txt:SetPoint("TOPLEFT", 415, __sc_frame.overlay_frame.y_offset)
     f.val_txt:SetText(string.format("%.1f", 0));
 
     f:SetScript("OnValueChanged", function(self, val)
@@ -2103,7 +2146,7 @@ local function create_sw_ui_overlay_frame()
         sc.overlay.currently_casting_frame_parent.border:SetScale(val);
     end);
 
-    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 30;
+    __sc_frame.overlay_frame.y_offset = __sc_frame.overlay_frame.y_offset - 21;
 
     f_txt = __sc_frame.overlay_frame:CreateFontString(nil, "OVERLAY")
     f_txt:SetFontObject(GameFontNormal)
@@ -2117,7 +2160,49 @@ local function create_sw_ui_overlay_frame()
         "overlay_currently_casting_font",
         sc.overlay.set_currently_casting_frames_font
     );
-    overlay_currently_casting_font_dropdown_f:SetPoint("TOPLEFT", 232, __sc_frame.overlay_frame.y_offset+6);
+    overlay_currently_casting_font_dropdown_f:SetPoint("TOPLEFT", 217, __sc_frame.overlay_frame.y_offset+6);
+
+    for _, v in ipairs({__sc_frame.overlay_frame:GetChildren()}) do
+        local _, _, _, _, y = v:GetPoint(1);
+        v.original_y_offset = y;
+    end
+
+    f = CreateFrame("Slider", nil, __sc_frame.overlay_frame, "UIPanelScrollBarTrimTemplate");
+    f:SetOrientation('VERTICAL');
+    f:SetPoint("RIGHT", __sc_frame.overlay_frame, "RIGHT", 10, 0);
+    local height = __sc_frame.overlay_frame:GetHeight();
+    f:SetWidth(20);
+    f:SetHeight(height-25);
+    f:SetScript("OnValueChanged", function(self, val)
+        for _, v in ipairs({__sc_frame.overlay_frame:GetChildren()}) do
+            if v.original_y_offset then
+                local p, rel_to, rel_p, x = v:GetPoint(1);
+                local new_y = v.original_y_offset + val;
+                v:SetPoint(p, rel_to, rel_p, x, new_y);
+                if v.original_y_offset >= val and v.original_y_offset <= height+val then
+                    v:Show();
+                else
+                    v:Hide();
+                end
+            end
+        end
+    end);
+    __sc_frame.overlay_frame.slider = f;
+    f:SetValue(0);
+    f:SetValueStep(15);
+
+    local bg = f:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints(f);
+    bg:SetColorTexture(0, 0, 0, 0.5);
+
+    __sc_frame.overlay_frame:EnableMouseWheel(true)
+    __sc_frame.overlay_frame:SetScript("OnMouseWheel", function(_, delta)
+        local scrollbar = __sc_frame.overlay_frame.slider;
+        scrollbar:SetValue(scrollbar:GetValue() - delta*5);
+    end);
+
+
+
 end
 
 local function create_sw_ui_calculator_frame()
@@ -2419,8 +2504,7 @@ local function create_sw_ui_loadout_frame()
     f_txt:SetText("Active loadout");
     f_txt:SetTextColor(1.0, 1.0, 1.0);
 
-    f = --CreateFrame("Button", nil, __sc_frame.loadout_frame, "UIDropDownMenuTemplate");
-        libDD:Create_UIDropDownMenu("__sc_frame_loadout_frame_loadout_dropdown", __sc_frame.loadout_frame);
+    f = libDD:Create_UIDropDownMenu("__sc_frame_loadout_frame_loadout_dropdown", __sc_frame.loadout_frame);
     f:SetPoint("TOPLEFT", x_pad + 80, __sc_frame.loadout_frame.y_offset+7);
     f.init_func = function()
         libDD:UIDropDownMenu_SetText(__sc_frame.loadout_frame.loadout_dropdown, config.loadout.name);
@@ -3964,6 +4048,7 @@ local function post_login_load()
     add_to_options();
 end
 
+--------------------------------------------------------------------------------
 ui.font                                 = font;
 ui.load_sw_ui                           = load_sw_ui;
 ui.create_sw_base_ui                    = create_sw_base_ui;

@@ -66,6 +66,7 @@ local default_settings     = {
     overlay_display_avg_cast                        = false,
     overlay_display_actual_cast                     = false,
     overlay_display_hit_chance                      = false,
+    overlay_display_miss_chance                     = false,
     overlay_display_crit_chance                     = false,
     overlay_display_casts_until_oom                 = false,
     overlay_display_effect_until_oom                = false,
@@ -81,7 +82,9 @@ local default_settings     = {
     overlay_update_freq                             = 3,
     overlay_font                                    = {"Interface\\AddOns\\SpellCoda\\font\\Oswald-Bold.ttf", "THICKOUTLINE"},
     overlay_font_size                               = 8,
-    overlay_offset                                  = 0.0,
+    overlay_offset                                  = 0.0, -- horizontal offset
+    overlay_vertical_margin_offset                  = 0.0, -- vertical offset on top and bottom fontstrings in opposite directions
+    overlay_no_decimals                             = 0.0,
 
     overlay_disable_currently_casting_info          = true,
     overlay_currently_casting_only_eval             = true,
@@ -285,9 +288,7 @@ local function activate_settings()
                     f:Click();
                 end
             elseif ft == "Slider" then
-                if f:GetValue() ~= v then
-                    f:SetValue(v);
-                end
+                f:SetValue(v);
             elseif ft == "EditBox" then
                 if f.number_editbox then
                     if tonumber(f:GetText()) ~= v then
