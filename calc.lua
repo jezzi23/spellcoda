@@ -14,6 +14,8 @@ local class_buffs                                   = sc.class_buffs;
 local auto_attack_spell_id                          = sc.auto_attack_spell_id;
 local auto_wand_spell_id                            = sc.auto_wand_spell_id;
 
+local spell_cost                                    = sc.utils.spell_cost;
+local spell_cast_time                               = sc.utils.spell_cast_time;
 local best_rank_by_lvl                              = sc.utils.best_rank_by_lvl;
 local spell_lname                                   = sc.utils.spell_lname;
 local dummy_value                                   = sc.utils.dummy_value;
@@ -237,7 +239,7 @@ local function stats_crit(extra, attack_skill, attack_subclass, bid, comp, spell
     local crit_rating_per_perc = get_combat_rating_effect(CR_CRIT_SPELL, loadout.lvl);
     local crit_from_rating = 0.01 * (loadout.crit_rating + effects.raw.crit_rating) / crit_rating_per_perc;
 
-    local crit = math.max(0, crit_from_rating) + (effects.ability.crit[bid] or 0) + extra;
+    local crit = crit_from_rating + (effects.ability.crit[bid] or 0) + extra;
 
     if bit.band(spell.flags, spell_flags.requires_ranged_slot) ~= 0 or
         (comp.school1 == schools.physical and bit.band(comp.flags, comp_flags.no_attack) == 0) then
@@ -2237,6 +2239,9 @@ local function only_threat_info(info, stats, spell, loadout, effects, eval_flags
     local bid = spell.base_id;
     local anycomp = spell.direct or spell.periodic;
 
+    eval_flags = eval_flags or 0;
+    eval_flags = bit.bor(eval_flags, mandatory_flags_by_spell(anycomp));
+
     local num_unbounded_targets = config.loadout.unbounded_aoe_targets;
     local direct = spell.direct;
     if direct then
@@ -2310,7 +2315,29 @@ local function only_threat_info(info, stats, spell, loadout, effects, eval_flags
 
     info.threat_per_cost = info.threat/stats.cost;
     info.threat_per_sec = info.threat/stats.cast_time;
+end
 
+local function dummy_cast_until_oom_info(info, stats, spell_id, loadout, effects)
+    -- spells we don't extensively compute but should show ingame available cost or cast time
+    local cost, resource_name = spell_cost(spell_id);
+    cost = cost or 0.0;
+    local cast_time = spell_cast_time(spell_id);
+    cast_time = cast_time or 0.0;
+    stats.cast_time = cast_time;
+
+    -- filling with dummies to fit cast until oom signature
+    stats.cost = cost;
+    stats.cast_time = cast_time;
+    stats.regen_while_casting = effects.raw.regen_while_casting;
+    info.cost_per_sec = cost/cast_time;
+    info.expected = 0
+    if not spells[spell_id] or resource_name ~= "MANA" then
+        stats.cast_time = 0.0;
+        info.time_until_oom = nil;
+        info.num_casts_until_oom = nil;
+    else
+        cast_until_oom(info, spells[spell_id], stats, loadout, effects);
+    end
 end
 
 local dmg_magic_stat_weights = {
@@ -2566,6 +2593,11 @@ local function calc_spell_resource_regen(spell, spell_id, loadout, effects, eval
    return info_buffer;
 end
 
+local function calc_spell_dummy_cast_until_oom(spell_id, loadout, effects)
+    dummy_cast_until_oom_info(info_buffer, stats_buffer, spell_id, loadout, effects);
+    return info_buffer, stats_buffer;
+end
+
 local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_finalized, effects_d, eval_flags)
 
     out.name = GetSpellInfo(spell_id);
@@ -2625,20 +2657,22 @@ local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_fin
     end
 end
 
-calc.fight_types                = fight_types;
-calc.evaluation_flags           = evaluation_flags;
-calc.stats_for_spell            = stats_for_spell;
-calc.spell_info                 = spell_info;
-calc.cast_until_oom             = cast_until_oom;
-calc.stat_weights               = stat_weights;
-calc.get_combat_rating_effect   = get_combat_rating_effect;
-calc.spell_diff                 = spell_diff;
-calc.resource_regen_info        = resource_regen_info;
-calc.only_threat_info           = only_threat_info;
-calc.add_extra_effect           = add_extra_effect;
-calc.effect_flags               = effect_flags;
-calc.calc_spell_eval            = calc_spell_eval;
-calc.calc_spell_threat          = calc_spell_threat;
-calc.calc_spell_resource_regen  = calc_spell_resource_regen;
+--------------------------------------------------------------------------------
+calc.fight_types                        = fight_types;
+calc.evaluation_flags                   = evaluation_flags;
+calc.stats_for_spell                    = stats_for_spell;
+calc.spell_info                         = spell_info;
+calc.cast_until_oom                     = cast_until_oom;
+calc.stat_weights                       = stat_weights;
+calc.get_combat_rating_effect           = get_combat_rating_effect;
+calc.spell_diff                         = spell_diff;
+calc.resource_regen_info                = resource_regen_info;
+calc.only_threat_info                   = only_threat_info;
+calc.add_extra_effect                   = add_extra_effect;
+calc.effect_flags                       = effect_flags;
+calc.calc_spell_eval                    = calc_spell_eval;
+calc.calc_spell_threat                  = calc_spell_threat;
+calc.calc_spell_resource_regen          = calc_spell_resource_regen;
+calc.calc_spell_dummy_cast_until_oom    = calc_spell_dummy_cast_until_oom;
 
 sc.calc                      = calc;

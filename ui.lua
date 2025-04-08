@@ -4,6 +4,7 @@ local spells                                    = sc.spells;
 local spids                                     = sc.spids;
 local spell_flags                               = sc.spell_flags;
 
+local assign_color_tag                          = sc.utils.assign_color_tag;
 local highest_learned_rank                      = sc.utils.highest_learned_rank;
 local effect_color                              = sc.utils.effect_color;
 
@@ -13,7 +14,6 @@ local wowhead_talent_code_from_url              = sc.talents.wowhead_talent_code
 local fight_types                               = sc.calc.fight_types;
 local evaluation_flags                          = sc.calc.evaluation_flags;
 
-local effect_colors                             = sc.utils.effect_colors;
 local format_number                             = sc.utils.format_number;
 local color_by_lvl_diff                         = sc.utils.color_by_lvl_diff;
 
@@ -41,6 +41,11 @@ local libstub_data_broker = LibStub("LibDataBroker-1.1", true);
 local libstub_icon = libstub_data_broker and LibStub("LibDBIcon-1.0", true);
 local libstub_launcher;
 local libDD = LibStub("LibUIDropDownMenu-4.0", true);
+
+local colored_text_frames = {};
+local function register_text_frame_color(frame, color_tag)
+    colored_text_frames[frame] = color_tag;
+end
 
 local function display_spell_diff(i, calc_list, diff, frame)
     if not calc_list[i] then
@@ -104,43 +109,6 @@ local function display_spell_diff(i, calc_list, diff, frame)
     end
     v.role_icon.tex:SetAllPoints(v.role_icon);
 
-    --local change_fmt = format_number(diff.diff_ratio, 2);
-    --local change = change_fmt.."%";
-    --if not diff.diff_ratio then
-    --    change = "";
-    --elseif diff.diff_ratio < 0 then
-    --    v.change:SetTextColor(195/255, 44/255, 11/255);
-    --    change = change;
-    --elseif diff.diff_ratio > 0 then
-    --    v.change:SetTextColor(33/255, 185/255, 21/255);
-    --    change = "+"..change;
-    --else
-    --    v.change:SetTextColor(1, 1, 1);
-    --end
-    --v.change:SetText(change);
-
-    --local first = format_number(diff.first, 2);
-    --if diff.first < 0 then
-    --    v.first:SetTextColor(195/255, 44/255, 11/255);
-    --elseif diff.first > 0 then
-    --    v.first:SetTextColor(33/255, 185/255, 21/255);
-    --    first = "+"..first;
-    --else
-    --    v.first:SetTextColor(1, 1, 1);
-    --end
-    --v.first:SetText(first);
-
-    --local second = format_number(diff.second, 2);
-    --if diff.second < 0 then
-    --    v.second:SetTextColor(195/255, 44/255, 11/255);
-    --elseif diff.second > 0 then
-    --    v.second:SetTextColor(33/255, 185/255, 21/255);
-    --    second = "+"..second;
-    --else
-    --    v.second:SetTextColor(1, 1, 1);
-    --end
-    --v.second:SetText(second);
-    ------------------
     local change_fmt = format_number(diff.diff_ratio, 2);
     local change = change_fmt.."%";
     if not diff.diff_ratio  then
@@ -196,6 +164,7 @@ local function display_spell_diff(i, calc_list, diff, frame)
         calc_list[i].cancel_button:Hide();
     end
 end
+
 
 local cached_spells_cmp_diffs = {};
 
@@ -281,7 +250,7 @@ local function editbox_config(frame, update_func, close_func)
     end);
     frame:SetScript("OnEditFocusLost", close_func);
     frame:SetScript("OnTextChanged", update_func);
-
+    frame:SetScript("OnTextSet", update_func);
 end
 
 local filtered_buffs = {};
@@ -919,6 +888,9 @@ local function multi_row_checkbutton(buttons_info, parent_frame, num_columns, fu
         if v.color then
             txt:SetTextColor(v.color[1], v.color[2], v.color[3]);
         end
+        if v.color_tag then
+            register_text_frame_color(txt, v.color_tag);
+        end
         if v.tooltip then
             getglobal(f:GetName()).tooltip = v.tooltip;
         end
@@ -941,7 +913,7 @@ end
 local function make_frame_scrollable(frame)
 
     local height = frame:GetHeight();
-    local restrict_bottom_space = -15;
+    local restrict_bottom_space = -25;
 
     if -frame.y_offset - restrict_bottom_space <= height then
         return;
@@ -968,8 +940,10 @@ local function make_frame_scrollable(frame)
                     local p, rel_to, rel_p, x = v:GetPoint(1);
                     local new_y = v.original_y_offset + val;
                     v:SetPoint(p, rel_to, rel_p, x, new_y);
-                    local y_bound = -v.original_y_offset - restrict_bottom_space;
-                    if y_bound >= val and y_bound <= height+val then
+                    --local y_bound = -v.original_y_offset - restrict_bottom_space;
+                    --local y_bound = -v.original_y_offset - restrict_bottom_space;
+                    
+                    if -v.original_y_offset >= val and -v.original_y_offset -restrict_bottom_space <= height+val then
                         v:Show();
                     else
                         v:Hide();
@@ -1124,17 +1098,13 @@ local function create_sw_ui_spells_frame(pframe)
     f:SetFontObject(font);
     f:SetText("Per second");
     f:SetPoint("TOPLEFT", per_sec_x_offset, pframe.y_offset);
-    f:SetTextColor(effect_colors.effect_per_sec[1],
-                   effect_colors.effect_per_sec[2],
-                   effect_colors.effect_per_sec[3]);
+    register_text_frame_color(f, "effect_per_sec");
 
     local f = pframe:CreateFontString(nil, "OVERLAY");
     f:SetFontObject(font);
     f:SetText("Per cost");
     f:SetPoint("TOPLEFT", per_cost_x_offset, pframe.y_offset);
-    f:SetTextColor(effect_colors.effect_per_cost[1],
-                   effect_colors.effect_per_cost[2],
-                   effect_colors.effect_per_cost[3]);
+    register_text_frame_color(f, "effect_per_cost");
 
     local f = pframe:CreateFontString(nil, "OVERLAY");
     f:SetFontObject(font);
@@ -1235,17 +1205,13 @@ local function create_sw_ui_spells_frame(pframe)
         effect_per_sec_str:SetFontObject(font);
         effect_per_sec_str:SetText("");
         effect_per_sec_str:SetPoint("TOPLEFT", per_sec_x_offset, pframe.y_offset);
-        effect_per_sec_str:SetTextColor(effect_colors.effect_per_sec[1],
-                                        effect_colors.effect_per_sec[2],
-                                        effect_colors.effect_per_sec[3]);
+        register_text_frame_color(effect_per_sec_str, "effect_per_sec");
 
         local effect_per_cost_str = pframe:CreateFontString(nil, "OVERLAY");
         effect_per_cost_str:SetFontObject(font);
         effect_per_cost_str:SetText("");
         effect_per_cost_str:SetPoint("TOPLEFT", per_cost_x_offset, pframe.y_offset);
-        effect_per_cost_str:SetTextColor(effect_colors.effect_per_cost[1],
-                                         effect_colors.effect_per_cost[2],
-                                         effect_colors.effect_per_cost[3]);
+        register_text_frame_color(effect_per_cost_str, "effect_per_cost");
 
         local cost = pframe:CreateFontString(nil, "OVERLAY");
         cost:SetFontObject(font);
@@ -1443,127 +1409,128 @@ local function create_sw_ui_tooltip_frame(pframe)
         {
             id = "tooltip_display_target_info",
             txt = "Target info",
-            color = effect_colors.target_info,
+            color_tag = "target_info",
             tooltip = "Target level, armor and resistance assumed in calculation."
         },
         {
             id = "tooltip_display_avoidance_info",
             txt = "Miss, avoidance & mitigation",
-            color = effect_colors.avoidance_info,
+            color_tag = avoidance_info,
             tooltip = "Avoidance based on weapon skill & target level. Mitigation based on target armor or resistance."
         },
         {
             id = "tooltip_display_normal",
             txt = "Normal effect",
-            color = effect_colors.normal
+            color_tag = "normal"
         },
         {
             id = "tooltip_display_crit",
             txt = "Critical effect",
-            color = effect_colors.crit
+            color_tag = "crit"
         },
         {
             id = "tooltip_display_expected",
             txt = "Expected effect",
-            color = effect_colors.expectation,
-            tooltip = "This average considers all kinds of outcomes like critical, miss, resist, dodge, parry, glance etc.",
+            color_tag = "expectation",
+            tooltip = sc.overlay.label_handler.overlay_display_expected.tooltip,
         },
         {
             id = "tooltip_display_effect_per_sec",
             txt = "Effect per second",
-            color = effect_colors.effect_per_sec
+            color_tag = "effect_per_sec",
+            tooltip = sc.overlay.label_handler.overlay_display_effect_per_sec.tooltip,
         },
         {
             id = "tooltip_display_threat",
             txt = "Expected threat",
-            color = effect_colors.threat,
+            color_tag = "threat",
         },
         {
             id = "tooltip_display_threat_per_sec",
             txt = "Threat per second",
-            color = effect_colors.threat
+            color_tag = "threat"
         },
         {
             id = "tooltip_display_threat_per_cost",
             txt = "Threat per cost",
-            color = effect_colors.effect_per_cost
+            color_tag = "effect_per_cost",
         },
         {
             id = "tooltip_display_effect_per_cost",
             txt = "Effect per cost",
-            color = effect_colors.effect_per_cost
+            color_tag = "effect_per_cost",
+            tooltip = sc.overlay.label_handler.overlay_display_effect_per_cost.tooltip,
         },
         {
             id = "tooltip_display_cost_per_sec",
             txt = "Cost per second" ,
-            color = effect_colors.cost_per_sec
+            color_tag = "cost_per_sec"
         },
         {
             id = "tooltip_display_avg_cost",
             txt = "Expected cost",
-            color = effect_colors.avg_cost,
-            tooltip = "Shown when different from tooltip's cost.",
+            color_tag = "cost",
+            tooltip = "Shown when different from actual cost.",
         },
         {
             id = "tooltip_display_avg_cast",
             txt = "Expected execution time",
-            color = effect_colors.avg_cast,
-            tooltip = "Shown when different from tooltip's cast time.",
+            color_tag = "execution_time",
+            tooltip = "Shown when different from actual cast time.",
         },
         {
             id = "tooltip_display_cast_until_oom",
             txt = "Casting until OOM",
-            color = effect_colors.normal,
+            color_tag = "normal",
             tooltip = "Assumes you cast a particular ability until you are OOM with no cooldowns."
         },
         {
             id = "tooltip_display_base_mod",
             txt = "Base effect mod",
-            color = effect_colors.sp_effect,
+            color_tag = "sp_effect",
             tooltip = "Intended for debugging."
         },
         {
             id = "tooltip_display_sp_effect_calc",
             txt = "Coef & SP/AP effect",
-            color = effect_colors.sp_effect,
+            color_tag = "sp_effect",
         },
         {
             id = "tooltip_display_sp_effect_ratio",
             txt = "SP/AP to base effect ratio",
-            color = effect_colors.sp_effect,
+            color_tag = "sp_effect",
         },
         {
             id = "tooltip_display_spell_rank",
             txt = "Spell rank info",
-            color = effect_colors.spell_rank,
+            color_tag = "spell_rank",
         },
         {
             id = "tooltip_display_spell_id",
             txt = "Spell id",
-            color = effect_colors.spell_rank,
+            color_tag = "spell_rank",
         },
         {
             id = "tooltip_display_stat_weights_effect",
             txt = "Stat weights: Effect",
-            color = effect_colors.stat_weights
+            color_tag = "stat_weights",
         },
         {
             id = "tooltip_display_stat_weights_effect_per_sec",
             txt = "Stat weights: Effect per sec",
-            color = effect_colors.stat_weights
+            color_tag = "stat_weights",
         },
         {
             id = "tooltip_display_stat_weights_effect_until_oom",
             txt = "Stat weights: Effect until OOM",
-            color = effect_colors.stat_weights
+            color_tag = "stat_weights",
         },
         {
             id = "tooltip_display_resource_regen",
             txt = "Resource restoration",
-            tooltip = "Shows resource gained from spells like Evocation, Mana tide totem, etc.",
-            color = effect_colors.avg_cost
+            tooltip = sc.overlay.label_handler.overlay_display_resource_regen.tooltip,
+            color_tag = "cost",
         },
-        --tooltip_display_cast_and_tap       
     };
 
     pframe.y_offset = pframe.y_offset - 10;
@@ -1775,6 +1742,42 @@ local function create_font_dropdown(parent_frame, dropdown_name, font_config_key
     return dropdown_frame;
 end;
 
+local overlay_components_selection_display = {
+    "overlay_display_normal",
+    "overlay_display_direct_normal",
+    "overlay_display_ot_normal",
+    "overlay_display_hit_chance",
+
+    "overlay_display_crit",
+    "overlay_display_direct_crit",
+    "overlay_display_ot_crit",
+    "overlay_display_crit_chance",
+
+    "overlay_display_expected",
+    "overlay_display_effect_per_sec",
+
+    "overlay_display_threat",
+    "overlay_display_threat_per_sec",
+
+    "overlay_display_avg_cost",
+    "overlay_display_actual_cost",
+    "overlay_display_effect_per_cost",
+    "overlay_display_threat_per_cost",
+
+    "overlay_display_miss_chance",
+    "overlay_display_avoid_chance",
+    "overlay_display_mitigation",
+
+    "overlay_display_avg_cast",
+    "overlay_display_actual_cast",
+
+    "overlay_display_effect_until_oom",
+    "overlay_display_time_until_oom",
+    "overlay_display_casts_until_oom",
+
+    "overlay_display_rank",
+};
+
 local function create_sw_ui_overlay_frame(pframe)
 
     local f, f_txt;
@@ -1799,46 +1802,6 @@ local function create_sw_ui_overlay_frame(pframe)
             end
         },
         {
-            id = "overlay_resource_regen",
-            txt = "Resource restoration spells ",
-            color = effect_colors.avg_cost,
-            tooltip = "Puts mana restoration amount on overlay for spells like Evocation.",
-            func = function()
-                sc.core.update_action_bar_needed = true;
-            end,
-        },
-        {
-            id = "overlay_old_rank",
-            txt = "Old rank warning",
-            color = effect_colors.crit,
-            func = function()
-                sc.core.old_ranks_checks_needed = true;
-            end
-        },
-        {
-            id = "overlay_old_rank_limit_to_known",
-            txt = "Restrict rank warning to learned",
-            color = effect_colors.crit,
-            func = function()
-                sc.core.old_ranks_checks_needed = true;
-            end,
-            tooltip = "Does not warn about old rank when the higher rank is not learned/known by player. Requires old rank warning option to be toggled.",
-        },
-        {
-            id = "overlay_icon_top_clearance",
-            txt = "Icon top clearance",
-            func = function()
-                sc.core.update_action_bar_needed = true;
-            end,
-        },
-        {
-            id = "overlay_icon_bottom_clearance",
-            txt = "Icon bottom clearance",
-            func = function()
-                sc.core.update_action_bar_needed = true;
-            end,
-        },
-        {
             id = "overlay_no_decimals",
             txt = "Never show decimals",
             func = function(self)
@@ -1849,11 +1812,28 @@ local function create_sw_ui_overlay_frame(pframe)
                 end
             end,
         },
+        {
+            id = "overlay_old_rank",
+            txt = "Old rank warning",
+            color_tag = "old_rank",
+            func = function()
+                sc.core.old_ranks_checks_needed = true;
+            end
+        },
+        {
+            id = "overlay_old_rank_limit_to_known",
+            txt = "Restrict rank warning to learned",
+            color_tag = "old_rank",
+            func = function()
+                sc.core.old_ranks_checks_needed = true;
+            end,
+            tooltip = "Does not warn about old rank when the higher rank is not learned/known by player. Requires old rank warning option to be toggled.",
+        },
     };
 
     multi_row_checkbutton(overlay_settings_checks, pframe, 2);
 
-    pframe.y_offset = pframe.y_offset - 25;
+    pframe.y_offset = pframe.y_offset - 10;
 
     local slider_frame_type = "Slider";
     f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_update_freq", pframe, "UISliderTemplate");
@@ -1880,90 +1860,7 @@ local function create_sw_ui_overlay_frame(pframe)
     f.val_txt:SetFontObject(font)
     f.val_txt:SetPoint("TOPLEFT", 415, pframe.y_offset)
 
-    pframe.y_offset = pframe.y_offset - 21;
-
-    f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_font_size", pframe, "UISliderTemplate");
-    f._type = slider_frame_type;
-    f:SetOrientation('HORIZONTAL');
-    f:SetPoint("TOPLEFT", 235, pframe.y_offset+4);
-    f:SetMinMaxValues(2, 24)
-    f:SetValueStep(1)
-    f:SetWidth(175)
-    f:SetHeight(20)
-    f:SetHitRectInsets(0, 0, 3, 3)
-
-    f_txt = pframe:CreateFontString(nil, "OVERLAY")
-    f_txt:SetFontObject(GameFontNormal)
-    f_txt:SetTextColor(1.0, 1.0, 1.0);
-    f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset)
-    f_txt:SetText("Font size")
-
-    f.val_txt = pframe:CreateFontString(nil, "OVERLAY")
-    f.val_txt:SetFontObject(font)
-    f.val_txt:SetPoint("TOPLEFT", 415, pframe.y_offset)
-    f:SetScript("OnValueChanged", function(self, val)
-        config.settings.overlay_font_size = val;
-        self.val_txt:SetText(string.format("%.2fx", config.settings.overlay_font_size));
-        sc.overlay.overlay_reconfig();
-    end);
-
-    pframe.y_offset = pframe.y_offset - 21;
-    f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_offset", pframe, "UISliderTemplate");
-    f._type = slider_frame_type;
-    f:SetOrientation('HORIZONTAL');
-    f:SetPoint("TOPLEFT", 235, pframe.y_offset+4);
-    f:SetMinMaxValues(-15, 15);
-    f:SetWidth(175)
-    f:SetHeight(20)
-    f:SetValueStep(0.1);
-    f:SetHitRectInsets(0, 0, 3, 3)
-
-    f_txt = pframe:CreateFontString(nil, "OVERLAY")
-    f_txt:SetFontObject(GameFontNormal)
-    f_txt:SetTextColor(1.0, 1.0, 1.0);
-    f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset)
-    f_txt:SetText("Horizontal offset")
-
-
-    f.val_txt = pframe:CreateFontString(nil, "OVERLAY")
-    f.val_txt:SetFontObject(font)
-    f.val_txt:SetPoint("TOPLEFT", 415, pframe.y_offset)
-
-    f:SetScript("OnValueChanged", function(self, val)
-        config.settings.overlay_offset = val;
-        self.val_txt:SetText(string.format("%.1f", val))
-        sc.overlay.overlay_reconfig();
-    end);
-
-    pframe.y_offset = pframe.y_offset - 21;
-    f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_vertical_margin_offset", pframe, "UISliderTemplate");
-    f._type = slider_frame_type;
-    f:SetOrientation('HORIZONTAL');
-    f:SetPoint("TOPLEFT", 235, pframe.y_offset+4);
-    f:SetMinMaxValues(-15, 15);
-    f:SetWidth(175)
-    f:SetHeight(20)
-    f:SetValueStep(0.1);
-    f:SetHitRectInsets(0, 0, 3, 3)
-
-    f_txt = pframe:CreateFontString(nil, "OVERLAY")
-    f_txt:SetFontObject(GameFontNormal)
-    f_txt:SetTextColor(1.0, 1.0, 1.0);
-    f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset)
-    f_txt:SetText("Vertical margin offset")
-
-    f.val_txt = pframe:CreateFontString(nil, "OVERLAY")
-    f.val_txt:SetFontObject(font)
-    f.val_txt:SetPoint("TOPLEFT", 415, pframe.y_offset)
-
-    f:SetScript("OnValueChanged", function(self, val)
-        config.settings.overlay_vertical_margin_offset = val;
-        self.val_txt:SetText(string.format("%.1f", val))
-        sc.overlay.overlay_reconfig();
-    end);
-
-    pframe.y_offset = pframe.y_offset - 21;
-
+    pframe.y_offset = pframe.y_offset - 30;
 
     f_txt = pframe:CreateFontString(nil, "OVERLAY")
     f_txt:SetFontObject(GameFontNormal)
@@ -1979,266 +1876,7 @@ local function create_sw_ui_overlay_frame(pframe)
     );
     overlay_font_dropdown_f:SetPoint("TOPLEFT", 217, pframe.y_offset+6);
 
-    pframe.y_offset = pframe.y_offset - 20;
-
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
-    f_txt:SetText("Spell overlay components. Maximum 3");
-    f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
-
-    pframe.y_offset = pframe.y_offset - 15;
-
-    pframe.num_overlay_components_toggled = 0;
-    pframe.num_overlay_special_toggled = 0;
-
-    local overlay_components = {
-        {
-            id = "overlay_display_normal",
-            txt = "Normal effect",
-            color = effect_colors.normal,
-        },
-        {
-            id = "overlay_display_crit",
-            txt = "Critical effect",
-            color = effect_colors.crit,
-        },
-        {
-            id = "overlay_display_hit_chance",
-            txt = "Normal hit chance",
-            color = effect_colors.hit_chance,
-            tooltip = "Probability of landing a normal hit"
-        },
-        {
-            id = "overlay_display_crit_chance",
-            txt = "Critical chance",
-            color = effect_colors.crit
-        },
-        {
-            id = "overlay_display_miss_chance",
-            txt = "Miss chance",
-            color = effect_colors.avoidance_info,
-        },
-        {
-            id = "overlay_display_avoid_chance",
-            txt = "Avoid chance",
-            color = effect_colors.avoidance_info,
-            tooltip = "Probability of spell fully avoided (parried, dodged or miss)"
-        },
-        {
-            id = "overlay_display_expected",
-            txt = "Expected effect",
-            color = effect_colors.expectation,
-            tooltip = "Expected effect is the DMG or Heal dealt on average for a single cast considering miss chance, crit chance, spell power etc. This equates to your DPS or HPS number multiplied by the ability's execution time"
-        },
-        {
-            id = "overlay_display_effect_per_sec",
-            txt = "Effect per sec",
-            color = effect_colors.effect_per_sec,
-        },
-        {
-            id = "overlay_display_threat",
-            txt = "Expected threat",
-            color = effect_colors.threat,
-        },
-        {
-            id = "overlay_display_threat_per_sec",
-            txt = "Threat per sec",
-            color = effect_colors.threat,
-        },
-        {
-            id = "overlay_display_threat_per_cost",
-            txt = "Threat per cost",
-            color = effect_colors.effect_per_cost
-        },
-        {
-            id = "overlay_display_effect_per_cost",
-            txt = "Effect per cost",
-            color = effect_colors.effect_per_cost
-        },
-        {
-            id = "overlay_display_avg_cost",
-            txt = "Expected cost",
-            color = effect_colors.avg_cost,
-            tooltip = "Shown for computed spells",
-            optional_evaluation = true,
-        },
-        {
-            id = "overlay_display_actual_cost",
-            txt = "Actual cost",
-            color = effect_colors.avg_cost,
-            tooltip = "Queried from ingame API - not computed",
-            optional_evaluation = true,
-        },
-        {
-            id = "overlay_display_avg_cast",
-            txt = "Expected execution time",
-            color = effect_colors.avg_cast,
-            tooltip = "Shown for computed spells",
-            optional_evaluation = true,
-        },
-        {
-            id = "overlay_display_actual_cast",
-            txt = "Actual cast time",
-            color = effect_colors.avg_cast,
-            tooltip = "Queried from ingame API - not computed, but capped at GCD",
-            optional_evaluation = true,
-        },
-        {
-            id = "overlay_display_effect_until_oom",
-            txt = "Effect until OOM" ,
-            color = effect_colors.effect_until_oom,
-            optional_evaluation = true,
-        },
-        {
-            id = "overlay_display_casts_until_oom",
-            txt = "Casts until OOM",
-            color = effect_colors.casts_until_oom,
-            optional_evaluation = true,
-        },
-        {
-            id = "overlay_display_time_until_oom",
-            txt = "Time until OOM",
-            color = effect_colors.time_until_oom,
-            optional_evaluation = true,
-        },
-    };
-
-    local icon_checkbox_func = function(self)
-
-        local checked = self:GetChecked();
-        if checked then
-
-            pframe.num_overlay_components_toggled = pframe.num_overlay_components_toggled + 1;
-        else
-            pframe.num_overlay_components_toggled = pframe.num_overlay_components_toggled - 1;
-        end
-
-        if pframe.num_overlay_components_toggled > 3 then
-            checked = false;
-            self:SetChecked(false);
-            pframe.num_overlay_components_toggled = 3;
-        end
-        config.settings[self._settings_id] = checked;
-
-        sc.core.update_action_bar_needed = true;
-    end;
-
-    multi_row_checkbutton(overlay_components, pframe, 2, icon_checkbox_func);
-
-    pframe.y_offset = pframe.y_offset - 10;
-
-    pframe.overlay_components = {};
-    for k, v in pairs(overlay_components) do
-        pframe.overlay_components[v.id] = {
-            color = v.color,
-            optional_evaluation = v.optional_evaluation,
-        }
-    end
-
-    pframe.y_offset = pframe.y_offset - 15;
-    local div = pframe:CreateTexture(nil, "ARTWORK")
-    div:SetColorTexture(0.5, 0.5, 0.5, 0.6);
-    div:SetHeight(1);
-    div:SetPoint("TOPLEFT", pframe, "TOPLEFT", 0, pframe.y_offset);
-    div:SetPoint("TOPRIGHT", pframe, "TOPRIGHT", 0, pframe.y_offset);
-    pframe.y_offset = pframe.y_offset - 5;
-
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
-    f_txt:SetText("Spell cast info frame");
-    f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
-
-    pframe.y_offset = pframe.y_offset - 15;
-
-    multi_row_checkbutton(
-        {
-            {
-                id = "overlay_disable_currently_casting_info",
-                txt = "Disable spell cast info frame",
-                func = function(self)
-                    if self:GetChecked() then
-                        sc.overlay.currently_casting_frame_parent.border.disabled_txt:Show();
-                    else
-                        sc.overlay.currently_casting_demo();
-                        sc.overlay.currently_casting_frame_parent.border.disabled_txt:Hide();
-                    end
-                end
-            },
-            {
-                id = "overlay_currently_casting_only_eval",
-                txt = "Only show for evaluable spells",
-            },
-            {
-                id = "overlay_currently_casting_animate",
-                txt = "Animate",
-                fun = function()
-                    sc.overlay.currently_casting_demo();
-                end
-            },
-            {
-                id = "overlay_currently_casting_horizontal",
-                txt = "Horizontal animation",
-                fun = function()
-                    sc.overlay.currently_casting_demo();
-                end
-            },
-        },
-        pframe, 2);
-
-    pframe.y_offset = pframe.y_offset - 25;
-    f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_currently_casting_info_scale", pframe, "UISliderTemplate");
-    f._type = slider_frame_type;
-    f:SetOrientation('HORIZONTAL');
-    f:SetPoint("TOPLEFT", 235, pframe.y_offset+4);
-    f:SetMinMaxValues(0.1, 3.0);
-    f:SetWidth(175)
-    f:SetHeight(20)
-    f:SetValueStep(0.05);
-    f:SetHitRectInsets(0, 0, 3, 3)
-
-    f_txt = pframe:CreateFontString(nil, "OVERLAY")
-    f_txt:SetFontObject(GameFontNormal)
-    f_txt:SetTextColor(1.0, 1.0, 1.0);
-    f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset)
-    f_txt:SetText("Scale")
-
-    f.val_txt = pframe:CreateFontString(nil, "OVERLAY")
-    f.val_txt:SetFontObject(font)
-    f.val_txt:SetPoint("TOPLEFT", 415, pframe.y_offset)
-    f.val_txt:SetText(string.format("%.1f", 0));
-
-    f:SetScript("OnValueChanged", function(self, val)
-        config.settings.overlay_currently_casting_info_scale = val;
-        self.val_txt:SetText(string.format("%.2f", val))
-        sc.overlay.currently_casting_f1.icon_frame:SetScale(val);
-        sc.overlay.currently_casting_f2.icon_frame:SetScale(val);
-        sc.overlay.currently_casting_frame_parent.border:SetScale(val);
-    end);
-
-    pframe.y_offset = pframe.y_offset - 21;
-
-    f_txt = pframe:CreateFontString(nil, "OVERLAY")
-    f_txt:SetFontObject(GameFontNormal)
-    f_txt:SetTextColor(1.0, 1.0, 1.0);
-    f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset);
-    f_txt:SetText("Font");
-
-    local overlay_currently_casting_font_dropdown_f = create_font_dropdown(
-        pframe,
-        "__sc_frame_setting_overlay_currently_casting_font",
-        "overlay_currently_casting_font",
-        function()
-            for k in pairs(sc.overlay.currently_casting_frame_labels) do
-                sc.overlay.currently_casting_frame_label_reconfig(k);
-            end
-        end
-    );
-    overlay_currently_casting_font_dropdown_f:SetPoint("TOPLEFT", 217, pframe.y_offset+6);
-
-    pframe.y_offset = pframe.y_offset - 25;
-
+    pframe.y_offset = pframe.y_offset - 28;
 
     -- headers
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
@@ -2271,12 +1909,25 @@ local function create_sw_ui_overlay_frame(pframe)
     f_txt:SetText("Display");
     f_txt:SetTextColor(222/255, 192/255, 40/255);
 
-    for _, k in ipairs(sc.overlay.currently_casting_frame_labels_disp_order) do
-        local v = sc.overlay.currently_casting_frame_labels[k];
+    local overlay_labels = {
+        {
+            config_subkey = "overlay_top",
+            desc = "Top",
+        },
+        {
+            config_subkey = "overlay_center",
+            desc = "Center",
+        },
+        {
+            config_subkey = "overlay_bottom",
+            desc = "Bottom",
+        },
+    };
 
-        local label_frame_setting_subkey = "overlay_currently_casting_"..k;
-
-        pframe.y_offset = pframe.y_offset - 20;
+    pframe.y_offset = pframe.y_offset - 13;
+    for _, v in ipairs(overlay_labels) do
+        local k = v.config_subkey;
+        local label_frame_setting_subkey = k;
 
         do
             -- enable button
@@ -2287,13 +1938,9 @@ local function create_sw_ui_overlay_frame(pframe)
             f:SetPoint("TOPLEFT", 10, pframe.y_offset);
             f:SetScript("OnClick", function(self)
                 config.settings[self._settings_id] = self:GetChecked();
-
-                sc.overlay.currently_casting_frame_label_reconfig(k);
+                sc.loadouts.force_update = true;
+                sc.core.update_action_bar_needed = true;
             end);
-            if v.adjacent_to then
-                getglobal(f:GetName()).tooltip = "Moves to center when adjacent field is empty";
-            end
-
             getglobal(f:GetName()..'Text'):SetText(v.desc);
         end
 
@@ -2312,7 +1959,9 @@ local function create_sw_ui_overlay_frame(pframe)
                 local valid = val and val > 1;
                 if valid then
                     config.settings[self._settings_id] = val;
-                    sc.overlay.currently_casting_frame_label_reconfig(k);
+                    sc.loadouts.force_update = true;
+                    sc.core.update_action_bar_needed = true;
+                    sc.overlay.overlay_reconfig();
                 end
                 return valid;
             end
@@ -2341,7 +1990,9 @@ local function create_sw_ui_overlay_frame(pframe)
                 local val = tonumber(self:GetText());
                 if val then
                     config.settings[self._settings_id] = val;
-                    sc.overlay.currently_casting_frame_label_reconfig(k);
+                    sc.loadouts.force_update = true;
+                    sc.core.update_action_bar_needed = true;
+                    sc.overlay.overlay_reconfig();
                 end
                 return val;
             end
@@ -2369,7 +2020,12 @@ local function create_sw_ui_overlay_frame(pframe)
                 local val = tonumber(self:GetText());
                 if val then
                     config.settings[self._settings_id] = val;
-                    sc.overlay.currently_casting_frame_label_reconfig(k);
+                    sc.core.update_action_bar_needed = true;
+                    sc.loadouts.force_update = true;
+                    sc.overlay.overlay_reconfig();
+                    for label in pairs(sc.overlay.ccf_labels) do
+                        sc.overlay.ccf_label_reconfig(label);
+                    end
                 end
                 return val;
             end
@@ -2384,11 +2040,6 @@ local function create_sw_ui_overlay_frame(pframe)
         end
 
         do
-            -- selection
-            local selections = 0;
-            for _, _ in pairs(v.selection) do
-                selections = selections + 1;
-            end
             local option_key = label_frame_setting_subkey.."_selection";
             local dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_"..option_key, pframe);
 
@@ -2398,18 +2049,21 @@ local function create_sw_ui_overlay_frame(pframe)
             dd.init_func = function()
                 libDD:UIDropDownMenu_Initialize(dd, function(self)
 
-                    if not v.selection[config.settings[self._settings_id]] then
-                        config.settings[self._settings_id] = next(v.selection);
+                    if not sc.overlay.label_handler[config.settings[self._settings_id]] then
+                        config.settings[self._settings_id] = next(sc.overlay.label_handler);
                     end
-                    local active_sel = v.selection[config.settings[self._settings_id]];
-                    local r, g, b = effect_color(active_sel.color_tag);
-                    sc.overlay.currently_casting_frame_label_reconfig(k);
-                    libDD:UIDropDownMenu_SetText(self, CreateColor(r, g, b, 1.0):WrapTextInColorCode(active_sel.desc));
+                    local active_sel = sc.overlay.label_handler[config.settings[self._settings_id]];
+                    sc.core.update_action_bar_needed = true;
+                    sc.loadouts.force_update = true;
+
+                    libDD:UIDropDownMenu_SetText(self, active_sel.desc);
+                    register_text_frame_color(self.Text, active_sel.color_tag);
 
                     libDD:UIDropDownMenu_SetWidth(self, 120);
 
-                    for sel_k, sel_v in pairs(v.selection) do
-                        r, g, b = effect_color(sel_v.color_tag);
+                    for _, sel_k in ipairs(overlay_components_selection_display) do
+                        local sel_v = sc.overlay.label_handler[sel_k];
+                        local r, g, b = effect_color(sel_v.color_tag);
                         local txt = CreateColor(r, g, b, 1.0):WrapTextInColorCode(sel_v.desc);
                         libDD:UIDropDownMenu_AddButton(
                             {
@@ -2417,15 +2071,393 @@ local function create_sw_ui_overlay_frame(pframe)
                                 checked = sel_k == config.settings[self._settings_id],
                                 func = function()
                                     config.settings[self._settings_id] = sel_k;
-                                    sc.overlay.currently_casting_frame_label_reconfig(k);
+                                    sc.core.update_action_bar_needed = true;
+                                    sc.loadouts.force_update = true;
                                     libDD:UIDropDownMenu_SetText(self, txt);
-                                end
+                                end,
+                                tooltipTitle = "",
+                                tooltipText = sel_v.tooltip,
+                                tooltipOnButton = sel_v.tooltip ~= nil,
                             }
                         );
                     end
                 end);
             end;
         end
+        pframe.y_offset = pframe.y_offset - 20;
+    end
+
+    pframe.y_offset = pframe.y_offset - 20;
+
+    do
+        local option_key = "overlay_resource_regen";
+        f = CreateFrame("CheckButton", "__sc_frame_setting_"..option_key, pframe, "ChatConfigCheckButtonTemplate");
+        f._type = "CheckButton";
+        f._settings_id = option_key;
+        f:SetPoint("TOPLEFT", 10, pframe.y_offset);
+        f:SetScript("OnClick", function(self)
+            config.settings[self._settings_id] = self:GetChecked();
+            sc.core.update_action_bar_needed = true;
+            sc.loadouts.force_update = true;
+        end);
+        local handler = sc.overlay.label_handler.overlay_display_resource_regen;
+        local text_frame = getglobal(f:GetName()..'Text');
+        text_frame:SetText(handler.desc);
+        register_text_frame_color(text_frame, handler.color_tag);
+    end
+    do
+        local option_key = "overlay_resource_regen_display_idx";
+        local dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_"..option_key, pframe);
+
+        dd._type = "DropDownMenu";
+        dd._settings_id = option_key;
+        dd:SetPoint("TOPLEFT", 165, pframe.y_offset+3);
+        local selections =  {"Top label", "Center label", "Bottom label"};
+        dd.init_func = function()
+            libDD:UIDropDownMenu_Initialize(dd, function(self)
+
+                sc.core.update_action_bar_needed = true;
+                sc.loadouts.force_update = true;
+
+                libDD:UIDropDownMenu_SetWidth(self, 120);
+
+                for i, disp in ipairs(selections) do
+                    if config.settings[self._settings_id] == i then
+                        libDD:UIDropDownMenu_SetText(self, disp);
+                    end
+                    libDD:UIDropDownMenu_AddButton(
+                        {
+                            text = disp,
+                            checked = i == config.settings[self._settings_id],
+                            func = function()
+                                config.settings[self._settings_id] = i;
+                                sc.core.update_action_bar_needed = true;
+                                sc.loadouts.force_update = true;
+                                libDD:UIDropDownMenu_SetText(self, disp);
+                            end,
+                        }
+                    );
+                end
+            end);
+        end;
+    end
+    pframe.y_offset = pframe.y_offset - 25;
+
+    local div = pframe:CreateTexture(nil, "ARTWORK")
+    div:SetColorTexture(0.5, 0.5, 0.5, 0.6);
+    div:SetHeight(1);
+    div:SetPoint("TOPLEFT", pframe, "TOPLEFT", 0, pframe.y_offset);
+    div:SetPoint("TOPRIGHT", pframe, "TOPRIGHT", 0, pframe.y_offset);
+    pframe.y_offset = pframe.y_offset - 5;
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(GameFontNormal);
+    f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
+    f_txt:SetText("Spell cast info frame");
+    f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
+
+    pframe.y_offset = pframe.y_offset - 15;
+
+    multi_row_checkbutton(
+        {
+            {
+                id = "overlay_disable_cc_info",
+                txt = "Disable spell cast info frame",
+                func = function(self)
+                    if sc.overlay.ccf_parent.config_mode then
+                        if self:GetChecked() then
+                            sc.overlay.ccf_parent.border.disabled_txt:Show();
+                        else
+                            sc.overlay.ccf_parent.border.disabled_txt:Hide();
+                        end
+                        sc.overlay.cc_demo();
+                    end
+                end
+            },
+            {
+                id = "overlay_cc_only_eval",
+                txt = "Only show for evaluable spells",
+            },
+            {
+                id = "overlay_cc_animate",
+                txt = "Animate",
+                func = function()
+
+                    if sc.overlay.ccf_parent.config_mode then
+                        sc.overlay.cc_demo();
+                    end
+                end,
+                tooltip = "Animation puts a cooldown on spell switching during the animation",
+            },
+            {
+                id = "overlay_cc_horizontal",
+                txt = "Horizontal animation",
+                func = function()
+                    if sc.overlay.ccf_parent.config_mode then
+                        sc.overlay.cc_demo();
+                    end
+                end
+            },
+            {
+                id = "overlay_cc_move_adjacent_on_empty",
+                txt = "Move neighbouringing labels closer when other is empty",
+                func = function(self)
+
+                    for k in pairs(sc.overlay.ccf_labels) do
+                        sc.overlay.ccf_label_reconfig(k);
+                    end
+                end
+            },
+        },
+        pframe, 2);
+
+    pframe.y_offset = pframe.y_offset - 25;
+    f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_cc_info_scale", pframe, "UISliderTemplate");
+    f._type = slider_frame_type;
+    f:SetOrientation('HORIZONTAL');
+    f:SetPoint("TOPLEFT", 235, pframe.y_offset+4);
+    f:SetMinMaxValues(0.1, 3.0);
+    f:SetWidth(175)
+    f:SetHeight(20)
+    f:SetValueStep(0.05);
+    f:SetHitRectInsets(0, 0, 3, 3)
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY")
+    f_txt:SetFontObject(GameFontNormal)
+    f_txt:SetTextColor(1.0, 1.0, 1.0);
+    f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset)
+    f_txt:SetText("Scale")
+
+    f.val_txt = pframe:CreateFontString(nil, "OVERLAY")
+    f.val_txt:SetFontObject(font)
+    f.val_txt:SetPoint("TOPLEFT", 415, pframe.y_offset)
+    f.val_txt:SetText(string.format("%.1f", 0));
+
+    f:SetScript("OnValueChanged", function(self, val)
+        config.settings.overlay_cc_info_scale = val;
+        self.val_txt:SetText(string.format("%.2f", val))
+        sc.overlay.cc_f1.icon_frame:SetScale(val);
+        sc.overlay.cc_f2.icon_frame:SetScale(val);
+        sc.overlay.ccf_parent.border:SetScale(val);
+    end);
+
+    pframe.y_offset = pframe.y_offset - 25;
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY")
+    f_txt:SetFontObject(GameFontNormal)
+    f_txt:SetTextColor(1.0, 1.0, 1.0);
+    f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset);
+    f_txt:SetText("Font");
+
+    local overlay_cc_font_dropdown_f = create_font_dropdown(
+        pframe,
+        "__sc_frame_setting_overlay_cc_font",
+        "overlay_cc_font",
+        function()
+            for k in pairs(sc.overlay.ccf_labels) do
+                sc.overlay.ccf_label_reconfig(k);
+            end
+        end
+    );
+    overlay_cc_font_dropdown_f:SetPoint("TOPLEFT", 217, pframe.y_offset+6);
+
+    pframe.y_offset = pframe.y_offset - 25;
+
+    -- headers
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(font);
+    f_txt:SetPoint("TOPLEFT", 35, pframe.y_offset);
+    f_txt:SetText("Label");
+    f_txt:SetTextColor(222/255, 192/255, 40/255);
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(font);
+    f_txt:SetPoint("TOPLEFT", 175, pframe.y_offset);
+    f_txt:SetText("Font size");
+    f_txt:SetTextColor(222/255, 192/255, 40/255);
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(font);
+    f_txt:SetPoint("TOPLEFT", 240, pframe.y_offset);
+    f_txt:SetText("x");
+    f_txt:SetTextColor(222/255, 192/255, 40/255);
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(font);
+    f_txt:SetPoint("TOPLEFT", 280, pframe.y_offset);
+    f_txt:SetText("y");
+    f_txt:SetTextColor(222/255, 192/255, 40/255);
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(font);
+    f_txt:SetPoint("TOPLEFT", 320, pframe.y_offset);
+    f_txt:SetText("Display");
+    f_txt:SetTextColor(222/255, 192/255, 40/255);
+
+    pframe.y_offset = pframe.y_offset - 13;
+    for _, k in ipairs({
+        "outside_right_upper",
+        "outside_right_lower",
+        "outside_left_upper",
+        "outside_left_lower",
+        "outside_top_left",
+        "outside_top_right",
+        "outside_bottom_left",
+        "outside_bottom_right",
+        "inside_top",
+        "inside_bottom",
+        "inside_left",
+        "inside_right",
+    }) do
+        local v = sc.overlay.ccf_labels[k];
+
+        local label_frame_setting_subkey = "overlay_cc_"..k;
+
+        do
+            -- enable button
+            local option_key = label_frame_setting_subkey.."_enabled";
+            f = CreateFrame("CheckButton", "__sc_frame_setting_"..option_key, pframe, "ChatConfigCheckButtonTemplate");
+            f._type = "CheckButton";
+            f._settings_id = option_key;
+            f:SetPoint("TOPLEFT", 10, pframe.y_offset);
+            f:SetScript("OnClick", function(self)
+                config.settings[self._settings_id] = self:GetChecked();
+                sc.overlay.ccf_label_reconfig(k);
+            end);
+
+            getglobal(f:GetName()..'Text'):SetText(v.desc);
+        end
+
+        do
+            -- font size
+            local option_key = label_frame_setting_subkey.."_fsize";
+            f = CreateFrame("EditBox", "__sc_frame_setting_"..option_key, pframe, "InputBoxTemplate");
+            f._type = "EditBox";
+            f._settings_id = option_key;
+            f.number_editbox = true;
+            f:SetPoint("TOPLEFT", 185, pframe.y_offset-2);
+            f:SetSize(35, 15);
+            f:SetAutoFocus(false);
+            local update = function(self)
+                local val = tonumber(self:GetText());
+                local valid = val and val > 1;
+                if valid then
+                    config.settings[self._settings_id] = val;
+                    sc.overlay.ccf_label_reconfig(k);
+                end
+                return valid;
+            end
+            local close = function(self)
+                if not update(self) then
+                    self:SetText(""..config.default_settings[self._settings_id]);
+                end
+
+            	self:ClearFocus();
+                self:HighlightText(0,0);
+            end
+            editbox_config(f, update, close);
+        end
+
+        do
+            -- x offset
+            local option_key = label_frame_setting_subkey.."_x";
+            f = CreateFrame("EditBox", "__sc_frame_setting_"..option_key, pframe, "InputBoxTemplate");
+            f._type = "EditBox";
+            f._settings_id = option_key;
+            f.number_editbox = true;
+            f:SetPoint("TOPLEFT", 230, pframe.y_offset-2);
+            f:SetSize(35, 15);
+            f:SetAutoFocus(false);
+            local update = function(self)
+                local val = tonumber(self:GetText());
+                if val then
+                    config.settings[self._settings_id] = val;
+                    sc.overlay.ccf_label_reconfig(k);
+                end
+                return val;
+            end
+            local close = function(self)
+                if not update(self) then
+                    self:SetText(""..config.default_settings[self._settings_id]);
+                end
+            	self:ClearFocus();
+                self:HighlightText(0,0);
+            end
+            editbox_config(f, update, close);
+        end
+
+        do
+
+            local option_key = label_frame_setting_subkey.."_y";
+            f = CreateFrame("EditBox", "__sc_frame_setting_"..option_key, pframe, "InputBoxTemplate");
+            f._type = "EditBox";
+            f._settings_id = option_key;
+            f.number_editbox = true;
+            f:SetPoint("TOPLEFT", 275, pframe.y_offset-2);
+            f:SetSize(35, 15);
+            f:SetAutoFocus(false);
+            local update = function(self)
+                local val = tonumber(self:GetText());
+                if val then
+                    config.settings[self._settings_id] = val;
+                    sc.overlay.ccf_label_reconfig(k);
+                end
+                return val;
+            end
+            local close = function(self)
+                if not update(self) then
+                    self:SetText(""..config.default_settings[self._settings_id]);
+                end
+            	self:ClearFocus();
+                self:HighlightText(0,0);
+            end
+            editbox_config(f, update, close);
+        end
+
+        do
+            local option_key = label_frame_setting_subkey.."_selection";
+            local dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_"..option_key, pframe);
+
+            dd._type = "DropDownMenu";
+            dd._settings_id = option_key;
+            dd:SetPoint("TOPLEFT", 300, pframe.y_offset+3);
+            dd.init_func = function()
+                libDD:UIDropDownMenu_Initialize(dd, function(self)
+
+                    if not sc.overlay.label_handler[config.settings[self._settings_id]] then
+                        config.settings[self._settings_id] = next(sc.overlay.label_handler);
+                    end
+                    local active_sel = sc.overlay.label_handler[config.settings[self._settings_id]];
+                    sc.overlay.ccf_label_reconfig(k);
+                    libDD:UIDropDownMenu_SetText(self, active_sel.desc);
+                    register_text_frame_color(self.Text, active_sel.color_tag);
+
+                    libDD:UIDropDownMenu_SetWidth(self, 120);
+
+                    for _, sel_k in ipairs(overlay_components_selection_display) do
+                        local sel_v = sc.overlay.label_handler[sel_k];
+                        local r, g, b = effect_color(sel_v.color_tag);
+                        local txt = CreateColor(r, g, b, 1.0):WrapTextInColorCode(sel_v.desc);
+                        libDD:UIDropDownMenu_AddButton(
+                            {
+                                text = txt,
+                                checked = sel_k == config.settings[self._settings_id],
+                                func = function()
+                                    config.settings[self._settings_id] = sel_k;
+                                    sc.overlay.ccf_label_reconfig(k);
+                                    libDD:UIDropDownMenu_SetText(self, txt);
+                                end,
+                                tooltipTitle = "",
+                                tooltipText = sel_v.tooltip,
+                                tooltipOnButton = sel_v.tooltip ~= nil,
+                            }
+                        );
+                    end
+                end);
+            end;
+        end
+        pframe.y_offset = pframe.y_offset - 20;
+
     end
 
     make_frame_scrollable(pframe);
@@ -3583,7 +3615,6 @@ end
 local function update_profile_frame()
 
     sc.config.set_active_settings();
-    sc.config.activate_settings();
 
     __sc_frame.profile_frame.primary_spec.init_func();
     __sc_frame.profile_frame.second_spec.init_func();
@@ -3660,6 +3691,7 @@ local function create_sw_ui_profile_frame(pframe)
                             __sc_p_char.main_spec_profile = k;
                             libDD:UIDropDownMenu_SetText(pframe.primary_spec, k);
                             update_profile_frame();
+                            sc.config.activate_settings();
                         end
                     }
                 );
@@ -3701,6 +3733,7 @@ local function create_sw_ui_profile_frame(pframe)
                             __sc_p_char.second_spec_profile = k;
                             libDD:UIDropDownMenu_SetText(pframe.second_spec, k);
                             update_profile_frame();
+                            sc.config.activate_settings();
                         end
                     }
                 );
@@ -3737,8 +3770,8 @@ local function create_sw_ui_profile_frame(pframe)
             __sc_p_acc.profiles[__sc_p_char[k]] = nil
             __sc_p_char[k] = txt;
         end
-
         update_profile_frame()
+
     end
     f:SetScript("OnEnterPressed", function(self) 
         editbox_save(self);
@@ -3781,6 +3814,7 @@ local function create_sw_ui_profile_frame(pframe)
     f:SetScript("OnClick", function(self)
         config.delete_profile();
         update_profile_frame();
+        sc.config.activate_settings();
     end);
     f:SetPoint("TOPLEFT", 190, pframe.y_offset+4);
     f:SetText("Delete");
@@ -3840,6 +3874,7 @@ local function create_sw_ui_profile_frame(pframe)
             pframe.new_profile_name_editbox:SetText("");
         end
         update_profile_frame();
+        sc.config.activate_settings();
     end);
     f:SetPoint("TOPLEFT", 190, pframe.y_offset+4);
     f:SetText("Default preset");
@@ -3861,6 +3896,7 @@ local function create_sw_ui_profile_frame(pframe)
             pframe.new_profile_name_editbox:SetText("");
         end
         update_profile_frame();
+        sc.config.activate_settings();
     end);
     f:SetPoint("TOPLEFT", 190, pframe.y_offset+4);
     f:SetText("Copy of active profile");
@@ -3971,6 +4007,118 @@ local function create_sw_ui_settings_frame(pframe)
     };
 
     multi_row_checkbutton(spell_settings, pframe, 1);
+
+    pframe.y_offset = pframe.y_offset - 10;
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(GameFontNormal);
+    f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
+    f_txt:SetText("Color palette RGB");
+    f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
+
+    pframe.y_offset = pframe.y_offset - 15;
+    -- headers
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(font);
+    f_txt:SetPoint("TOPLEFT", 10, pframe.y_offset);
+    f_txt:SetText("Tag");
+    f_txt:SetTextColor(222/255, 192/255, 40/255);
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(font);
+    f_txt:SetPoint("TOPLEFT", 230, pframe.y_offset);
+    f_txt:SetText("Red");
+    f_txt:SetTextColor(222/255, 192/255, 40/255);
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(font);
+    f_txt:SetPoint("TOPLEFT", 310, pframe.y_offset);
+    f_txt:SetText("Green");
+    f_txt:SetTextColor(222/255, 192/255, 40/255);
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(font);
+    f_txt:SetPoint("TOPLEFT", 390, pframe.y_offset);
+    f_txt:SetText("Blue");
+    f_txt:SetTextColor(222/255, 192/255, 40/255);
+
+    pframe.y_offset = pframe.y_offset - 15;
+    for _, v in ipairs({
+        {"normal", "Normal"},
+        {"crit", "Critical"},
+        {"old_rank", "Old rank"},
+        {"target_info", "Target info"},
+        {"avoidance_info", "Avoidance/mitigation info"},
+        {"expectation", "Effect expectation"},
+        {"effect_per_sec", "Effect per sec"},
+        {"threat", "Threat"},
+        {"execution_time", "Execution time"},
+        {"cost", "Cost"},
+        {"effect_per_cost", "Effect per cost"},
+        {"cost_per_sec", "Effect per sec"},
+        {"effect_until_oom", "Effect until OOM"},
+        {"casts_until_oom", "Casts until OOM"},
+        {"time_until_oom", "Time until OOM"},
+        {"sp_effect", "Spell info internals (coefs etc)"},
+        {"stat_weights", "Stat weights"},
+        {"spell_rank", "Spell rank"},
+
+    }) do
+        local label_frame_setting_subkey = "general_color_"..v[1];
+        do
+            f_txt = pframe:CreateFontString(nil, "OVERLAY");
+            f_txt:SetFontObject(GameFontNormal);
+            f_txt:SetPoint("TOPLEFT", 10, pframe.y_offset-4);
+            f_txt:SetText(v[2]);
+            register_text_frame_color(f_txt, v[1]);
+        end
+
+        for i, rgb_comp in pairs({"_r", "_g", "_b"}) do
+            local option_key = label_frame_setting_subkey..rgb_comp;
+            f = CreateFrame("EditBox", "__sc_frame_setting_"..option_key, pframe, "InputBoxTemplate");
+            f._type = "EditBox";
+            f._settings_id = option_key;
+            f.number_editbox = true;
+            f:SetPoint("TOPLEFT", 230 + (i-1)*80, pframe.y_offset-2);
+            f:SetSize(35, 15);
+            f:SetAutoFocus(false);
+            local update = function(self)
+                local val = tonumber(self:GetText());
+                local valid = val and val >= 0 and val <= 255
+                if valid then
+                    config.settings[self._settings_id] = val;
+                    assign_color_tag(v[1], i, val);
+                    for frame, color_tag in pairs(colored_text_frames) do
+                        if color_tag == v[1] then
+                            frame:SetTextColor(effect_color(v[1]));
+                        end
+                    end
+                    sc.core.update_action_bar_needed = true;
+                    sc.loadouts.force_update = true;
+                    for label in pairs(sc.overlay.ccf_labels) do
+                        sc.overlay.ccf_label_reconfig(label);
+                    end
+                end
+                return valid;
+            end
+            local close = function(self)
+                if not update(self) then
+                    self:SetText(""..config.default_settings[self._settings_id]);
+                end
+
+            	self:ClearFocus();
+                self:HighlightText(0,0);
+            end
+            editbox_config(f, update, close);
+
+            f_txt = pframe:CreateFontString(nil, "OVERLAY");
+            f_txt:SetFontObject(GameFontNormal);
+            f_txt:SetPoint("TOPLEFT", 230+(i-1)*80 + 38, pframe.y_offset-4);
+            f_txt:SetText("/255");
+            f_txt:SetTextColor(1, 1, 1);
+        end
+        pframe.y_offset = pframe.y_offset - 16;
+    end
 end
 
 local function create_sw_base_ui()
@@ -4002,7 +4150,7 @@ local function create_sw_base_ui()
     local x_margin = 15;
 
     for _, v in pairs({"spells_frame", "tooltip_frame", "overlay_frame", "loadout_frame", "buffs_frame", "calculator_frame", "profile_frame", "settings_frame"}) do
-        __sc_frame[v] = CreateFrame("ScrollFrame", "sw_"..v, __sc_frame);
+        __sc_frame[v] = CreateFrame("ScrollFrame", "__sc_frame_"..v, __sc_frame);
         __sc_frame[v]:SetPoint("TOP", __sc_frame, 0, -tabbed_child_frames_y_offset-35);
         __sc_frame[v]:SetWidth(width-x_margin*2);
         __sc_frame[v]:SetHeight(height-tabbed_child_frames_y_offset-35-5);
@@ -4169,11 +4317,8 @@ local function load_sw_ui()
     create_sw_ui_loadout_frame(__sc_frame.loadout_frame);
     create_sw_ui_buffs_frame(__sc_frame.buffs_frame);
     create_sw_ui_calculator_frame(__sc_frame.calculator_frame);
-    create_sw_ui_profile_frame(__sc_frame.profile_frame);
     create_sw_ui_settings_frame(__sc_frame.settings_frame);
-
-    --__sc_frame.calculator_frame.sim_type = fight_types.repeated_casts;
-    --__sc_frame.calculator_frame.sim_type_button.init_func();
+    create_sw_ui_profile_frame(__sc_frame.profile_frame);
 
     sw_activate_tab(__sc_frame.tabs[1]);
     __sc_frame:Hide();

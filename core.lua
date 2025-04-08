@@ -33,7 +33,7 @@ sc.core                         = core;
 core.addon_name                 = "SpellCoda";
 
 local version_major             = 0;
-local version_minor             = 3;
+local version_minor             = 4;
 local version_build             = sc.addon_build_id;
 
 core.version_id                 = version_build + version_minor*1000 + version_major*1000000;
@@ -98,35 +98,35 @@ local function client_age_days()
     return diff_days;
 end
 
-local currently_casting_spell_id        = 0;
-local currently_casting_noexpire        = false;
-local currently_casting_channel         = true;
-local currently_casting_expire_timer    = 0;
-local currently_casting_waiting_on_anim = false;
-local currently_casting_expiration      = 3;
+local cc_spell_id        = 0;
+local cc_noexpire        = false;
+local cc_channel         = true;
+local cc_expire_timer    = 0;
+local cc_waiting_on_anim = false;
+local cc_expiration      = 3;
 
-local function currently_casting_enqueue(spell_id)
+local function cc_enqueue(spell_id)
 
-    if sc.overlay.currently_casting_f1.animating then
-        currently_casting_waiting_on_anim = true;
+    if sc.overlay.cc_f1.animating then
+        cc_waiting_on_anim = true;
     else
-        sc.overlay.currently_casting_new_spell(spell_id);
-        currently_casting_waiting_on_anim = false;
+        sc.overlay.cc_new_spell(spell_id);
+        cc_waiting_on_anim = false;
     end
-    currently_casting_spell_id = spell_id;
+    cc_spell_id = spell_id;
 end
 
-local function set_current_casting_spell(spell_id)
+local function set_cc_spell(spell_id)
 
     if spells[spell_id] and
-        (not config.settings.overlay_currently_casting_only_eval or
+        (not config.settings.overlay_cc_only_eval or
         bit.band(spells[spell_id].flags, spell_flags.eval) ~= 0) then
 
-        currently_casting_expire_timer = currently_casting_expiration;
-        if currently_casting_spell_id ~= spell_id then
-            currently_casting_enqueue(spell_id);
+        cc_expire_timer = cc_expiration;
+        if cc_spell_id ~= spell_id then
+            cc_enqueue(spell_id);
         end
-        currently_casting_spell_id = spell_id;
+        cc_spell_id = spell_id;
     end
 end
 
@@ -138,33 +138,33 @@ for _, v in pairs({"attack", "shoot", "auto_shot"}) do
 end
 
 local function spell_tracking(dt)
-    currently_casting_expire_timer = currently_casting_expire_timer - dt;
-    if currently_casting_noexpire then
+    cc_expire_timer = cc_expire_timer - dt;
+    if cc_noexpire then
         return;
     end
-    if currently_casting_expire_timer < 0.0 then
+    if cc_expire_timer < 0.0 then
 
         -- degrade to autorepeat or 0
         local is_repeating = false;
         for _, id in pairs(auto_repeat_spells_tracking) do
             if IsCurrentSpell(id) then
                 is_repeating = true;
-                set_current_casting_spell(id);
+                set_cc_spell(id);
                 break;
             end
         end
 
         if not is_repeating then
 
-            if currently_casting_spell_id ~= 0 then
-                currently_casting_enqueue(0);
+            if cc_spell_id ~= 0 then
+                cc_enqueue(0);
             end
-            currently_casting_spell_id = 0;
+            cc_spell_id = 0;
         end
     end
 
-    if currently_casting_waiting_on_anim then
-        currently_casting_enqueue(currently_casting_spell_id);
+    if cc_waiting_on_anim then
+        cc_enqueue(cc_spell_id);
     end
 end
 
@@ -174,49 +174,49 @@ local event_dispatch = {
             if spell_id == 53563 or spell_id == 407613 then -- beacon
                 core.beacon_snapshot_time = core.addon_running_time;
             end
-            set_current_casting_spell(spell_id);
-            if not currently_casting_channel then
-                currently_casting_noexpire = false;
+            set_cc_spell(spell_id);
+            if not cc_channel then
+                cc_noexpire = false;
             end
         end
     end,
     ["UNIT_SPELLCAST_CHANNEL_START"] = function(_, caster, _, spell_id)
         if caster == "player" then
-            set_current_casting_spell(spell_id);
-            currently_casting_noexpire = true;
-            currently_casting_channel = true;
+            set_cc_spell(spell_id);
+            cc_noexpire = true;
+            cc_channel = true;
         end
     end,
     ["UNIT_SPELLCAST_CHANNEL_STOP"] = function(_, caster, _, spell_id)
         if caster == "player" then
-            currently_casting_noexpire = false;
-            currently_casting_channel = false;
-            currently_casting_expire_timer = currently_casting_expiration;
+            cc_noexpire = false;
+            cc_channel = false;
+            cc_expire_timer = cc_expiration;
         end
     end,
     ["UNIT_SPELLCAST_START"] = function(self, caster, _, spell_id)
         if caster == "player" then
-            set_current_casting_spell(spell_id);
-            currently_casting_noexpire = true;
+            set_cc_spell(spell_id);
+            cc_noexpire = true;
         end
     end,
     ["UNIT_SPELLCAST_STOP"] = function(self, caster, _, spell_id)
         if caster == "player" then
-            currently_casting_noexpire = false;
-            currently_casting_expire_timer = currently_casting_expiration;
+            cc_noexpire = false;
+            cc_expire_timer = cc_expiration;
         end
     end,
     ["UNIT_SPELLCAST_FAILED"] = function(self, caster, _, spell_id)
         if caster == "player" then
-            currently_casting_noexpire = false;
-            currently_casting_expire_timer = currently_casting_expiration;
+            cc_noexpire = false;
+            cc_expire_timer = cc_expiration;
         end
     end,
     ["START_AUTOREPEAT_SPELL"] = function(self, arg1, arg2, arg4)
-        currently_casting_noexpire = false;
+        cc_noexpire = false;
         for _, id in pairs(auto_repeat_spells_tracking) do
             if IsCurrentSpell(id) then
-                set_current_casting_spell(id);
+                set_cc_spell(id);
                 return;
             end
         end
@@ -228,11 +228,11 @@ local event_dispatch = {
             set_active_settings();
             set_active_loadout(__sc_p_char.active_loadout);
             load_sw_ui();
-            sc.overlay.init_currently_casting_frames();
+            sc.overlay.init_ccfs();
             activate_settings();
-            activate_loadout_config();
-            update_profile_frame()
-            update_loadout_frame();
+            update_profile_frame();
+            --activate_loadout_config();
+            update_loadout_frame(); -- activates activate_loadout_config()
         end
     end,
     ["PLAYER_LOGOUT"] = function()
@@ -358,17 +358,16 @@ local event_dispatch = {
     ["ACTIVE_TALENT_GROUP_CHANGED"] = function()
 
         core.active_spec = GetActiveTalentGroup();
-        set_active_settings()
+        update_profile_frame();
         activate_settings();
         core.update_action_bar_needed = true;
         core.talents_update_needed = true;
-        update_profile_frame();
     end,
     ["CHARACTER_POINTS_CHANGED"] = function()
 
         sc.loadouts.force_update = true;
-        set_active_settings();
-        activate_settings();
+        --set_active_settings();
+        --activate_settings();
         if not config.loadout.use_custom_talents then
             core.talents_update_needed = true;
             update_loadout_frame();
