@@ -870,6 +870,112 @@ local function create_sw_spell_id_viewer()
     __sc_frame.spell_icon:SetScript("OnLeave", tooltip_viewer_off);
 end
 
+local function create_sw_item_id_viewer()
+
+    __sc_frame.item_id_viewer_editbox = CreateFrame("EditBox", "sw_item_id_viewer_editbox", __sc_frame, "InputBoxTemplate");
+    __sc_frame.item_id_viewer_editbox:SetPoint("TOPLEFT", __sc_frame, 325, -6);
+    __sc_frame.item_id_viewer_editbox:SetText("");
+    __sc_frame.item_id_viewer_editbox:SetSize(100, 10);
+    __sc_frame.item_id_viewer_editbox:SetAutoFocus(false);
+
+    __sc_frame.item_id_viewer_editbox:SetScript("OnEvent", function(self, event, ...)
+        __sc_frame.item_id_viewer_editbox:GetScript("OnTextChanged")(__sc_frame.item_id_viewer_editbox);
+    end);
+
+
+    local tooltip_overwrite_editbox = function(self)
+        local txt = self:GetText();
+        if txt == "" then
+            __sc_frame.item_id_viewer_editbox_label:Show();
+        else
+            __sc_frame.item_id_viewer_editbox_label:Hide();
+        end
+        local id = tonumber(txt);
+        if id and GetItemInfo(id) then
+            self:SetTextColor(0, 1, 0);
+        else
+            self:SetTextColor(1, 0, 0);
+        end
+        self:ClearFocus();
+    end
+
+    local invalid_item_id = 1728;
+    local invalid_item_tex = GetItemIcon(1728);
+
+    __sc_frame.item_id_viewer_editbox:SetScript("OnEnterPressed", tooltip_overwrite_editbox);
+    __sc_frame.item_id_viewer_editbox:SetScript("OnEscapePressed", tooltip_overwrite_editbox);
+    __sc_frame.item_id_viewer_editbox:SetScript("OnEditFocusLost", function(self)
+        tooltip_overwrite_editbox(self);
+        __sc_frame.item_id_viewer_editbox:UnregisterEvent("GET_ITEM_INFO_RECEIVED");
+    end);
+    __sc_frame.item_id_viewer_editbox:SetScript("OnEditFocusGained", function()
+        __sc_frame.item_id_viewer_editbox:RegisterEvent("GET_ITEM_INFO_RECEIVED");
+    end);
+    __sc_frame.item_id_viewer_editbox:SetScript("OnTextChanged", function(self)
+        local txt = self:GetText();
+        if txt == "" then
+            __sc_frame.item_id_viewer_editbox_label:Show();
+        else
+            __sc_frame.item_id_viewer_editbox_label:Hide();
+        end
+        local id = tonumber(txt);
+        if id and id <= bit.lshift(1, 31) and GetItemInfo(id) then
+            self:SetTextColor(0, 1, 0);
+        else
+            self:SetTextColor(1, 0, 0);
+            id = 0;
+        end
+
+        if id == 0 then
+            __sc_frame.item_icon_tex:SetTexture(invalid_item_tex);
+            GameTooltip:Hide();
+        else
+            __sc_frame.item_icon_tex:SetTexture(GetItemIcon(id));
+
+            GameTooltip:SetOwner(__sc_frame.item_icon, "ANCHOR_BOTTOMRIGHT");
+            GameTooltip:SetItemByID(id);
+            GameTooltip:Show();
+        end
+    end);
+
+    __sc_frame.item_id_viewer_editbox_label = __sc_frame:CreateFontString(nil, "OVERLAY");
+    __sc_frame.item_id_viewer_editbox_label:SetFontObject(font);
+    __sc_frame.item_id_viewer_editbox_label:SetText("Item ID viewer");
+    __sc_frame.item_id_viewer_editbox_label:SetPoint("CENTER", __sc_frame.item_id_viewer_editbox, 0, 0);
+
+    __sc_frame.item_icon = CreateFrame("Frame", "__sc_custom_item_id", __sc_frame);
+    __sc_frame.item_icon:SetSize(17, 17);
+    __sc_frame.item_icon:SetPoint("RIGHT", __sc_frame.item_id_viewer_editbox, 17, 0);
+
+    local tex = __sc_frame.item_icon:CreateTexture(nil);
+    tex:SetAllPoints(__sc_frame.item_icon);
+    tex:SetTexture(invalid_item_tex);
+    __sc_frame.item_icon_tex = tex;
+
+    local tooltip_viewer_on = function(self)
+        local txt = __sc_frame.item_id_viewer_editbox:GetText();
+        local id = tonumber(txt);
+        if txt == "" then
+            id = invalid_item_id;
+        elseif not id then
+            id = 0;
+        end
+        if GetItemInfo(id) then
+            GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT");
+            GameTooltip:SetItemByID(id);
+            GameTooltip:Show();
+        else
+            GameTooltip:Hide();
+        end
+    end
+    local tooltip_viewer_off = function(self)
+        GameTooltip:Hide();
+    end
+
+    __sc_frame.item_icon:SetScript("OnEnter", tooltip_viewer_on);
+    __sc_frame.item_icon:SetScript("OnLeave", tooltip_viewer_off);
+end
+
 local function multi_row_checkbutton(buttons_info, parent_frame, num_columns, func, x_pad)
     x_pad = x_pad or 10;
     local column_offset = 230;
@@ -4174,6 +4280,7 @@ local function create_sw_base_ui()
     );
 
     create_sw_spell_id_viewer();
+    create_sw_item_id_viewer();
 
     __sc_frame.tabs = {};
 
