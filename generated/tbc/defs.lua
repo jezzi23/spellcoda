@@ -1,20 +1,20 @@
 -- THIS FILE IS GENERATED
 local _, sc = ...;
 sc.addon_build_id = 1023;
-sc.client_name_src = "wow_classic_era";
-sc.client_version_src = "1.15.7.60191";
+sc.client_name_src = "wow_classic";
+sc.client_version_src = "2.5.4.44833";
 _, sc.class = UnitClass("player");
 _, _, sc.race = UnitRace("player");
 sc.faction = UnitFactionGroup("player");
 local build, version, date = GetBuildInfo();
 sc.client_version_loaded = build.."."..version;
 sc.client_date_loaded = date;
-sc.max_lvl = 60;
+sc.max_lvl = 70;
 sc.expansions = {
 	vanilla = 0,
 	tbc = 1,
 };
-sc.expansion = sc.expansions.vanilla;
+sc.expansion = sc.expansions.tbc;
 sc.game_modes = {
     hardcore = bit.lshift(1, 0),
     season_of_discovery = bit.lshift(1, 2),
@@ -55,6 +55,13 @@ sc.races = {
 	gnome = 7,
 	troll = 8,
 	goblin = 9,
+	bloodelf = 10,
+	draenei = 11,
+	felorc = 12,
+	naga = 13,
+	broken = 14,
+	skeleton = 15,
+	foresttroll = 18,
 };
 sc.schools = {
 	physical = 1,
@@ -77,16 +84,16 @@ sc.powers = {
 	rage = 1,
 	focus = 2,
 	energy = 3,
-	combopoints = 4,
-	happiness = 27,
+	happiness = 4,
+	combopoints = 14,
 };
 sc.power_mod = {
 	[0] = 1,
 	[1] = 0.1,
 	[2] = 1,
 	[3] = 1,
-	[4] = 1,
-	[27] = 0.001,
+	[4] = 0.001,
+	[14] = 1,
 };
 sc.spell_flags = {
 	heal = bit.lshift(1, 0),
