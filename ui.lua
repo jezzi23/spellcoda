@@ -2247,7 +2247,7 @@ local function create_sw_ui_overlay_frame(pframe)
             end);
         end;
     end
-    pframe.y_offset = pframe.y_offset - 25;
+    pframe.y_offset = pframe.y_offset - 30;
 
     local div = pframe:CreateTexture(nil, "ARTWORK")
     div:SetColorTexture(0.5, 0.5, 0.5, 0.6);
@@ -2286,7 +2286,7 @@ local function create_sw_ui_overlay_frame(pframe)
             },
             {
                 id = "overlay_cc_animate",
-                txt = "Animate",
+                txt = "Animation",
                 func = function()
 
                     if sc.overlay.ccf_parent.config_mode then
@@ -2297,7 +2297,7 @@ local function create_sw_ui_overlay_frame(pframe)
             },
             {
                 id = "overlay_cc_horizontal",
-                txt = "Horizontal animation",
+                txt = "Horizontal transition",
                 func = function()
                     if sc.overlay.ccf_parent.config_mode then
                         sc.overlay.cc_demo();
@@ -4055,7 +4055,7 @@ local function create_sw_ui_settings_frame(pframe)
         },
         {
             id = "general_version_mismatch_notify",
-            txt = "Outdated addon notification",
+            txt = "Notify about addon and client version mismatch (needs update)",
         },
     };
 

@@ -885,7 +885,7 @@ local function update_spell_icon_frame(frame_info, spell, spell_id, loadout, eff
         frame_info.overlay_frames[resource_restore_disp_index]:SetTextColor(effect_color(handler.color_tag));
         frame_info.overlay_frames[resource_restore_disp_index]:Show();
 
-    elseif num_overlay_components_toggled > 0 then 
+    elseif num_overlay_components_toggled > 0 then
 
         if bit.band(spell.flags, spell_flags.eval) ~= 0 then
             spell_effect, stats = calc_spell_eval(spell, loadout, effects, eval_flags, spell_id);
@@ -1055,7 +1055,7 @@ local function cc_config_mode_spell_id()
     elseif sc.class == sc.classes.rogue then
         return sc.spids.sinister_strike;
     elseif sc.class == sc.classes.paladin then
-        return sc.spids.holy_light;
+        return sc.spids.exorcism;
     elseif sc.class == sc.classes.warrior then
         return sc.spids.overpower;
     elseif sc.class == sc.classes.hunter then
@@ -1073,6 +1073,7 @@ local function cc_demo_dummy_fill(info, stats)
 
     -- display something in all fields for config demo
     info.num_direct_effects = 1;
+    info.num_periodic_effects = 1;
     info.min_noncrit_if_hit1 = 1234;
     info.max_noncrit_if_hit1 = 2345;
     info.min_crit_if_hit1 = 4321;
@@ -1193,7 +1194,7 @@ local function update_cc()
     for _, v in pairs(ccfs) do
 
         local k = v.spell_id;
-        if spells[k] then
+        if spells[k] and overlay.cc_active == v then
 
             local spell = spells[k];
             local info, stats;
@@ -1213,8 +1214,6 @@ local function update_cc()
             end
             update_ccf(v, spell, info, stats, k);
             v.icon_frame:Show();
-        else
-            v.icon_frame:Hide();
         end
     end
 end
@@ -1246,7 +1245,7 @@ local function ccf_label_reconfig(label_id)
             label:SetText("");
         end
     end
-    if not config.settings.overlay_disable_cc_info then
+    if not config.settings.overlay_disable_cc_info or ccf_parent.config_mode then
         update_cc();
     end
 end
@@ -1359,11 +1358,11 @@ cc_new_spell = function(spell_id)
         new = overlay.cc_f1;
         old = overlay.cc_f2;
     end
-
     new.spell_id = spell_id;
-    update_cc();
 
     overlay.cc_active = new;
+
+    update_cc();
 
     if config.settings.overlay_cc_animate then
 
@@ -1393,6 +1392,7 @@ cc_new_spell = function(spell_id)
     else
         new.icon_frame:SetAlpha(1);
         old.icon_frame:SetAlpha(0);
+        old.spell_id = 0;
     end
 
 end

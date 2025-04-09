@@ -81,8 +81,9 @@ local function client_age_days()
         Jul = 7, Aug = 8, Sep = 9, Oct = 10, Nov = 11, Dec = 12
     };
 
-    local client_month_str, client_day, client_year = sc.client_date_loaded:match("(%a+) (%d+) (%d+)");
-    local month_str, day, year = date("%b %d %Y"):match("(%a+) (%d+) (%d+)");
+    local client_month_str, client_day, client_year = sc.client_date_loaded:match("(%a+)%s+(%d+)%s+(%d+)");
+    local month_str, day, year = date("%b %d %Y"):match("(%a+)%s+(%d+)%s+(%d+)");
+
     if not client_month_str or not client_day or not client_year or not month_str or not day or not year then
         return 0;
     end
