@@ -44,7 +44,7 @@ local function spell_cast_time(spell_id)
     if cast_time  then
         cast_time = cast_time/1000;
     end
-    if spells[spell_id] then
+    if spells[spell_id] and spells[spell_id].gcd > 0 then
         cast_time = cast_time or 0.0;
         cast_time = math.max(spells[spell_id].gcd, cast_time);
     end
@@ -81,29 +81,38 @@ local function next_rank(spell_data)
     return spells[sc.rank_seqs[spell_data.base_id][spell_data.rank + 1]];
 end
 
-
 local effect_colors = {
-    hit_chance              = { 232 / 255, 225 / 255,  32 / 255 },
-    target_info             = {  70 / 255, 130 / 255, 180 / 255 },
-    avoidance_info          = {  70 / 255, 130 / 255, 180 / 255 },
-    normal                  = { 232 / 255, 225 / 255,  32 / 255 },
-    crit                    = { 252 / 255,  69 / 255,   3 / 255 },
-    expectation             = { 255 / 255, 128 / 255,   0 / 255 },
-    effect_per_sec          = { 255 / 255, 128 / 255,   0 / 255 },
-    avg_cast                = { 149 / 255,  53 / 255,  83 / 255 },
-    avg_cost                = {   0 / 255, 255 / 255, 255 / 255 },
-    effect_per_cost         = {   0 / 255, 255 / 255, 255 / 255 },
-    cost_per_sec            = {   0 / 255, 255 / 255, 255 / 255 },
-    effect_until_oom        = { 255 / 255, 128 / 255,   0 / 255 },
-    casts_until_oom         = {   0 / 255, 255 / 255,   0 / 255 },
-    time_until_oom          = {   0 / 255, 255 / 255,   0 / 255 },
-    sp_effect               = { 138 / 255, 134 / 255, 125 / 255 },
-    stat_weights            = {   0 / 255, 255 / 255,   0 / 255 },
-    spell_rank              = { 138 / 255, 134 / 255, 125 / 255 },
-    threat                  = { 150 / 255, 105 / 255,  25 / 255 },
+    --normal                  = { 232 / 255, 225 / 255,  32 / 255 },
+    --crit                    = { 252 / 255,  69 / 255,   3 / 255 },
+    --old_rank                = { 252 / 255,  69 / 255,   3 / 255 },
+    --target_info             = {  70 / 255, 130 / 255, 180 / 255 },
+    --avoidance_info          = {  70 / 255, 130 / 255, 180 / 255 },
+    --expectation             = { 255 / 255, 128 / 255,   0 / 255 },
+    --effect_per_sec          = { 255 / 255, 128 / 255,   0 / 255 },
+    --execution_time          = { 149 / 255,  53 / 255,  83 / 255 },
+    --cost                    = {   0 / 255, 255 / 255, 255 / 255 },
+    --effect_per_cost         = {   0 / 255, 255 / 255, 255 / 255 },
+    --cost_per_sec            = {   0 / 255, 255 / 255, 255 / 255 },
+    --effect_until_oom        = { 255 / 255, 128 / 255,   0 / 255 },
+    --casts_until_oom         = {   0 / 255, 255 / 255,   0 / 255 },
+    --time_until_oom          = {   0 / 255, 255 / 255,   0 / 255 },
+    --sp_effect               = { 138 / 255, 134 / 255, 125 / 255 },
+    --stat_weights            = {   0 / 255, 255 / 255,   0 / 255 },
+    --spell_rank              = { 138 / 255, 134 / 255, 125 / 255 },
+    --threat                  = { 150 / 255, 105 / 255,  25 / 255 },
 };
 
+local function assign_color_tag(color_tag, index, val)
+    if not effect_colors[color_tag] then
+        effect_colors[color_tag] = {0, 0, 0};
+    end
+    effect_colors[color_tag][index] = val/255;
+end
+
 local function effect_color(effect)
+    if not effect_colors[effect] then
+        return 0, 0, 0;
+    end
     return effect_colors[effect][1], effect_colors[effect][2], effect_colors[effect][3];
 end
 
@@ -134,7 +143,7 @@ local function format_number(val, max_accuracy_digits)
     elseif (abs_val < 1000.0 and max_accuracy_digits >= 1) then
         return string.format("%.1f", val);
     elseif (abs_val < 10000.0) then
-        return string.format("%d", 0.5+math.floor(val));
+        return string.format("%.0f", val);
     elseif (abs_val < 1000000.0) then
         return string.format("%.1fk", val/1000);
     elseif (abs_val < 10000000000.0) then
@@ -232,7 +241,6 @@ local function spell_lname(spell_id)
     else
         return lname;
     end
-
 end
 
 local dummy_min_idx = 1;
@@ -254,6 +262,7 @@ local function dummy_value(dummy_id, iid)
     return 0;
 end
 
+--------------------------------------------------------------------------------
 utils.deep_table_copy               = deep_table_copy;
 utils.spell_cost                    = spell_cost;
 utils.spell_cast_time               = spell_cast_time;
@@ -271,7 +280,8 @@ utils.add_threat_flat_by_rank       = add_threat_flat_by_rank;
 utils.add_threat_mod_all_ranks      = add_threat_mod_all_ranks;
 utils.spell_lname                   = spell_lname;
 utils.dummy_value                   = dummy_value;
-
+utils.register_text_frame_color     = register_text_frame_color;
+utils.assign_color_tag              = assign_color_tag;
 
 sc.utils = utils;
 sc.ext = {};

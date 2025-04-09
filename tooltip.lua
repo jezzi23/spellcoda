@@ -1226,14 +1226,14 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                     tooltip,
                     "Expected execution time:",
                     string.format("%.1f sec (%.3f but gcd capped)", stats.gcd, stats.cast_time_nogcd),
-                    effect_color("avg_cast")
+                    effect_color("execution_time")
                 );
             else
                 add_line(
                     tooltip,
                     "Expected execution time:",
                     string.format("%.3f%s sec", stats.cast_time, oh),
-                    effect_color("avg_cast")
+                    effect_color("execution_time")
                 );
             end
         end
@@ -1247,7 +1247,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             tooltip,
             "Expected cost:",
             string.format("%.1f", stats.cost),
-            effect_color("avg_cost")
+            effect_color("cost")
         );
     end
     if config.settings.tooltip_display_effect_per_cost and stats.cost ~= 0 then
@@ -1525,7 +1525,7 @@ local function write_tooltip_spell_info(tooltip, spell, spell_id, loadout, effec
                 tooltip,
                 "Restored for player:",
                 string.format("%.0f", math.floor(info.total_restored)),
-                effect_color("avg_cost")
+                effect_color("cost")
             );
             if spell.periodic then
                 add_line(
@@ -1536,7 +1536,7 @@ local function write_tooltip_spell_info(tooltip, spell, spell_id, loadout, effec
                         info.tick_time,
                         math.floor(info.ticks)
                     ),
-                    effect_color("avg_cost")
+                    effect_color("cost")
                 );
             end
         elseif bit.band(spell.flags, spell_flags.only_threat) ~= 0 and
@@ -1609,14 +1609,14 @@ local function write_tooltip_spell_info(tooltip, spell, spell_id, loadout, effec
                             tooltip,
                             "Expected execution time:",
                             string.format("%.1f sec (%.3f but gcd capped)", stats.gcd, stats.cast_time_nogcd),
-                            effect_color("avg_cast")
+                            effect_color("execution_time")
                         );
                     else
                         add_line(
                             tooltip,
                             "Expected execution time:",
                             string.format("%.3f sec", stats.cast_time),
-                            effect_color("avg_cast")
+                            effect_color("execution_time")
                         );
                     end
                 end
@@ -1782,9 +1782,6 @@ local function make_item_tooltip_data(tooltip)
             second_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
         }
     };
-    for _, v in pairs(data.headers) do
-        v:SetTextColor(effect_color("effect_per_sec"));
-    end
     return data;
 end
 -- need two separate because both these tooltips may be open at same time
@@ -1966,14 +1963,17 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     local header2;
     local header3;
     local fight_type_str;
+    local color_tag;
     if fight_type == fight_types.repeated_casts then
         header2 = "Per sec";
         header3 = "Effect";
         fight_type_str = "Repeated casts";
+        color_tag = "effect_per_sec";
     else
         header2 = "Effect  ";
         header3 = "Duration (s)";
         fight_type_str = "Cast until OOM";
+        color_tag = "effect_until_oom";
     end
 
     tt.headers.change_fstr:SetText(header1);
@@ -1983,6 +1983,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     for _, v in pairs(tt.headers) do
         v:SetParent(tooltip);
         v:Show();
+        v:SetTextColor(effect_color(color_tag));
     end
 
     tooltip:AddLine(" ");
@@ -2011,7 +2012,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     tooltip:AddDoubleLine(header0,
         " ",
         1, 1, 1,
-        effect_color("effect_per_sec"));
+        effect_color(color_tag));
 
     local num_lines = tooltip:NumLines();
     local min_width = 50;
