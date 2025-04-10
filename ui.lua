@@ -2163,6 +2163,7 @@ local function create_sw_ui_overlay_frame(pframe)
                     sc.loadouts.force_update = true;
 
                     libDD:UIDropDownMenu_SetText(self, active_sel.desc);
+                    self.Text:SetTextColor(effect_color(active_sel.color_tag));
                     register_text_frame_color(self.Text, active_sel.color_tag);
 
                     libDD:UIDropDownMenu_SetWidth(self, 120);
@@ -2306,7 +2307,7 @@ local function create_sw_ui_overlay_frame(pframe)
             },
             {
                 id = "overlay_cc_move_adjacent_on_empty",
-                txt = "Move neighbouringing labels closer when other is empty",
+                txt = "Move neighbouring labels closer when other is empty",
                 func = function(self)
 
                     for k in pairs(sc.overlay.ccf_labels) do
@@ -2536,6 +2537,7 @@ local function create_sw_ui_overlay_frame(pframe)
                     local active_sel = sc.overlay.label_handler[config.settings[self._settings_id]];
                     sc.overlay.ccf_label_reconfig(k);
                     libDD:UIDropDownMenu_SetText(self, active_sel.desc);
+                    self.Text:SetTextColor(effect_color(active_sel.color_tag));
                     register_text_frame_color(self.Text, active_sel.color_tag);
 
                     libDD:UIDropDownMenu_SetWidth(self, 120);

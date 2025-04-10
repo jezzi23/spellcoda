@@ -91,7 +91,7 @@ local default_settings     = {
     overlay_center_x                                            = 1.0,
     overlay_center_y                                            = -1.5,
     overlay_center_fsize                                        = 8,
-    overlay_center_selection                                    = "overlay_display_avoid_chance",
+    overlay_center_selection                                    = "overlay_display_normal",
 
     overlay_bottom_enabled                                      = true,
     overlay_bottom_x                                            = 1.0,
@@ -172,7 +172,7 @@ local default_settings     = {
     overlay_cc_inside_bottom_selection                          = "overlay_display_crit_chance",
 
     overlay_cc_inside_left_enabled                              = true,
-    overlay_cc_inside_left_x                                    = 0,
+    overlay_cc_inside_left_x                                    = 3,
     overlay_cc_inside_left_y                                    = 0,
     overlay_cc_inside_left_fsize                                = 7,
     overlay_cc_inside_left_selection                            = "overlay_display_rank",

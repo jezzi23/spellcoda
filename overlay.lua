@@ -714,6 +714,7 @@ local overlay_label_handler = {
         desc = "Avoid chance",
         color_tag = "avoidance_info",
         requires_spell_flags = spell_flags.eval,
+        tooltip = "Chance to miss, parry or dodge"
     },
     overlay_display_effect_until_oom = {
         func = function(frame_overlay, info)
@@ -1192,7 +1193,6 @@ end
 local function update_cc()
 
     for _, v in pairs(ccfs) do
-
         local k = v.spell_id;
         if spells[k] and overlay.cc_active == v then
 
@@ -1213,7 +1213,6 @@ local function update_cc()
                 info, stats = calc_spell_dummy_cast_until_oom(k, loadout, effects);
             end
             update_ccf(v, spell, info, stats, k);
-            v.icon_frame:Show();
         end
     end
 end
@@ -1364,6 +1363,17 @@ cc_new_spell = function(spell_id)
 
     update_cc();
 
+    if new.spell_id ~= 0  then
+        new.icon_frame:Show();
+    else
+        new.icon_frame:Hide();
+    end
+    if old.spell_id ~= 0  then
+        old.icon_frame:Show();
+    else
+        old.icon_frame:Hide();
+    end
+
     if config.settings.overlay_cc_animate then
 
         old.icon_frame:SetPoint("CENTER", 0, 0);
@@ -1383,16 +1393,9 @@ cc_new_spell = function(spell_id)
             old.icon_frame.anim_old_spell_vertical:Play();
         end
 
-        if new.spell_id ~= 0  then
-            new.icon_frame:Show();
-        end
-        if old.spell_id ~= 0  then
-            old.icon_frame:Show();
-        end
     else
         new.icon_frame:SetAlpha(1);
         old.icon_frame:SetAlpha(0);
-        old.spell_id = 0;
     end
 
 end
