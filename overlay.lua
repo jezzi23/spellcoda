@@ -890,7 +890,7 @@ local function update_spell_icon_frame(frame_info, spell, spell_id, loadout, eff
 
         if bit.band(spell.flags, spell_flags.eval) ~= 0 then
             spell_effect, stats = calc_spell_eval(spell, loadout, effects, eval_flags, spell_id);
-            cast_until_oom(spell_effect, spell, stats, loadout, effects);
+            cast_until_oom(spell_effect, spell, stats, loadout, effects, false, 0);
 
         elseif bit.band(spell.flags, spell_flags.only_threat) ~= 0 and only_threat_overlay then
             spell_effect, stats = calc_spell_threat(spell, loadout, effects, eval_flags);
@@ -1205,7 +1205,7 @@ local function update_cc()
                 end
 
                 info, stats = calc_spell_eval(spell, loadout, effects, eval_flags, k);
-                cast_until_oom(info, spell, stats, loadout, effects);
+                cast_until_oom(info, spell, stats, loadout, effects, false, 0);
             elseif bit.band(spells[k].flags, spell_flags.only_threat) ~= 0 then
                 info, stats = calc_spell_threat(spell, loadout, effects, eval_flags);
                 info, stats = calc_spell_dummy_cast_until_oom(k, loadout, effects);

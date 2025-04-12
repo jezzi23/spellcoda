@@ -67,6 +67,7 @@ local evaluation_flags = {
     expectation_of_self                     = bit.lshift(1, 7),
 
     fix_weapon_skill_to_level               = bit.lshift(1, 8),
+    at_max_mana                             = bit.lshift(1, 9),
 
     -- combo points value shifted, reserve 3 bits for max 5 points
     num_combo_points_bit_start              = 20,
@@ -2039,8 +2040,7 @@ local function spell_info(info, spell, stats, loadout, effects, eval_flags, spel
 
 end
 
-local function cast_until_oom(spell_effect, spell, stats, loadout, effects, calculating_weights)
-
+local function cast_until_oom(spell_effect, spell, stats, loadout, effects, calculating_weights, eval_flags)
 
     if spell.power_type ~= powers.mana then
         spell_effect.num_casts_until_oom = nil;
@@ -2050,9 +2050,12 @@ local function cast_until_oom(spell_effect, spell, stats, loadout, effects, calc
         return;
     end
 
-    calculating_weights = calculating_weights or false;
-
-    local mana = loadout.resources[powers.mana] + config.loadout.extra_mana + effects.raw.mana;
+    local mana = config.loadout.extra_mana + effects.raw.mana;
+    if bit.band(eval_flags, evaluation_flags.at_max_mana) ~= 0 then
+        mana = mana + loadout.resources_max[powers.mana];
+    else
+        mana = mana + loadout.resources[powers.mana];
+    end
 
     local spirit = loadout.stats[attr.spirit] + effects.by_attr.stat_flat[attr.spirit];
 
@@ -2336,7 +2339,7 @@ local function dummy_cast_until_oom_info(info, stats, spell_id, loadout, effects
         info.time_until_oom = nil;
         info.num_casts_until_oom = nil;
     else
-        cast_until_oom(info, spells[spell_id], stats, loadout, effects);
+        cast_until_oom(info, spells[spell_id], stats, loadout, effects, false, 0);
     end
 end
 
@@ -2411,7 +2414,7 @@ local function stat_weights(normal_info, spell, loadout, effects, eval_flags, sp
         effects_finalize_forced(loadout, effects_diffed)
 
         spell_stats_info(info_diff, spell_stats_diffed, spell, loadout, effects_diffed, eval_flags, spell_id);
-        cast_until_oom(info_diff, spell, spell_stats_diffed, loadout, effects_diffed, true);
+        cast_until_oom(info_diff, spell, spell_stats_diffed, loadout, effects_diffed, true, 0);
         if v.key2 then
             diff[v.key][v.key2] = 0;
         else
@@ -2635,15 +2638,16 @@ local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_fin
         out.first = info.effect_per_sec - normal_eps;
         out.second = info.expected - normal_exp;
     else
+        eval_flags = bit.bor(eval_flags, evaluation_flags.at_max_mana);
         local info, stats = calc_spell_eval(spell, loadout, effects_finalized, eval_flags, spell_id);
-        cast_until_oom(info, spell, stats, loadout, effects_finalized, true);
+        cast_until_oom(info, spell, stats, loadout, effects_finalized, true, eval_flags);
 
         local normal_exp_until_oom = info.effect_until_oom;
         local normal_time_until_oom = info.time_until_oom;
 
         effects_finalize_forced(loadout, effects_d);
         info = calc_spell_eval(spell, loadout, effects_d, eval_flags, spell_id);
-        cast_until_oom(info, spell, stats, loadout, effects_d, true);
+        cast_until_oom(info, spell, stats, loadout, effects_d, true, eval_flags);
 
         if not info.effect_until_oom then
             out.diff_ratio = nil;

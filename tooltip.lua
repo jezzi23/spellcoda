@@ -362,7 +362,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
     end
 
     local info, stats = calc_spell_eval(spell, loadout, effects_finalized, eval_flags, spell_id);
-    cast_until_oom(info, spell, stats, loadout, effects_finalized, true);
+    cast_until_oom(info, spell, stats, loadout, effects_finalized, true, 0);
 
     local stats_eval, stat_normalize_to;
     if bit.band(eval_flags, evaluation_flags.stat_weights) ~= 0 then
