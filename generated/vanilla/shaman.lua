@@ -372,7 +372,7 @@ sc.spells = {
 			flags = bit.bor(0),
 		},
 		cast_time = 0,
-		cost = 0.22,
+		cost = 280,
 		power_type = powers.mana,
 		rank = 3,
 		lvl_req = 32,
@@ -381,7 +381,7 @@ sc.spells = {
 		base_id = 408341,
 		gcd = 1.5000001,
 		train = 0,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.base_mana_cost, spell_flags.instant),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant),
 	},
 	[421] = {
 		direct = {
@@ -431,7 +431,7 @@ sc.spells = {
 			flags = bit.bor(0, comp_flags.unbounded_aoe),
 		},
 		cast_time = 0,
-		cost = 0.22,
+		cost = 520,
 		power_type = powers.mana,
 		rank = 5,
 		lvl_req = 52,
@@ -440,7 +440,7 @@ sc.spells = {
 		base_id = 408341,
 		gcd = 1.5000001,
 		train = 0,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.base_mana_cost, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
 	},
 	[2008] = {
 		cast_time = 10,
@@ -567,7 +567,7 @@ sc.spells = {
 			flags = bit.bor(0),
 		},
 		cast_time = 0,
-		cost = 0.22,
+		cost = 170,
 		power_type = powers.mana,
 		rank = 2,
 		lvl_req = 22,
@@ -576,7 +576,7 @@ sc.spells = {
 		base_id = 408341,
 		gcd = 1.5000001,
 		train = 0,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.base_mana_cost, spell_flags.instant),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant),
 	},
 	[408341] = {
 		direct = {
@@ -590,7 +590,7 @@ sc.spells = {
 			flags = bit.bor(0),
 		},
 		cast_time = 0,
-		cost = 0.22,
+		cost = 95,
 		power_type = powers.mana,
 		rank = 1,
 		lvl_req = 12,
@@ -599,7 +599,7 @@ sc.spells = {
 		base_id = 408341,
 		gcd = 1.5000001,
 		train = 0,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.base_mana_cost, spell_flags.instant),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant),
 	},
 	[10447] = {
 		direct = {
@@ -2200,7 +2200,7 @@ sc.spells = {
 			flags = bit.bor(0),
 		},
 		cast_time = 0,
-		cost = 0.22,
+		cost = 395,
 		power_type = powers.mana,
 		rank = 4,
 		lvl_req = 42,
@@ -2209,7 +2209,7 @@ sc.spells = {
 		base_id = 408341,
 		gcd = 1.5000001,
 		train = 0,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.base_mana_cost, spell_flags.instant),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant),
 	},
 	[6041] = {
 		direct = {
@@ -4607,9 +4607,9 @@ sc.class_buffs = {
 			{"by_attr", "stat_flat", 77, {1,}, 2, 0},
 	},
 	[1213939] = {
-			{"by_school", "threat", 0.19999999, {}, 0, 1},
-			{"by_school", "dmg_mod", 0.099999994, {1,2,3,4,5,6,7,}, 1, 2},
-			{"raw", "phys_mod", 0.099999994, nil, 1, 2},
+			{"by_school", "threat", 0.25, {}, 0, 1},
+			{"by_school", "dmg_mod", 0.049999997, {1,2,3,4,5,6,7,}, 1, 2},
+			{"raw", "phys_mod", 0.049999997, nil, 1, 2},
 	},
 	[10491] = {
 			{"raw", "mp5_flat", 15, nil, 0, 0},
@@ -7473,7 +7473,7 @@ local set_bonuses = {
 	[540] = {{2,14047},{4,23044},{6,14467},},
 	[1732] = {{2,14467},{3,22804},{6,14047},},
 	[1885] = {{2,1219421},{4,1219423},{6,1219462},},
-	[1898] = {{2,1218700},{6,1218995},},
+	[1898] = {{4,1218700},{6,1218995},},
 	[1655] = {{3,9117},{6,9408},},
 	[390] = {{2,14467},{3,23044},{6,14047},},
 	[507] = {{3,26169},{5,26171},},
@@ -7698,7 +7698,7 @@ local set_bonuses = {
 	[1757] = {{2,14047},{4,22804},{6,14467},},
 	[1576] = {{3,429864},{5,429863},{8,429865},},
 	[1822] = {{6,468069},},
-	[1899] = {{2,1218514},},
+	[1899] = {{4,1218514},},
 	[1725] = {{2,14467},{6,14384},},
 	[487] = {{2,7503},{3,7597},},
 	[1944] = {{2,1226407},{4,1226415},{6,1226378},},
@@ -7799,7 +7799,7 @@ local set_bonuses = {
 	[474] = {{5,24431},},
 	[543] = {{2,14384},{6,14467},},
 	[182] = {{4,30779},},
-	[1933] = {{2,1227237},{4,1227242},{6,1227245},},
+	[1933] = {{2,1227237},{4,1227242},},
 	[1938] = {{2,1226585},{4,1226591},{6,1226595},},
 	[472] = {{2,7503},{3,18384},},
 	[1804] = {{2,467216},{4,467221},{6,467227},},
@@ -7831,7 +7831,7 @@ local set_bonuses = {
 	[1800] = {{2,7523},},
 	[1618] = {{3,14462},{6,9336},},
 	[1579] = {{2,9417},{3,432639},},
-	[1810] = {{2,467518},{6,467529},},
+	[1810] = {{2,467518},{4,467526},{6,467529},},
 	[1907] = {{2,1223336},},
 	[1806] = {{4,467333},{6,467334},},
 	[1770] = {{2,14049},{6,14467},},
@@ -8000,7 +8000,7 @@ local set_effects = {
 			{"ability", "cast_mod_flat", -0.5, {1064,}, 0, 0},
 	},
 	[1219367] = {
-			{"ability", "effect_mod_ot", 0.19999999, {8050,}, 0, 0},
+			{"ability", "effect_mod_ot", 0.39999998, {8050,}, 0, 0},
 	},
 	[467814] = {
 			{"ability", "effect_mod", 0.19999999, {1064,421,}, 0, 0},
@@ -8019,7 +8019,7 @@ local set_effects = {
 	},
 	[1226986] = {
 			{"ability", "extra_dur", -0.98999995, {1535,}, 0, 2},
-			{"ability", "cost_mod", -0.5, {1535,}, 0, 4},
+			{"ability", "cost_mod", -0.59999996, {1535,408341,}, 0, 4},
 	},
 	[23573] = {
 			{"ability", "jumps_flat", 3, {331,}, 0, 0},
