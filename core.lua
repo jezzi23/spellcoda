@@ -272,7 +272,7 @@ local event_dispatch = {
             print("Spells in data:", num_spells);
         end
         -- don't warn about updates when build is relatively fresh
-        local version_warning_build_threshold_days = 3;
+        local version_warning_build_threshold_days = 5;
         if core.__sw__debug__ then
             version_warning_build_threshold_days = 0;
         end

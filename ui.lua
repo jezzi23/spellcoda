@@ -4057,7 +4057,7 @@ local function create_sw_ui_settings_frame(pframe)
         },
         {
             id = "general_version_mismatch_notify",
-            txt = "Notify about addon and client version mismatch (needs update)",
+            txt = "Notify about addon and client version mismatch",
         },
     };
 
