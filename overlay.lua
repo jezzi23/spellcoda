@@ -1217,6 +1217,33 @@ local function update_cc()
     end
 end
 
+local function ccf_anim_reconfig()
+
+    for _, v in pairs(ccfs) do
+        -- v
+        if config.settings.overlay_cc_horizontal then
+            v.icon_frame.anim_new_spell.slide_in:SetDuration(config.settings.overlay_cc_transition_time);
+            v.icon_frame.anim_new_spell.slide_in:SetOffset(config.settings.overlay_cc_transition_length, 0);
+
+            v.icon_frame.anim_old_spell.slide_out:SetDuration(config.settings.overlay_cc_transition_time);
+            v.icon_frame.anim_old_spell.slide_out:SetOffset(config.settings.overlay_cc_transition_length, 0);
+
+        else
+            v.icon_frame.anim_new_spell.slide_in:SetDuration(config.settings.overlay_cc_transition_time);
+            v.icon_frame.anim_new_spell.slide_in:SetOffset(0, -config.settings.overlay_cc_transition_length);
+
+            v.icon_frame.anim_old_spell.slide_out:SetDuration(config.settings.overlay_cc_transition_time);
+            v.icon_frame.anim_old_spell.slide_out:SetOffset(0, -config.settings.overlay_cc_transition_length);
+        end
+        v.icon_frame.anim_new_spell.fade_in:SetDuration(config.settings.overlay_cc_transition_time);
+        v.icon_frame.anim_new_spell.fade_in:SetFromAlpha(0);
+        v.icon_frame.anim_new_spell.fade_in:SetToAlpha(1);
+
+        v.icon_frame.anim_old_spell.fade_out:SetDuration(config.settings.overlay_cc_transition_time);
+        v.icon_frame.anim_old_spell.fade_out:SetFromAlpha(1);
+        v.icon_frame.anim_old_spell.fade_out:SetToAlpha(0);
+    end
+end
 
 local function ccf_label_reconfig(label_id)
     for _, v in pairs(ccfs) do
@@ -1258,72 +1285,47 @@ local function create_ccf()
 
     frames.icon_frame = CreateFrame("Frame", nil, ccf_parent);
     frames.icon_frame:SetPoint("CENTER", 0, 0);
+    frames.icon_frame:SetSize(32, 32);
 
-    frames.icon_frame.anim_new_spell_vertical = frames.icon_frame:CreateAnimationGroup();
-    frames.icon_frame.anim_new_spell_horiz = frames.icon_frame:CreateAnimationGroup();
-    frames.icon_frame.slide_offset = 100;
-    frames.icon_frame.slide_dur = 0.3;
+    --frames.icon_frame.cooldown_frame = CreateFrame("Cooldown", "$parentCooldown", frames.icon_frame, "CooldownFrameTemplate");
+    --frames.icon_frame.cooldown_frame:SetAllPoints(frames.icon_frame)
+    --frames.icon_frame.cooldown_frame:SetDrawEdge(true);
+    --frames.icon_frame.cooldown_frame:SetSwipeColor(0, 0, 0, 0.7);
 
-    local make_alpha_anim_fade_in = function(anim_group)
-        local fade_in = anim_group:CreateAnimation("Alpha");
-        fade_in:SetDuration(frames.icon_frame.slide_dur);
-        fade_in:SetFromAlpha(0);
-        fade_in:SetToAlpha(1);
-        fade_in:SetSmoothing("OUT");
-        anim_group:SetScript("OnFinished", function()
-            frames.icon_frame.animating = false;
-            frames.icon_frame:SetAlpha(1);
-            frames.icon_frame:SetPoint("CENTER", 0, 0);
-        end);
-    end;
-    local make_alpha_anim_fade_out = function(anim_group)
-        local fade_out = anim_group:CreateAnimation("Alpha");
-        fade_out:SetDuration(frames.icon_frame.slide_dur);
-        fade_out:SetFromAlpha(1);
-        fade_out:SetToAlpha(0);
-        fade_out:SetSmoothing("OUT");
-        anim_group:SetScript("OnFinished", function()
-            frames.icon_frame.animating = false;
-            frames.icon_frame:SetAlpha(0);
-            frames.icon_frame:ClearAllPoints();
-            frames.icon_frame:SetPoint("CENTER", 0, 0);
-        end);
+    frames.icon_frame.anim_new_spell = frames.icon_frame:CreateAnimationGroup();
 
-    end;
+    local slide_in = frames.icon_frame.anim_new_spell:CreateAnimation("Translation");
+    slide_in:SetSmoothing("OUT");
+    frames.icon_frame.anim_new_spell.slide_in = slide_in;
 
-    local slide_in_v = frames.icon_frame.anim_new_spell_vertical:CreateAnimation("Translation");
-    slide_in_v:SetDuration(frames.icon_frame.slide_dur);
-    slide_in_v:SetOffset(0, -frames.icon_frame.slide_offset);
-    slide_in_v:SetSmoothing("OUT");
+    local fade_in = frames.icon_frame.anim_new_spell:CreateAnimation("Alpha");
+    fade_in:SetSmoothing("OUT");
+    frames.icon_frame.anim_new_spell:SetScript("OnFinished", function()
+        frames.icon_frame.animating = false;
+        frames.icon_frame:SetAlpha(1);
+        frames.icon_frame:SetPoint("CENTER", 0, 0);
+    end);
+    frames.icon_frame.anim_new_spell.fade_in = fade_in;
 
-    local slide_in_h = frames.icon_frame.anim_new_spell_horiz:CreateAnimation("Translation");
-    slide_in_h:SetDuration(frames.icon_frame.slide_dur);
-    slide_in_h:SetOffset(frames.icon_frame.slide_offset, 0);
-    slide_in_h:SetSmoothing("OUT");
+    frames.icon_frame.anim_old_spell = frames.icon_frame:CreateAnimationGroup();
 
-    make_alpha_anim_fade_in(frames.icon_frame.anim_new_spell_vertical);
-    make_alpha_anim_fade_in(frames.icon_frame.anim_new_spell_horiz);
+    local slide_out = frames.icon_frame.anim_old_spell:CreateAnimation("Translation");
+    slide_out:SetSmoothing("OUT");
+    frames.icon_frame.anim_old_spell.slide_out = slide_out;
 
-    frames.icon_frame.anim_old_spell_vertical = frames.icon_frame:CreateAnimationGroup();
-    frames.icon_frame.anim_old_spell_horiz = frames.icon_frame:CreateAnimationGroup();
-
-    local slide_out_v = frames.icon_frame.anim_old_spell_vertical:CreateAnimation("Translation");
-    slide_out_v:SetDuration(frames.icon_frame.slide_dur);
-    slide_out_v:SetOffset(0, -frames.icon_frame.slide_offset);
-    slide_out_v:SetSmoothing("OUT");
-
-    local slide_out_h = frames.icon_frame.anim_old_spell_horiz:CreateAnimation("Translation");
-    slide_out_h:SetDuration(frames.icon_frame.slide_dur);
-    slide_out_h:SetOffset(frames.icon_frame.slide_offset, 0);
-    slide_out_h:SetSmoothing("OUT");
-
-    make_alpha_anim_fade_out(frames.icon_frame.anim_old_spell_vertical);
-    make_alpha_anim_fade_out(frames.icon_frame.anim_old_spell_horiz);
+    local fade_out = frames.icon_frame.anim_old_spell:CreateAnimation("Alpha");
+    fade_out:SetSmoothing("OUT");
+    frames.icon_frame.anim_old_spell:SetScript("OnFinished", function()
+        frames.icon_frame.animating = false;
+        frames.icon_frame:SetAlpha(0);
+        frames.icon_frame:ClearAllPoints();
+        frames.icon_frame:SetPoint("CENTER", 0, 0);
+    end);
+    frames.icon_frame.anim_old_spell.fade_out = fade_out;
 
     frames.icon_frame:Hide();
     frames.icon_frame:SetAlpha(0);
 
-    frames.icon_frame:SetSize(32, 32);
     frames.icon_texture = frames.icon_frame:CreateTexture(nil, "ARTWORK");
     frames.icon_texture:SetAllPoints(frames.icon_frame);
     frames.icon_texture:SetTexture("Interface\\Icons\\Spell_Nature_Thorns");
@@ -1340,7 +1342,6 @@ local overlay_effects_update_id = 0;
 cc_new_spell = function(spell_id)
     if config.settings.overlay_disable_cc_info and
         not ccf_parent.config_mode then
-
         return;
     end
     if config.settings.overlay_disable then
@@ -1364,6 +1365,9 @@ cc_new_spell = function(spell_id)
     update_cc();
 
     if new.spell_id ~= 0  then
+        --local start, duration, enable = GetSpellCooldown(new.spell_id)
+        --CooldownFrame_Set(new.icon_frame.cooldown_frame, start, duration, enable)
+
         new.icon_frame:Show();
     else
         new.icon_frame:Hide();
@@ -1374,30 +1378,18 @@ cc_new_spell = function(spell_id)
         old.icon_frame:Hide();
     end
 
-    if config.settings.overlay_cc_animate then
-
-        old.icon_frame:SetPoint("CENTER", 0, 0);
-        new.icon_frame:SetAlpha(0);
-        old.icon_frame:SetAlpha(1);
-        new.icon_frame.animating = true;
-        old.icon_frame.animating = true;
-        if config.settings.overlay_cc_horizontal then
-            new.icon_frame:SetPoint("CENTER", -new.icon_frame.slide_offset, 0);
-
-            new.icon_frame.anim_new_spell_horiz:Play();
-            old.icon_frame.anim_old_spell_horiz:Play();
-        else
-            new.icon_frame:SetPoint("CENTER", 0, new.icon_frame.slide_offset);
-
-            new.icon_frame.anim_new_spell_vertical:Play();
-            old.icon_frame.anim_old_spell_vertical:Play();
-        end
-
+    old.icon_frame:SetPoint("CENTER", 0, 0);
+    new.icon_frame:SetAlpha(0);
+    old.icon_frame:SetAlpha(1);
+    new.icon_frame.animating = true;
+    old.icon_frame.animating = true;
+    if config.settings.overlay_cc_horizontal then
+        new.icon_frame:SetPoint("CENTER", -config.settings.overlay_cc_transition_length, 0);
     else
-        new.icon_frame:SetAlpha(1);
-        old.icon_frame:SetAlpha(0);
+        new.icon_frame:SetPoint("CENTER", 0, config.settings.overlay_cc_transition_length);
     end
-
+    new.icon_frame.anim_new_spell:Play();
+    old.icon_frame.anim_old_spell:Play();
 end
 
 local function init_ccfs()
@@ -1613,6 +1605,7 @@ overlay.ccf_parent                                  = ccf_parent;
 overlay.cc_demo                                     = cc_demo;
 overlay.ccf_labels                                  = ccf_labels;
 overlay.ccf_label_reconfig                          = ccf_label_reconfig;
+overlay.ccf_anim_reconfig                           = ccf_anim_reconfig;
 overlay.label_handler                               = overlay_label_handler;
 
 sc.overlay = overlay;

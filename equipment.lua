@@ -326,7 +326,7 @@ local function apply_equipment(loadout, effects)
                 end
             end
             found_anything = true;
-            local _, enchant_id, gem1, gem2, gem3, gem4 =
+            local _, enchant_id, gem1, gem2, gem3, gem4, suffix_id =
                 strsplit(":", item_link:match("|Hitem:(.+)|h"));
 
             enchant_id = tonumber(enchant_id);
@@ -336,6 +336,17 @@ local function apply_equipment(loadout, effects)
                 -- check for special +Damage enchant towards weapon which are not treated as aura effects
                 if sc.damage_enchants[enchant_id] and wpn_strs[item] then
                     apply_damage_enchant(effects, sc.damage_enchants[enchant_id], item, false);
+                end
+            end
+
+            suffix_id = tonumber(suffix_id);
+            if suffix_id and sc.suffix_ids[suffix_id] then
+                for _, ench_id in pairs(sc.suffix_ids[suffix_id]) do
+                    if sc.enchants[ench_id] then
+                        for _, effect_id in pairs(sc.enchants[ench_id]) do
+                            apply_effect(effects, effect_id, sc.enchant_effects[effect_id], false, 1.0, false, false);
+                        end
+                    end
                 end
             end
         end
