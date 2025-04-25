@@ -2146,7 +2146,13 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
     local min;
     local bid = spell.base_id;
     local direct = spell.direct;
+    local periodic = spell.periodic;
     local clvl = loadout.lvl;
+
+    info.tick_restored = 0;
+    info.restored = 0;
+    info.ticks = 0;
+
     if direct then
 
         if direct.per_lvl_sq == 0 then
@@ -2169,8 +2175,10 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
             )
             *
             (1.0 + (effects.ability.effect_mod[bid] or 0.0));
-    else
-        local periodic = spell.periodic;
+
+        info.restored = min;
+    end
+    if periodic then
 
         if periodic.per_lvl_sq == 0 then
             local lvl_diff_applicable = math.max(0,
@@ -2200,12 +2208,12 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
         info.tick_time =
             periodic.tick_time + (effects.ability.extra_tick_time_flat[bid] or 0.0);
         info.ticks = info.dur / info.tick_time;
+
+        info.tick_restored = min;
     end
 
     if bit.band(spell.flags, spell_flags.regen_pct) ~= 0 then
         -- percentage off mana regen
-        info.restored = 0.0;
-        info.total_restored = 0.0;
 
         local casting_regen = effects.raw.regen_while_casting;
         if get_buff(loadout, "player", spell_id, true) then
@@ -2217,21 +2225,17 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
         local spirit = loadout.stats[attr.spirit] + effects.by_attr.stat_flat[attr.spirit];
         -- Prevents combat casting regen % gained from this ability affecting this evaluation
         -- This becomes mana restored otherwise not gained from normal % regen while casting
-        info.restored =
-            (1.0 - casting_regen + min) * spirit_mana_regen(spirit);
-        info.total_restored = info.restored * info.dur/info.tick_time;
+        info.tick_restored =
+            (1.0 - casting_regen + info.tick_restored) * spirit_mana_regen(spirit)
+            +
+            info.tick_restored * 0.4*effects.raw.mp5_flat; -- NOTE: mp5 does benefit from the modifier too
 
     elseif bit.band(spell.flags, spell_flags.regen_max_pct) ~= 0 then
-        info.restored = min * loadout.resources_max[powers.mana];
-        info.total_restored = info.restored * info.dur/info.tick_time;
-
-    elseif spell.periodic then
-        info.restored = min;
-        info.total_restored = info.restored * info.dur/info.tick_time;
-    else
-        info.restored = min;
-        info.total_restored = info.restored;
+        info.tick_restored = info.tick_restored * loadout.resources_max[powers.mana];
+        info.restored = info.restored * loadout.resources_max[powers.mana];
     end
+
+    info.total_restored = info.restored + info.tick_restored * info.ticks;
 end
 
 local function only_threat_info(info, stats, spell, loadout, effects, eval_flags)
