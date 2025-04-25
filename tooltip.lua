@@ -1527,12 +1527,20 @@ local function write_tooltip_spell_info(tooltip, spell, spell_id, loadout, effec
                 string.format("%.0f", math.floor(info.total_restored)),
                 effect_color("cost")
             );
+            if spell.direct then
+                add_line(
+                    tooltip,
+                    "Direct:",
+                    string.format("%.0f", math.floor(info.restored)),
+                    effect_color("cost")
+                );
+            end
             if spell.periodic then
                 add_line(
                     tooltip,
                     "Periodically:",
                     string.format("%.0f every %.1fs x %.0f",
-                        math.floor(info.restored),
+                        math.floor(info.tick_restored),
                         info.tick_time,
                         math.floor(info.ticks)
                     ),
@@ -1741,6 +1749,13 @@ local inv_type_to_slot_ids = {
     INVTYPE_RELIC = { slots.RangedSlot },
 };
 
+local not_melee_class =
+    sc.class == sc.classes.priest or sc.class == sc.classes.mage or sc.class == sc.classes.warlock;
+local not_ranged_class =
+    sc.class == sc.classes.druid or sc.class == sc.classes.shaman or sc.class == sc.classes.paladin;
+local not_caster_class =
+    sc.class == sc.classes.warrior or sc.class == sc.classes.rogue;
+
 local inv_type_to_spid_force_eval = {
     INVTYPE_AMMO = {"shoot"},
     INVTYPE_WEAPON = { "attack"},
@@ -1749,6 +1764,13 @@ local inv_type_to_spid_force_eval = {
     INVTYPE_WEAPONOFFHAND = { "attack" },
     INVTYPE_RANGED = { "shoot", "auto_shot", "shoot_bow" },
     INVTYPE_RANGEDRIGHT = { "shoot", "auto_shot", "shoot_bow" },
+};
+
+local armor_ignorable = {
+    [1] = "cloth",
+    [2] = "leather",
+    [3] = "mail",
+    [4] = "plate",
 };
 
 local function make_item_tooltip_line_frames(tooltip)
@@ -1791,6 +1813,8 @@ local ref_tooltip_item_cmp = make_item_tooltip_data(ItemRefTooltip);
 -- The only reliable way to get alignment on item comparison numbers to be nicely aligned
 -- is to set them as frame objects because monospaced fonts seem to be broken ingame
 local function write_item_tooltip(tooltip, mod, mod_change, item_link)
+
+    -- Try multiple checks for early exit if don't want to commit to a diff calculation
     if config.settings.tooltip_shift_to_show and bit.band(mod, sc.tooltip_mod_flags.SHIFT) == 0 then
         return;
     end
@@ -1842,6 +1866,33 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         (cmp_slots[2] and tt.new_item.id == loadout.items[cmp_slots[2]]) then
         return;
     end
+
+    if config.settings.tooltip_item_smart and tt.new_item.class_id == 4 then
+        if tt.new_item.subclass_id == 1 and not_caster_class and tt.new_item.inv_type ~= "INVTYPE_CLOAK" then
+            -- cloth
+            return;
+        elseif tt.new_item.subclass_id == 4 and (not_melee_class or not_ranged_class) then
+            -- plate
+            return;
+        end
+    end
+    if config.settings.tooltip_item_ignore_unequippable then
+        if tt.new_item.class_id == 2 and
+            bit.band(sc.equippable_weapons_mask, bit.lshift(1, tt.new_item.subclass_id)) == 0 then
+            return;
+        elseif tt.new_item.class_id == 4 and
+            bit.band(sc.equippable_armors_mask, bit.lshift(1, tt.new_item.subclass_id)) == 0 then
+            return;
+        end
+    end
+
+    if tt.new_item.class_id == 4 then
+        local key = armor_ignorable[tt.new_item.subclass_id];
+        if key and config.settings["tooltip_item_ignore_"..key] then
+            return;
+        end
+    end
+
     local fight_type = config.settings.calc_fight_type;
     if bit.band(mod, sc.tooltip_mod_flags.ALT) ~= 0 then
         if fight_type == fight_types.repeated_casts then
@@ -1895,9 +1946,14 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             local i = 0;
             slot_cmp.len = 0;
 
-            if inv_type_to_spid_force_eval[tt.new_item.inv_type] then
+            if config.settings.tooltip_item_smart and inv_type_to_spid_force_eval[tt.new_item.inv_type] then
                 for _, spid_id in pairs(inv_type_to_spid_force_eval[tt.new_item.inv_type]) do
                     local k = spids[spid_id];
+                    if k == spids.shoot and not_ranged_class or
+                        k == spids.attack and not_melee_class
+                        then
+                        k = nil;
+                    end
                     if k and
                         not config.settings.spell_calc_list[k] and
                          spells[k] and bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
@@ -1920,6 +1976,13 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             for k, _ in pairs(config.settings.spell_calc_list) do
                 if config.settings.calc_list_use_highest_rank and spells[k] then
                     k = highest_learned_rank(spells[k].base_id);
+                end
+                if config.settings.tooltip_item_smart then
+                    if k == spids.shoot and not_ranged_class or
+                        k == spids.attack and not_melee_class
+                        then
+                        k = nil;
+                    end
                 end
                 if k and spells[k] and bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
                     i = i + 1;
@@ -1957,23 +2020,47 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
 
     tt.tooltip_item_id_last = tt.new_item.id;
 
-    -- display the cached evaluation data
+    -- abort if no spells or all diffs are 0
+    local neutral_abort = true;
+    for item_fits_in_slot, _ in pairs(cmp_slots) do
+        local slot_cmp;
+        if item_fits_in_slot > 1 then
+            slot_cmp = tt.cached_spells_cmp_item_slots[2];
+        else
+            slot_cmp = tt.cached_spells_cmp_item_slots[1];
+        end
 
+        for i = 1, slot_cmp.len do
+            local diff = slot_cmp.diff_list[i];
+            if diff.first ~= 0 or diff.second ~= 0 then
+                neutral_abort = false;
+                break;
+            end
+        end
+    end
+    if neutral_abort then
+        return;
+    end
+
+    -- display the cached evaluation data
     local header1 = "Change";
     local header2;
     local header3;
     local fight_type_str;
     local color_tag;
+    local mode_switch_tip;
     if fight_type == fight_types.repeated_casts then
         header2 = "Per sec";
         header3 = "Effect";
         fight_type_str = "Repeated casts";
         color_tag = "effect_per_sec";
+        mode_switch_tip = "Hold ALT key for Casting until OOM change";
     else
         header2 = "Effect  ";
         header3 = "Duration (s)";
         fight_type_str = "Cast until OOM";
         color_tag = "effect_until_oom";
+        mode_switch_tip = "Hold ALT key for Repeated casts change";
     end
 
     tt.headers.change_fstr:SetText(header1);
@@ -1997,12 +2084,14 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
 
     local wpn_skill_change = "";
 
-    if should_fix_wpn_skill then
-        wpn_skill_change = string.format(" Skill: as %d", loadout.lvl * 5);
-    elseif tt.new_item.wpn_skill ~= tt.old_item1.wpn_skill then
-        wpn_skill_change = string.format(" Skill: %d -> %d",
-            tt.old_item1.wpn_skill,
-            tt.new_item.wpn_skill);
+    if config.settings.tooltip_item_weapon_skill then
+        if should_fix_wpn_skill then
+            wpn_skill_change = string.format(" Skill: as %d", loadout.lvl * 5);
+        elseif tt.new_item.wpn_skill ~= tt.old_item1.wpn_skill then
+            wpn_skill_change = string.format(" Skill: %d -> %d",
+                tt.old_item1.wpn_skill,
+                tt.new_item.wpn_skill);
+        end
     end
     local header0 = string.format("|cFF4682B4|T%s:16:16:0:0|t -> |T%s:16:16:0:0|t%s|r",
         tt.old_item1.tex,
@@ -2033,12 +2122,14 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             slot_cmp = tt.cached_spells_cmp_item_slots[2];
 
             local wpn_skill_change = "";
-            if should_fix_wpn_skill then
-                wpn_skill_change = string.format(" Skill: as %d", loadout.lvl * 5);
-            elseif tt.new_item.wpn_skill ~= tt.old_item2.wpn_skill then
-                wpn_skill_change = string.format(" Skill: %d -> %d",
-                    tt.old_item2.wpn_skill,
-                    tt.new_item.wpn_skill);
+            if config.settings.tooltip_item_weapon_skill then
+                if should_fix_wpn_skill then
+                    wpn_skill_change = string.format(" Skill: as %d", loadout.lvl * 5);
+                elseif tt.new_item.wpn_skill ~= tt.old_item2.wpn_skill then
+                    wpn_skill_change = string.format(" Skill: %d -> %d",
+                        tt.old_item2.wpn_skill,
+                        tt.new_item.wpn_skill);
+                end
             end
             tooltip:AddDoubleLine(string.format("|cFF4682B4|T%s:16:16:0:0|t -> |T%s:16:16:0:0|t%s|r",
                     tt.old_item2.tex,
@@ -2136,6 +2227,12 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 v:Show();
             end
         end
+    end
+    if config.settings.tooltip_item_show_evaluation_modes and
+        bit.band(mod, sc.tooltip_mod_flags.ALT) == 0 and
+        not not_caster_class then
+
+        tooltip:AddLine(mode_switch_tip, 1, 1, 1);
     end
     tt.item_tooltip_frames_hidden = false;
     tooltip:Show();

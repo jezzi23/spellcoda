@@ -104,11 +104,10 @@ local cc_noexpire        = false;
 local cc_channel         = true;
 local cc_expire_timer    = 0;
 local cc_waiting_on_anim = false;
-local cc_expiration      = 3;
 
 local function cc_enqueue(spell_id)
 
-    if sc.overlay.cc_f1.animating then
+    if sc.overlay.cc_f1.animating and not config.settings.overlay_cc_transition_nocd then
         cc_waiting_on_anim = true;
     else
         sc.overlay.cc_new_spell(spell_id);
@@ -123,7 +122,7 @@ local function set_cc_spell(spell_id)
         (not config.settings.overlay_cc_only_eval or
         bit.band(spells[spell_id].flags, spell_flags.eval) ~= 0) then
 
-        cc_expire_timer = cc_expiration;
+        cc_expire_timer = config.settings.overlay_cc_hanging_time;
         if cc_spell_id ~= spell_id then
             cc_enqueue(spell_id);
         end
@@ -192,7 +191,7 @@ local event_dispatch = {
         if caster == "player" then
             cc_noexpire = false;
             cc_channel = false;
-            cc_expire_timer = cc_expiration;
+            cc_expire_timer = config.settings.overlay_cc_hanging_time;
         end
     end,
     ["UNIT_SPELLCAST_START"] = function(self, caster, _, spell_id)
@@ -204,13 +203,13 @@ local event_dispatch = {
     ["UNIT_SPELLCAST_STOP"] = function(self, caster, _, spell_id)
         if caster == "player" then
             cc_noexpire = false;
-            cc_expire_timer = cc_expiration;
+            cc_expire_timer = config.settings.overlay_cc_hanging_time;
         end
     end,
     ["UNIT_SPELLCAST_FAILED"] = function(self, caster, _, spell_id)
         if caster == "player" then
             cc_noexpire = false;
-            cc_expire_timer = cc_expiration;
+            cc_expire_timer = config.settings.overlay_cc_hanging_time;
         end
     end,
     ["START_AUTOREPEAT_SPELL"] = function(self, arg1, arg2, arg4)

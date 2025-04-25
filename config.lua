@@ -51,6 +51,14 @@ local default_settings     = {
 
     tooltip_disable_item                                        = false,
     tooltip_item_leveling_skill_normalize                       = true,
+    tooltip_item_weapon_skill                                   = true,
+    tooltip_item_smart                                          = true,
+    tooltip_item_show_evaluation_modes                          = true,
+    tooltip_item_ignore_unequippable                            = false,
+    tooltip_item_ignore_cloth                                   = false,
+    tooltip_item_ignore_leather                                 = false,
+    tooltip_item_ignore_mail                                    = false,
+    tooltip_item_ignore_plate                                   = false,
 
     -- overlay
     overlay_display_normal                                      = false,
@@ -100,15 +108,18 @@ local default_settings     = {
     overlay_bottom_selection                                    = "overlay_display_effect_per_sec",
 
     overlay_disable_cc_info                                     = true,
-    overlay_cc_only_eval                                        = true,
+    overlay_cc_only_eval                                        = false,
     overlay_cc_horizontal                                       = false,
     overlay_cc_info_scale                                       = 1.0,
     overlay_cc_info_region                                      = "CENTER",
     overlay_cc_info_x                                           = 350,
     overlay_cc_info_y                                           = 0,
     overlay_cc_font                                             = {"Fonts\\FRIZQT__.TTF", "OUTLINE"},
-    overlay_cc_animate                                          = true,
     overlay_cc_move_adjacent_on_empty                           = true,
+    overlay_cc_hanging_time                                     = 3,
+    overlay_cc_transition_time                                  = 0.3,
+    overlay_cc_transition_length                                = 100,
+    overlay_cc_transition_nocd                                  = false,
 
     -- Currently casting frame labels
     overlay_cc_outside_right_upper_enabled                      = true,

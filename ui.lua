@@ -1435,7 +1435,7 @@ local function create_sw_ui_tooltip_frame(pframe)
     local tooltip_general_checks = {
         {
             id = "tooltip_shift_to_show",
-            txt = "Require SHIFT to show tooltip"
+            txt = "Require SHIFT to show tooltips"
         },
     };
 
@@ -1454,13 +1454,23 @@ local function create_sw_ui_tooltip_frame(pframe)
     div:SetColorTexture(0.5, 0.5, 0.5, 0.6);
     div:SetHeight(1);
     div:SetPoint("TOPLEFT", pframe, "TOPLEFT", 0, pframe.y_offset);
-    div:SetPoint("TOPRIGHT", pframe, "TOPRIGHT", 0, pframe.y_offset);
+    div:SetPoint("TOPRIGHT", pframe, "TOPRIGHT", -10, pframe.y_offset);
 
-    local tooltip_spell_checks = {
-        {
+    pframe.y_offset = pframe.y_offset - 5;
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(GameFontNormal);
+    f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
+    f_txt:SetText("Tooltip spell settings");
+    f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
+
+    pframe.y_offset = pframe.y_offset - 15;
+    multi_row_checkbutton({{
             id = "tooltip_disable",
             txt = "Disable spell tooltip",
-        },
+        }}, pframe, 1, nil, 0);
+
+    multi_row_checkbutton({
         --{
         --    id = "tooltip_clear_original",
         --    txt = "Clear original tooltip",
@@ -1474,20 +1484,9 @@ local function create_sw_ui_tooltip_frame(pframe)
             txt = "Disable casts until OOM for CDs",
             tooltip = "Hides casts until OOM for spells with cooldowns."
         }
-    };
+    }, pframe, 2);
 
     pframe.y_offset = pframe.y_offset - 5;
-
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
-    f_txt:SetText("Tooltip spell settings");
-    f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
-
-    pframe.y_offset = pframe.y_offset - 15;
-    multi_row_checkbutton(tooltip_spell_checks, pframe, 2);
-
-    pframe.y_offset = pframe.y_offset - 30;
 
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
@@ -1745,7 +1744,7 @@ local function create_sw_ui_tooltip_frame(pframe)
     div:SetColorTexture(0.5, 0.5, 0.5, 0.6);
     div:SetHeight(1);
     div:SetPoint("TOPLEFT", pframe, "TOPLEFT", 0, pframe.y_offset);
-    div:SetPoint("TOPRIGHT", pframe, "TOPRIGHT", 0, pframe.y_offset);
+    div:SetPoint("TOPRIGHT", pframe, "TOPRIGHT", -10, pframe.y_offset);
     pframe.y_offset = pframe.y_offset - 5;
 
 
@@ -1756,35 +1755,71 @@ local function create_sw_ui_tooltip_frame(pframe)
     f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
 
 
-    local tooltip_item_checks = {
-        {
+    pframe.y_offset = pframe.y_offset - 15;
+    f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
+    f:SetScript("OnClick", function()
+
+        sw_activate_tab(__sc_frame.tabs[4]);
+    end);
+
+    f:SetPoint("TOPRIGHT", -20, pframe.y_offset);
+    f:SetHeight(20);
+    f:SetWidth(170);
+    f:SetText("Configure spell list");
+    multi_row_checkbutton({{
             id = "tooltip_disable_item",
             txt = "Disable item upgrade evaluation in tooltip"
+        }}, pframe, 1, nil, 0);
+
+    multi_row_checkbutton({
+        {
+            id = "tooltip_item_smart",
+            txt = "Smarter tooltip",
+            tooltip = "Adds/removes some sensible aspects of the tooltip. Examples: Never showing Attack for caster classes or for cloth items; Show wand spell for wands; etc",
         },
+        {
+            id = "tooltip_item_show_evaluation_modes",
+            txt = "Show evaluation mode switch",
+        },
+
+    }, pframe, 2, nil);
+
+    multi_row_checkbutton({
         {
             id = "tooltip_item_leveling_skill_normalize",
             txt = "When not maximum level, use skill as clvl*5 for weapon comparisons.",
             tooltip = "More intuitive weapon upgrade results when leveling since lower weapon skill type is not punished",
         },
-    };
+    }, pframe, 1, nil);
 
-    pframe.y_offset = pframe.y_offset - 15;
-    multi_row_checkbutton(tooltip_item_checks, pframe, 1);
-    pframe.y_offset = pframe.y_offset - 5;
+    multi_row_checkbutton({
+        {
+            id = "tooltip_item_weapon_skill",
+            txt = "Show skill levels for weapons",
+        },
+        {
+            id = "tooltip_item_ignore_unequippable",
+            txt = "Ignore unequippable by class",
+        },
+        {
+            id = "tooltip_item_ignore_cloth",
+            txt = "Ignore armor type: cloth",
+        },
+        {
+            id = "tooltip_item_ignore_leather",
+            txt = "Ignore armor type: leather",
+        },
+        {
+            id = "tooltip_item_ignore_mail",
+            txt = "Ignore armor type: mail",
+        },
+        {
+            id = "tooltip_item_ignore_plate",
+            txt = "Ignore armor type: plate",
+        },
+    }, pframe, 2, nil);
 
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
-    f_txt:SetText("Spell list in item tooltip is configured under Calculator tab");
-    f_txt:SetTextColor(1, 1, 1);
-
-    pframe.y_offset = pframe.y_offset - 20;
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
-    f_txt:SetText("Switch between evaluation modes holding ALT key");
-    f_txt:SetTextColor(1, 1, 1);
-    f_txt:SetWordWrap(true);
+    make_frame_scrollable(pframe);
 end
 
 local fonts = {
@@ -1898,26 +1933,16 @@ local function create_sw_ui_overlay_frame(pframe)
 
     pframe.y_offset = pframe.y_offset - 15;
 
-    local overlay_settings_checks = {
-        {
+    multi_row_checkbutton({{
             id = "overlay_disable",
             txt = "Disable action bar overlay",
             func = function(self)
                 sc.overlay.clear_overlays();
                 sc.core.old_ranks_checks_needed = true;
             end
-        },
-        {
-            id = "overlay_no_decimals",
-            txt = "Never show decimals",
-            func = function(self)
-                if self:GetChecked() then
-                    sc.overlay.decimals_cap = 0;
-                else
-                    sc.overlay.decimals_cap = 3;
-                end
-            end,
-        },
+        }}, pframe, 1, nil, 0);
+
+    multi_row_checkbutton({
         {
             id = "overlay_old_rank",
             txt = "Old rank warning",
@@ -1935,11 +1960,20 @@ local function create_sw_ui_overlay_frame(pframe)
             end,
             tooltip = "Does not warn about old rank when the higher rank is not learned/known by player. Requires old rank warning option to be toggled.",
         },
-    };
+        {
+            id = "overlay_no_decimals",
+            txt = "Never show decimals",
+            func = function(self)
+                if self:GetChecked() then
+                    sc.overlay.decimals_cap = 0;
+                else
+                    sc.overlay.decimals_cap = 3;
+                end
+            end,
+        },
+    }, pframe, 2);
 
-    multi_row_checkbutton(overlay_settings_checks, pframe, 2);
-
-    pframe.y_offset = pframe.y_offset - 10;
+    pframe.y_offset = pframe.y_offset - 30;
 
     local slider_frame_type = "Slider";
     f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_update_freq", pframe, "UISliderTemplate");
@@ -2254,7 +2288,7 @@ local function create_sw_ui_overlay_frame(pframe)
     div:SetColorTexture(0.5, 0.5, 0.5, 0.6);
     div:SetHeight(1);
     div:SetPoint("TOPLEFT", pframe, "TOPLEFT", 0, pframe.y_offset);
-    div:SetPoint("TOPRIGHT", pframe, "TOPRIGHT", 0, pframe.y_offset);
+    div:SetPoint("TOPRIGHT", pframe, "TOPRIGHT", -10, pframe.y_offset);
     pframe.y_offset = pframe.y_offset - 5;
 
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
@@ -2281,30 +2315,43 @@ local function create_sw_ui_overlay_frame(pframe)
                     end
                 end
             },
+        },
+        pframe, 1, nil, 0);
+
+    multi_row_checkbutton(
+        {
             {
                 id = "overlay_cc_only_eval",
                 txt = "Only show for evaluable spells",
             },
             {
-                id = "overlay_cc_animate",
-                txt = "Animation",
+                id = "overlay_cc_transition_nocd",
+                txt = "Remove transition cooldown",
                 func = function()
 
                     if sc.overlay.ccf_parent.config_mode then
                         sc.overlay.cc_demo();
                     end
                 end,
-                tooltip = "Animation puts a cooldown on spell switching during the animation",
+                tooltip = "Transitions otherwise have a cooldown equal to transition time to prevent multiple transitions at once. This removal may look weird unless transition slide length is set to 0",
             },
             {
                 id = "overlay_cc_horizontal",
                 txt = "Horizontal transition",
                 func = function()
+                    sc.overlay.ccf_anim_reconfig();
                     if sc.overlay.ccf_parent.config_mode then
                         sc.overlay.cc_demo();
                     end
                 end
             },
+        },
+        pframe, 2);
+
+    pframe.y_offset = pframe.y_offset - 20;
+
+    multi_row_checkbutton(
+        {
             {
                 id = "overlay_cc_move_adjacent_on_empty",
                 txt = "Move neighbouring labels closer when other is empty",
@@ -2316,9 +2363,10 @@ local function create_sw_ui_overlay_frame(pframe)
                 end
             },
         },
-        pframe, 2);
+        pframe, 1);
 
-    pframe.y_offset = pframe.y_offset - 25;
+    pframe.y_offset = pframe.y_offset - 5;
+
     f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_cc_info_scale", pframe, "UISliderTemplate");
     f._type = slider_frame_type;
     f:SetOrientation('HORIZONTAL');
@@ -2348,7 +2396,105 @@ local function create_sw_ui_overlay_frame(pframe)
         sc.overlay.ccf_parent.border:SetScale(val);
     end);
 
-    pframe.y_offset = pframe.y_offset - 25;
+    pframe.y_offset = pframe.y_offset - 18;
+    -----
+
+    f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_cc_hanging_time", pframe, "UISliderTemplate");
+    f._type = slider_frame_type;
+    f:SetOrientation('HORIZONTAL');
+    f:SetPoint("TOPLEFT", 235, pframe.y_offset+4);
+    f:SetMinMaxValues(0.0, 10);
+    f:SetWidth(175)
+    f:SetHeight(20)
+    f:SetValueStep(0.05);
+    f:SetHitRectInsets(0, 0, 3, 3)
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY")
+    f_txt:SetFontObject(GameFontNormal)
+    f_txt:SetTextColor(1.0, 1.0, 1.0);
+    f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset)
+    f_txt:SetText("Hanging time until transition start")
+
+    f.val_txt = pframe:CreateFontString(nil, "OVERLAY")
+    f.val_txt:SetFontObject(font)
+    f.val_txt:SetPoint("TOPLEFT", 415, pframe.y_offset)
+    f.val_txt:SetText(string.format("%.1f", 0));
+
+    f:SetScript("OnValueChanged", function(self, val)
+        config.settings.overlay_cc_hanging_time = val;
+        self.val_txt:SetText(string.format("%.2fs", val))
+        sc.overlay.ccf_anim_reconfig();
+        if sc.overlay.ccf_parent.config_mode then
+            sc.overlay.cc_demo();
+        end
+    end);
+
+    pframe.y_offset = pframe.y_offset - 18;
+    -----
+
+    f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_cc_transition_time", pframe, "UISliderTemplate");
+    f._type = slider_frame_type;
+    f:SetOrientation('HORIZONTAL');
+    f:SetPoint("TOPLEFT", 235, pframe.y_offset+4);
+    f:SetMinMaxValues(0.0, 3.0);
+    f:SetWidth(175)
+    f:SetHeight(20)
+    f:SetValueStep(0.05);
+    f:SetHitRectInsets(0, 0, 3, 3)
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY")
+    f_txt:SetFontObject(GameFontNormal)
+    f_txt:SetTextColor(1.0, 1.0, 1.0);
+    f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset)
+    f_txt:SetText("Transition time")
+
+    f.val_txt = pframe:CreateFontString(nil, "OVERLAY")
+    f.val_txt:SetFontObject(font)
+    f.val_txt:SetPoint("TOPLEFT", 415, pframe.y_offset)
+    f.val_txt:SetText(string.format("%.1f", 0));
+
+    f:SetScript("OnValueChanged", function(self, val)
+        config.settings.overlay_cc_transition_time = val;
+        self.val_txt:SetText(string.format("%.2fs", val))
+        sc.overlay.ccf_anim_reconfig();
+        if sc.overlay.ccf_parent.config_mode then
+            sc.overlay.cc_demo();
+        end
+    end);
+    -----
+    pframe.y_offset = pframe.y_offset - 18;
+
+    f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_cc_transition_length", pframe, "UISliderTemplate");
+    f._type = slider_frame_type;
+    f:SetOrientation('HORIZONTAL');
+    f:SetPoint("TOPLEFT", 235, pframe.y_offset+4);
+    f:SetMinMaxValues(0.0, 300.0);
+    f:SetWidth(175)
+    f:SetHeight(20)
+    f:SetValueStep(0.05);
+    f:SetHitRectInsets(0, 0, 3, 3)
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY")
+    f_txt:SetFontObject(GameFontNormal)
+    f_txt:SetTextColor(1.0, 1.0, 1.0);
+    f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset)
+    f_txt:SetText("Transition slide length")
+
+    f.val_txt = pframe:CreateFontString(nil, "OVERLAY")
+    f.val_txt:SetFontObject(font)
+    f.val_txt:SetPoint("TOPLEFT", 415, pframe.y_offset)
+    f.val_txt:SetText(string.format("%.1f", 0));
+
+    f:SetScript("OnValueChanged", function(self, val)
+        config.settings.overlay_cc_transition_length = val;
+        self.val_txt:SetText(string.format("%.1f", val))
+        sc.overlay.ccf_anim_reconfig();
+        if sc.overlay.ccf_parent.config_mode then
+            sc.overlay.cc_demo();
+        end
+    end);
+
+    pframe.y_offset = pframe.y_offset - 20;
 
     f_txt = pframe:CreateFontString(nil, "OVERLAY")
     f_txt:SetFontObject(GameFontNormal)
@@ -2596,7 +2742,7 @@ local function create_sw_ui_calculator_frame(pframe)
     f_txt:SetPoint("TOPLEFT", 355, pframe.y_offset);
     f_txt:SetText("Delta");
 
-    f = CreateFrame("Button", "nil", pframe, "UIPanelButtonTemplate"); 
+    f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate"); 
     f:SetScript("OnClick", function()
 
         for _, v in pairs(pframe.stats) do
