@@ -5,6 +5,8 @@ local powers = sc.powers
 local schools = sc.schools
 local spell_flags = sc.spell_flags
 local comp_flags = sc.comp_flags
+sc.equippable_weapons_mask = 42032;
+sc.equippable_armors_mask = 7;
 sc.spells = {
 	[5179] = {
 		direct = {
@@ -1468,18 +1470,6 @@ sc.spells = {
 			jump_amp = 1,
 			flags = bit.bor(0, comp_flags.no_attack),
 		},
-		periodic = {
-			min = 20,
-			max = 20,
-			tick_time = 1,
-			dur = 10,
-			school1 = schools.physical,
-			coef = 0,
-			per_lvl = 0,
-			per_lvl_sq = 0,
-			jump_amp = 1,
-			flags = bit.bor(0, comp_flags.cant_crit, comp_flags.ignores_mitigation, comp_flags.no_attack),
-		},
 		cast_time = 0,
 		cost = 0,
 		power_type = powers.mana,
@@ -1490,7 +1480,7 @@ sc.spells = {
 		base_id = 5229,
 		gcd = 0,
 		train = 800,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.resource_regen),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant),
 	},
 	[769] = {
 		direct = {
