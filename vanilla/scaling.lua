@@ -153,11 +153,21 @@ local function lerp_by_lvl(by_lvl, lvl, min, max)
 end
 
 local function int_to_spell_crit(int, lvl)
-    return 0.01*int/lerp_by_lvl(class_int_to_spell_crit[class], lvl, 1, 60);
+    local int_to_crit = lerp_by_lvl(class_int_to_spell_crit[class], lvl, 1, 60);
+    if int_to_crit == 0 then
+        return 0;
+    else
+        return 0.01*int/int_to_crit;
+    end
 end
 
 local function agi_to_physical_crit(agi, lvl)
-    return 0.01*agi/lerp_by_lvl(class_agi_to_physical_crit[class], lvl, 1, 60);
+    local agi_to_crit = lerp_by_lvl(class_agi_to_physical_crit[class], lvl, 1, 60);
+    if agi_to_crit == 0 then
+        return 0;
+    else
+        return 0.01*agi/agi_to_crit;
+    end
 end
 
 scaling.dps_per_ap                       = dps_per_ap;
