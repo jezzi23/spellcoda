@@ -9523,7 +9523,7 @@ local enchant_effects = {
 	},
 	[403628] = {
 			{"ability", "jumps_flat", 5, {686,}, 0, 0},
-			{"ability", "effect_mod", -0.049999997, {686,}, 0, 2},
+			{"ability", "effect_mod", -0.29999998, {686,}, 0, 2},
 	},
 };
 for k, v in pairs(enchant_effects) do sc.enchant_effects[k] = v; end

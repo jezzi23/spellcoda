@@ -4609,7 +4609,7 @@ sc.class_buffs = {
 			{"by_attr", "stat_flat", 77, {1,}, 2, 0},
 	},
 	[1213939] = {
-			{"by_school", "threat", 0.25, {}, 0, 1},
+			{"by_school", "threat", 0.25, {1,2,3,4,5,6,7,}, 0, 1},
 			{"by_school", "dmg_mod", 0.049999997, {1,2,3,4,5,6,7,}, 1, 2},
 			{"raw", "phys_mod", 0.049999997, nil, 1, 2},
 	},
@@ -8028,9 +8028,6 @@ local set_effects = {
 	},
 	[449930] = {
 			{"ability", "cast_mod", -1, {415236,}, 0, 0},
-	},
-	[1219373] = {
-			{"ability", "effect_mod", 1, {324,}, 0, 0},
 	},
 	[1227111] = {
 			{"ability", "jumps_flat", 1, {1064,}, 0, 0},

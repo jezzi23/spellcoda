@@ -5793,6 +5793,7 @@ sc.class_buffs = {
 	},
 	[413247] = {
 			{"ability", "cast_mod", -0.19999999, {596,2050,2054,2060,}, 64, 0},
+			{"ability", "effect_mod", 0, {596,2050,2054,2060,}, 64, 1},
 	},
 	[28419] = {
 			{"raw", "phys_mod", 0.19999999, nil, 1, 0},
@@ -9185,6 +9186,9 @@ local item_effects = {
 };
 for k, v in pairs(item_effects) do sc.item_effects[k] = v; end
 local set_effects = {
+	[1226501] = {
+			{"ability", "effect_mod", 0.25, {401946,402277,}, 0, 2},
+	},
 	[1213705] = {
 			{"ability", "cast_mod", -1, {431655,}, 0, 0},
 			{"ability", "effect_mod", 0.099999994, {431655,}, 0, 1},

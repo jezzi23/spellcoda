@@ -3445,7 +3445,7 @@ sc.spells = {
 			coef = 0,
 			per_lvl = 0,
 			per_lvl_sq = 0,
-			jumps = 2,
+			jumps = 3,
 			jump_amp = 1,
 			flags = bit.bor(0, comp_flags.native_jumps),
 		},
@@ -3982,7 +3982,8 @@ sc.class_buffs = {
 			{"by_attr", "stat_flat", 1, {2,}, 2, 1},
 	},
 	[1226451] = {
-			{"raw", "cast_haste", 0.19999999, nil, 0, 0},
+			{"raw", "cast_haste", 0.19999999, nil, 64, 0},
+			{"ability", "gcd_flat", -0.5, {635,458856,20473,19750,25914,633,}, 64, 1},
 	},
 	[1213408] = {
 			{"by_attr", "stat_mod", 0.099999994, {1,2,3,4,5,}, 32, 0},
@@ -7515,6 +7516,7 @@ local passives = {
 			{"aura_pts", 1, 1, {20049,20056,20059,20058,20057,}, 0, 0},
 			{"aura_pts", 1, -1, {1020,642,}, 0, 1},
 			{"aura_pts", 3, 1, {1020,642,}, 0, 2},
+			{"ability", "hit", 0, {407669,}, 0, 3},
 	},
 	[466503] = {
 			{"aura_pts", 1, -1, {20049,20056,20059,20058,20057,}, 0, 0},
