@@ -1,6 +1,6 @@
 -- THIS FILE IS GENERATED
 local _, sc = ...;
-sc.addon_build_id = 1111;
+sc.addon_build_id = 1140;
 sc.client_name_src = "wow_classic";
 sc.client_version_src = "2.5.4.44833";
 _, sc.class = UnitClass("player");
