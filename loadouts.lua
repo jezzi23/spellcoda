@@ -724,7 +724,7 @@ local function dynamic_loadout(loadout)
     loadout.haste_rating = 0;
     loadout.hit_rating = 0;
     loadout.phys_hit = 0;
-    local phys_hit = GetSpellHitModifier();
+    local phys_hit = GetHitModifier();
     if phys_hit then
         loadout.phys_hit = 0.01*phys_hit;
     end
