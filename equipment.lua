@@ -118,7 +118,8 @@ local function apply_weapon(effects, id, slot, subclass_id, undo)
         mod = 1;
     end
 
-    subclass_id = subclass_id or -1;
+    -- Defaults to Fist weapon subclass which Unarmed skill line picks up on
+    subclass_id = subclass_id or 13;
     effects.raw["wpn_subclass_"..wpn_strs[slot]] = effects.raw["wpn_subclass_"..wpn_strs[slot]] + mod*subclass_id;
 
     local wpn_effect = sc.weapons[id];
