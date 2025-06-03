@@ -1,6 +1,6 @@
 -- THIS FILE IS GENERATED
 local _, sc = ...;
-sc.addon_build_id = 1180;
+sc.addon_build_id = 1192;
 sc.client_name_src = "wow_classic_era";
 sc.client_version_src = "1.15.7.61186";
 _, sc.class = UnitClass("player");
@@ -145,14 +145,13 @@ sc.aura_flags = {
 sc.feral_skill_as_wpn_subclass_hack = 28;
 sc.wep_subclass_to_normalized_speed = {
 	[1] = 3.3,
-	[6] = 3.3,
 	[16] = 2.8,
+	[6] = 3.3,
 	[28] = 0,
-	[-1] = 2.4,
+	[13] = 2.4,
 	[2] = 2.8,
 	[3] = 2.8,
 	[4] = 2.4,
-	[13] = 2.4,
 	[18] = 2.8,
 	[19] = 2.8,
 	[15] = 1.7,

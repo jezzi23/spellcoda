@@ -3513,6 +3513,7 @@ sc.talent_effects = {
 	[30919] = {
 			{"wpn_subclass", "skill_flat", 3, {128}, 10, 0},
 			{"wpn_subclass", "skill_flat", 3, {32768}, 10, 1},
+			{"wpn_subclass", "skill_flat", 3, {8192}, 10, 2},
 	},
 	[16719] = {
 			{"ability", "effect_mod", 0.16, {2835,399963,}, 0, 0},
@@ -3557,6 +3558,7 @@ sc.talent_effects = {
 	[30920] = {
 			{"wpn_subclass", "skill_flat", 5, {128}, 10, 0},
 			{"wpn_subclass", "skill_flat", 5, {32768}, 10, 1},
+			{"wpn_subclass", "skill_flat", 5, {8192}, 10, 2},
 	},
 	[14138] = {
 			{"raw", "phys_crit", 0.01, nil, 32, 0},
