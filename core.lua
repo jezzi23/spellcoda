@@ -271,14 +271,14 @@ local event_dispatch = {
             print("Spells in data:", num_spells);
         end
         -- don't warn about updates when build is relatively fresh
-        local version_warning_build_threshold_days = 5;
+        local version_warning_build_threshold_days = 14;
         if core.__sw__debug__ then
             version_warning_build_threshold_days = 0;
         end
         if config.settings.general_version_mismatch_notify and
             generated_data_is_outdated(sc.client_version_loaded, sc.client_version_src) and
             client_age_days() > version_warning_build_threshold_days then
-            print(core.addon_name..": detected client and addon data mismatch. Consider checking for an update.");
+            print(core.addon_name..": detected client and addon data mismatch for over 2 weeks. Consider checking for an update.");
         end
 
         -- temporary popup for first time using SpellCoda,

@@ -27,12 +27,15 @@ local overlay = {};
 local initialized = false;
 local active_overlays = {};
 local action_bar_frame_names = {};
-local action_id_frames = {};
 local spell_book_frames = {};
 local action_bar_addon_name = "Default";
 local externally_registered_spells = {};
 local external_overlay_frames = {};
 local num_overlay_components_toggled = 0;
+local action_id_frames = {};
+for i = 1, 120 do
+    action_id_frames[i] = {};
+end
 
 overlay.decimals_cap = 3;
 
@@ -109,9 +112,11 @@ local function check_old_rank(frame_info, spell_id, clvl)
     if not spell then
         return;
     end
+
     for i = 1, 3 do
         frame_info.overlay_frames[i]:Hide();
     end
+
     if not config.settings.overlay_disable and
         config.settings.overlay_old_rank and
         ((config.settings.overlay_old_rank_limit_to_known and spell_id ~= highest_learned_rank(spell.base_id))
@@ -239,12 +244,12 @@ local function spell_id_of_action(action_id)
     return spell_id;
 end
 
-local function try_register_frame(action_id, frame_name)
+local function try_register_frame(action_id, frame_name, spell_id)
     -- creates it if it suddenly exists but not registered
     local frame = _G[frame_name];
     if frame then
         action_id_frames[action_id].frame = frame;
-        local spell_id = spell_id_of_action(action_id);
+        spell_id = spell_id or spell_id_of_action(action_id);
         if spell_id ~= 0 then
             active_overlays[action_id] = spell_id;
         else
@@ -259,8 +264,7 @@ local function scan_action_frames()
 
     for action_id, v in pairs(action_bar_frame_names) do
 
-        if not action_id_frames[action_id] then
-            action_id_frames[action_id] = {};
+        if not action_id_frames[action_id].frame then
 
             local button_frame = _G[v];
             if button_frame then
@@ -369,8 +373,8 @@ local function reassign_overlay_icon_spell(action_id, spell_id)
             check_old_rank(action_id_frames[action_id], spell_id, active_loadout().lvl);
             active_overlays[action_id] = spell_id;
         end
-        action_id_frames[action_id].spell_id = spell_id;
     end
+    action_id_frames[action_id].spell_id = spell_id;
 end
 
 local function reassign_overlay_icon(action_id)
@@ -380,11 +384,17 @@ local function reassign_overlay_icon(action_id)
     if action_id > 120 or action_id <= 0 then
         return;
     end
-    if action_bar_frame_names[action_id] then
-        try_register_frame(action_id, action_bar_frame_names[action_id]);
-    end
 
     local spell_id = spell_id_of_action(action_id);
+    if action_id_frames[action_id].spell_id == spell_id then
+        -- no change since last
+        return;
+    end
+    action_id_frames[action_id].spell_id = spell_id;
+
+    if action_bar_frame_names[action_id] then
+        try_register_frame(action_id, action_bar_frame_names[action_id], spell_id);
+    end
 
     -- NOTE: any action_id > 12 we might have mirrored action ids
     -- with Bar 1 due to shapeshifts, and forms taking over Bar 1
