@@ -27,6 +27,7 @@ generated/vanilla/warlock.lua
 generated/vanilla/warrior.lua
 
 locale/default.lua
+
 locale/ptBR.lua
 locale/zhCN.lua
 locale/enCN.lua
@@ -40,6 +41,8 @@ locale/ruRU.lua
 locale/esES.lua
 locale/zhTW.lua
 locale/enTW.lua
+
+localization.lua
 
 utils.lua
 

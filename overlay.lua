@@ -1,5 +1,7 @@
 local _, sc = ...;
 
+local L                                         = sc.L;
+
 local spell_cost                                    = sc.utils.spell_cost;
 local spell_cast_time                               = sc.utils.spell_cast_time;
 local effect_color                                  = sc.utils.effect_color;
@@ -117,14 +119,14 @@ local function check_old_rank(frame_info, spell_id, clvl)
         frame_info.overlay_frames[i]:Hide();
     end
 
-    if not config.settings.overlay_disable and
+    if not config.settings.overlay_disable and not sc.core.mute_overlay and
         config.settings.overlay_old_rank and
         ((config.settings.overlay_old_rank_limit_to_known and spell_id ~= highest_learned_rank(spell.base_id))
          or
          (not config.settings.overlay_old_rank_limit_to_known and clvl > spell.lvl_outdated)) then
 
-        frame_info.overlay_frames[1]:SetText("OLD");
-        frame_info.overlay_frames[2]:SetText("RANK");
+        frame_info.overlay_frames[1]:SetText(L["OLD"]);
+        frame_info.overlay_frames[2]:SetText(L["RANK"]);
         frame_info.overlay_frames[3]:SetText("!!!");
         for i = 1, 3 do
             frame_info.overlay_frames[i]:SetTextColor(effect_color("old_rank"));
@@ -138,7 +140,7 @@ end
 
 local function old_rank_warning_traversal(clvl)
 
-    if config.settings.overlay_disable then
+    if config.settings.overlay_disable or sc.core.mute_overlay then
         return;
     end
     for _, v in pairs(action_id_frames) do
@@ -533,7 +535,7 @@ local overlay_label_handler = {
             end
             frame_overlay:SetText(format_number(val, math.min(1, overlay.decimals_cap)));
         end,
-        desc = "Normal effect aggregate",
+        desc = L["Normal effect aggregate"],
         color_tag = "normal",
         requires_spell_flags = spell_flags.eval,
     },
@@ -553,7 +555,7 @@ local overlay_label_handler = {
                 frame_overlay:SetText("");
             end
         end,
-        desc = "Critical effect aggregate",
+        desc = L["Critical effect aggregate"],
         color_tag = "crit",
         requires_spell_flags = spell_flags.eval,
     },
@@ -561,34 +563,34 @@ local overlay_label_handler = {
         func = function(frame_overlay, info)
             frame_overlay:SetText(format_number(info.expected, math.min(1, overlay.decimals_cap)));
         end,
-        desc = "Effect expectation",
+        desc = L["Effect expectation"],
         color_tag = "expectation",
         requires_spell_flags = spell_flags.eval,
-        tooltip = "Effect for a single cast considering all possible outcomes such as failed/diminished attacks, critical hits etc.",
+        tooltip = L["Effect for a single cast considering all possible outcomes such as failed/diminished attacks, critical hits etc."],
     },
     overlay_display_effect_per_sec = {
         func = function(frame_overlay, info)
             frame_overlay:SetText(format_number(info.effect_per_sec, math.min(1, overlay.decimals_cap)));
         end,
-        desc = "Effect per sec",
+        desc = L["Effect per sec"],
         color_tag = "effect_per_sec",
         requires_spell_flags = spell_flags.eval,
-        tooltip = "Expected effect divided by expected execution time",
+        tooltip = L["Expected effect divided by expected execution time"],
     },
     overlay_display_effect_per_cost = {
         func = function(frame_overlay, info)
             frame_overlay:SetText(format_number(info.effect_per_cost, math.min(2, overlay.decimals_cap)));
         end,
-        desc = "Effect per cost",
+        desc = L["Effect per cost"],
         color_tag = "effect_per_cost",
         requires_spell_flags = spell_flags.eval,
-        tooltip = "Expected effect divided by expected cost",
+        tooltip = L["Expected effect divided by expected cost"],
     },
     overlay_display_threat = {
         func = function(frame_overlay, info)
             frame_overlay:SetText(format_number(info.threat, math.min(1, overlay.decimals_cap)));
         end,
-        desc = "Threat expectation",
+        desc = L["Threat expectation"],
         color_tag = "threat",
         requires_spell_flags = bit.bor(spell_flags.eval, spell_flags.only_threat),
     },
@@ -596,7 +598,7 @@ local overlay_label_handler = {
         func = function(frame_overlay, info)
             frame_overlay:SetText(format_number(info.threat_per_sec, math.min(1, overlay.decimals_cap)));
         end,
-        desc = "Threat per sec",
+        desc = L["Threat per sec"],
         color_tag = "threat",
         requires_spell_flags = bit.bor(spell_flags.eval, spell_flags.only_threat),
     },
@@ -604,7 +606,7 @@ local overlay_label_handler = {
         func = function(frame_overlay, info)
             frame_overlay:SetText(format_number(info.threat_per_cost, math.min(2, overlay.decimals_cap)));
         end,
-        desc = "Threat per cost",
+        desc = L["Threat per cost"],
         color_tag = "effect_per_cost",
         requires_spell_flags = bit.bor(spell_flags.eval, spell_flags.only_threat),
     },
@@ -616,7 +618,7 @@ local overlay_label_handler = {
                 frame_overlay:SetText("");
             end
         end,
-        desc = "Cost expected",
+        desc = L["Cost expected"],
         color_tag = "cost",
         requires_spell_flags = spell_flags.eval,
     },
@@ -628,7 +630,7 @@ local overlay_label_handler = {
                 frame_overlay:SetText("");
             end
         end,
-        desc = "Execution time expected",
+        desc = L["Execution time expected"],
         color_tag = "execution_time",
         requires_spell_flags = spell_flags.eval,
     },
@@ -636,17 +638,17 @@ local overlay_label_handler = {
         func = function(frame_overlay, _, _, _, spell_id)
             frame_overlay:SetText(format_number(spell_cost(spell_id), 0));
         end,
-        desc = "Actual cost",
+        desc = L["Actual cost"],
         color_tag = "cost",
-        tooltip = "Not computed but queried through game API",
+        tooltip = L["Not computed but queried through game API"],
     },
     overlay_display_actual_cast = {
         func = function(frame_overlay, _, _, _, spell_id)
             frame_overlay:SetText(format_number(spell_cast_time(spell_id), math.min(2, overlay.decimals_cap)));
         end,
-        desc = "Actual cast time",
+        desc = L["Actual cast time"],
         color_tag = "execution_time",
-        tooltip = "Not computed but queried through game API and gcd capped",
+        tooltip = L["Not computed but queried through game API and GCD capped"],
     },
     overlay_display_hit_chance = {
         func = function(frame_overlay, _, stats, spell)
@@ -662,7 +664,7 @@ local overlay_label_handler = {
                 frame_overlay:SetText("");
             end
         end,
-        desc = "Normal hit chance",
+        desc = L["Normal hit chance"],
         color_tag = "normal",
         requires_spell_flags = spell_flags.eval,
     },
@@ -680,7 +682,7 @@ local overlay_label_handler = {
                 frame_overlay:SetText("");
             end
         end,
-        desc = "Critical hit chance",
+        desc = L["Critical hit chance"],
         color_tag = "crit",
         requires_spell_flags = spell_flags.eval,
     },
@@ -698,7 +700,7 @@ local overlay_label_handler = {
                 frame_overlay:SetText("");
             end
         end,
-        desc = "Miss chance",
+        desc = L["Miss chance"],
         color_tag = "avoidance_info",
         requires_spell_flags = spell_flags.eval,
     },
@@ -721,16 +723,16 @@ local overlay_label_handler = {
                 frame_overlay:SetText("");
             end
         end,
-        desc = "Avoid chance",
+        desc = L["Avoid chance"],
         color_tag = "avoidance_info",
         requires_spell_flags = spell_flags.eval,
-        tooltip = "Chance to miss, parry or dodge"
+        tooltip = L["Chance to miss, parry or dodge"]
     },
     overlay_display_effect_until_oom = {
         func = function(frame_overlay, info)
             frame_overlay:SetText(format_number(info.effect_until_oom, 0));
         end,
-        desc = "Effect until OOM",
+        desc = L["Effect until OOM"],
         color_tag = "effect_until_oom",
         requires_spell_flags = spell_flags.eval,
     },
@@ -738,14 +740,14 @@ local overlay_label_handler = {
         func = function(frame_overlay, info)
             frame_overlay:SetText(format_dur(info.time_until_oom));
         end,
-        desc = "Time until OOM",
+        desc = L["Time until OOM"],
         color_tag = "time_until_oom",
     },
     overlay_display_casts_until_oom = {
         func = function(frame_overlay, info)
             frame_overlay:SetText(format_number(info.num_casts_until_oom, math.min(1, overlay.decimals_cap)));
         end,
-        desc = "Casts until OOM",
+        desc = L["Casts until OOM"],
         color_tag = "casts_until_oom",
     },
     overlay_display_direct_normal = {
@@ -764,7 +766,7 @@ local overlay_label_handler = {
                 );
             end
         end,
-        desc = "Direct normal effect component 1",
+        desc = L["Direct normal effect component 1"],
         color_tag = "normal",
         requires_spell_flags = spell_flags.eval,
     },
@@ -784,7 +786,7 @@ local overlay_label_handler = {
                 );
             end
         end,
-        desc = "Direct critical effect component 1",
+        desc = L["Direct critical effect component 1"],
         color_tag = "crit",
         requires_spell_flags = spell_flags.eval,
     },
@@ -804,7 +806,7 @@ local overlay_label_handler = {
                 );
             end
         end,
-        desc = "Periodic normal effect component 1",
+        desc = L["Periodic normal effect component 1"],
         color_tag = "normal",
         requires_spell_flags = spell_flags.eval,
     },
@@ -824,7 +826,7 @@ local overlay_label_handler = {
                 );
             end
         end,
-        desc = "Periodic critical effect component 1",
+        desc = L["Periodic critical effect component 1"],
         color_tag = "crit",
         requires_spell_flags = spell_flags.eval,
     },
@@ -836,7 +838,7 @@ local overlay_label_handler = {
                frame_overlay:SetText("");
            end
         end,
-        desc = "Rank",
+        desc = L["Rank"],
         color_tag = "spell_rank",
     },
     overlay_display_mitigation = {
@@ -863,20 +865,20 @@ local overlay_label_handler = {
                 frame_overlay:SetText("");
             end
         end,
-        desc = "Mitigation",
+        desc = L["Mitigation"],
         color_tag = "avoidance_info",
         requires_spell_flags = spell_flags.eval,
-        tooltip = "Through armor or resistance",
+        tooltip = L["Through armor or resistance"],
     },
     overlay_display_resource_regen = {
         func = function(frame_overlay, info)
             frame_overlay:SetText(string.format("%.0f", math.ceil(info.total_restored)));
         end,
-        desc = "Resource regeneration",
+        desc = L["Resource regeneration"],
         color_tag = "cost",
         requires_spell_flags = spell_flags.resource_regen,
         non_standard = true,
-        tooltip = "Shows resource gained from spells like Evocation, Mana tide totem, etc.",
+        tooltip = L["Shows resource gained from spells like Evocation, Mana tide totem, etc."],
     },
 };
 
@@ -982,70 +984,70 @@ ccf_parent.border = border;
 
 local ccf_labels = {
     outside_right_upper = {
-        desc = "Outside: right - upper",
+        desc = L["Outside: right - upper"],
         p = "BOTTOMLEFT",
         rel_p = "TOPRIGHT",
         adjacent_to = {"outside_right_lower", "LEFT", "RIGHT"}
     },
     outside_right_lower = {
-        desc = "Outside: right - lower",
+        desc = L["Outside: right - lower"],
         p = "TOPLEFT",
         rel_p = "BOTTOMRIGHT",
         adjacent_to = {"outside_right_upper", "LEFT", "RIGHT"};
     },
     outside_left_upper = {
-        desc = "Outside: left - upper",
+        desc = L["Outside: left - upper"],
         p = "BOTTOMRIGHT",
         rel_p = "TOPLEFT",
         adjacent_to = {"outside_left_lower", "RIGHT", "LEFT"}
     },
     outside_left_lower = {
-        desc = "Outside: left - lower",
+        desc = L["Outside: left - lower"],
         p = "TOPRIGHT",
         rel_p = "BOTTOMLEFT",
         adjacent_to = {"outside_left_upper", "RIGHT", "LEFT"}
     },
     outside_top_left = {
-        desc = "Outside: top - left",
+        desc = L["Outside: top - left"],
         p = "RIGHT",
         rel_p = "TOP",
         adjacent_to = {"outside_top_right", "CENTER", "TOP"}
     },
     outside_top_right = {
-        desc = "Outside: top - right",
+        desc = L["Outside: top - right"],
         p = "LEFT",
         rel_p = "TOP",
         adjacent_to = {"outside_top_left", "CENTER", "TOP"}
     },
     outside_bottom_left = {
-        desc = "Outside: bottom - left",
+        desc = L["Outside: bottom - left"],
         p = "RIGHT",
         rel_p = "BOTTOM",
         adjacent_to = {"outside_bottom_right", "CENTER", "BOTTOM"}
     },
     outside_bottom_right = {
-        desc = "Outside: bottom - right",
+        desc = L["Outside: bottom - right"],
         p = "LEFT",
         rel_p = "BOTTOM",
         adjacent_to = {"outside_bottom_left", "CENTER", "BOTTOM"}
     },
     inside_top = {
-        desc = "Inside: top",
+        desc = L["Inside: top"],
         p = "TOP",
         rel_p = "TOP",
     },
     inside_bottom = {
-        desc = "Inside: bottom",
+        desc = L["Inside: bottom"],
         p = "BOTTOM",
         rel_p = "BOTTOM",
     },
     inside_left = {
-        desc = "Inside: left",
+        desc = L["Inside: left"],
         p = "LEFT",
         rel_p = "LEFT",
     },
     inside_right = {
-        desc = "Inside: right",
+        desc = L["Inside: right"],
         p = "RIGHT",
         rel_p = "RIGHT",
     },
@@ -1136,7 +1138,7 @@ local loadout, effects;
 
 local function update_ccf(frame, spell, info, stats, spell_id)
 
-    if config.settings.overlay_disable_cc_info and
+    if (config.settings.overlay_disable_cc_info or sc.core.mute_overlay) and
         not ccf_parent.config_mode then
         return;
     end
@@ -1281,7 +1283,7 @@ local function ccf_label_reconfig(label_id)
             label:SetText("");
         end
     end
-    if not config.settings.overlay_disable_cc_info or ccf_parent.config_mode then
+    if (not config.settings.overlay_disable_cc_info and not sc.core.mute_overlay) or ccf_parent.config_mode then
         update_cc();
     end
 end
@@ -1350,11 +1352,11 @@ end
 local overlay_effects_update_id = 0;
 
 cc_new_spell = function(spell_id)
-    if config.settings.overlay_disable_cc_info and
+    if (config.settings.overlay_disable_cc_info or sc.core.mute_overlay) and
         not ccf_parent.config_mode then
         return;
     end
-    if config.settings.overlay_disable then
+    if config.settings.overlay_disable or sc.core.mute_overlay then
         loadout, _, effects = update_loadout_and_effects();
     end
 
@@ -1413,7 +1415,7 @@ local function init_ccfs()
     __sc_frame.overlay_frame:SetScript("OnShow", function()
         ccf_parent.config_mode = true;
         ccf_parent.border:Show();
-        if config.settings.overlay_disable_cc_info then
+        if config.settings.overlay_disable_cc_info or sc.core.mute_overlay then
             ccf_parent.border.disabled_txt:Show();
         else
             ccf_parent.border.disabled_txt:Hide();
@@ -1540,7 +1542,7 @@ local function update_overlay()
     local spells_frame_open = __sc_frame:IsShown() and __sc_frame.spells_frame:IsShown();
     local calc_frame_open = __sc_frame:IsShown() and __sc_frame.calculator_frame:IsShown();
 
-    if not config.settings.overlay_disable then
+    if not config.settings.overlay_disable and not sc.core.mute_overlay then
         if not calc_frame_open then
 
             loadout, _, effects, update_id = update_loadout_and_effects();
@@ -1554,20 +1556,20 @@ local function update_overlay()
 
     if updated then
         if calc_frame_open then
-            if config.settings.overlay_disable then
+            if config.settings.overlay_disable or sc.core.mute_overlay then
                 sc.ui.update_calc_list(nil, nil, nil, eval_flags);
             else
                 sc.ui.update_calc_list(loadout, effects_before, effects, eval_flags);
             end
         elseif spells_frame_open then
-            if config.settings.overlay_disable then
+            if config.settings.overlay_disable or sc.core.mute_overlay then
                 sc.ui.update_spells_frame(nil, nil, eval_flags);
             else
                 sc.ui.update_spells_frame(loadout, effects, eval_flags);
             end
         end
 
-        if not config.settings.overlay_disable then
+        if not config.settings.overlay_disable and not sc.core.mute_overlay then
             update_spell_icons(loadout, effects, eval_flags);
         end
     end
@@ -1583,9 +1585,9 @@ local function update_overlay()
     --end
 
 
-    if not config.settings.overlay_disable_cc_info then
+    if not config.settings.overlay_disable_cc_info and not sc.core.mute_overlay then
 
-        if config.settings.overlay_disable then
+        if config.settings.overlay_disable or sc.core.mute_overlay then
 
             -- action bar overlay disabled, need to update loadout
             loadout, _, effects, update_id = update_loadout_and_effects();
