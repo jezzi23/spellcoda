@@ -1057,9 +1057,6 @@ local function make_frame_scrollable(frame)
                     local p, rel_to, rel_p, x = v:GetPoint(1);
                     local new_y = v.original_y_offset + val;
                     v:SetPoint(p, rel_to, rel_p, x, new_y);
-                    --local y_bound = -v.original_y_offset - restrict_bottom_space;
-                    --local y_bound = -v.original_y_offset - restrict_bottom_space;
-                    
                     if -v.original_y_offset >= val and -v.original_y_offset -restrict_bottom_space <= height+val then
                         v:Show();
                     else
@@ -1082,7 +1079,7 @@ local function make_frame_scrollable(frame)
     frame:SetScript("OnMouseWheel", function(_, delta)
         local scrollbar = frame.slider;
 
-        local val = scrollbar:GetValue() - delta*15;
+        local val = math.max(0, scrollbar:GetValue() - delta*15);
         scrollbar:SetValue(val);
         scrollbar:GetScript("OnValueChanged")(scrollbar, val);
     end);
@@ -1879,7 +1876,7 @@ local function create_sw_ui_tooltip_frame(pframe)
     for _, v in ipairs(multi_row_checkbutton({
         {
             id = "tooltip_item_leveling_skill_normalize",
-            txt = L["When not maximum level, use skill as clvl*5 for weapon comparisons."],
+            txt = L["Use skill as clvl*5 for weapon comparisons when not at maximum level"],
             tooltip = L["More intuitive weapon upgrade results when leveling since lower weapon skill type is not punished"],
         },
     }, pframe, 1, nil)) do
@@ -2160,7 +2157,7 @@ local function create_sw_ui_overlay_frame(pframe)
     f_txt:SetFontObject(GameFontNormal)
     f_txt:SetTextColor(1.0, 1.0, 1.0);
     f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset);
-    f_txt:SetText("Font");
+    f_txt:SetText(L["Font"]);
     ofs[#ofs + 1] = f_txt;
 
     local overlay_font_dropdown_f = create_font_dropdown(
@@ -2696,7 +2693,7 @@ local function create_sw_ui_overlay_frame(pframe)
     f_txt:SetFontObject(GameFontNormal)
     f_txt:SetTextColor(1.0, 1.0, 1.0);
     f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset);
-    f_txt:SetText("Font");
+    f_txt:SetText(L["Font"]);
     cfs[#cfs + 1] = f_txt;
 
     local overlay_cc_font_dropdown_f = create_font_dropdown(
@@ -2934,7 +2931,7 @@ local function create_sw_ui_calculator_frame(pframe)
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
     f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
-    f_txt:SetText("While this tab is open, ability overlay & tooltips reflect the change below");
+    f_txt:SetText(L["While this tab is open, ability overlay & tooltips reflect the change below"]);
     f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
 
     pframe.y_offset = pframe.y_offset - 25;
@@ -4113,6 +4110,8 @@ local function create_sw_ui_profile_frame(pframe)
     local f, f_txt;
     pframe.y_offset = pframe.y_offset - 5;
 
+    local rhs_offset = 250;
+
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
     f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
@@ -4130,14 +4129,14 @@ local function create_sw_ui_profile_frame(pframe)
 
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 30, pframe.y_offset);
+    f_txt:SetPoint("TOPLEFT", 10, pframe.y_offset);
     f_txt:SetText(L["Main spec profile"]);
     f_txt:SetTextColor(1.0, 1.0, 1.0);
 
     pframe.primary_spec = 
         --CreateFrame("Button", "__sc_frame_profile_main_spec", pframe, "UIDropDownMenuTemplate");
         libDD:Create_UIDropDownMenu("__sc_frame_profile_main_spec", pframe);
-    pframe.primary_spec:SetPoint("TOPLEFT", 170, pframe.y_offset+6);
+    pframe.primary_spec:SetPoint("TOPLEFT", rhs_offset-20, pframe.y_offset+6);
     pframe.primary_spec.init_func = function()
 
         libDD:UIDropDownMenu_SetText(pframe.primary_spec, __sc_p_char.main_spec_profile);
@@ -4163,7 +4162,7 @@ local function create_sw_ui_profile_frame(pframe)
 
     pframe.active_main_spec = pframe:CreateFontString(nil, "OVERLAY");
     pframe.active_main_spec:SetFontObject(GameFontNormal);
-    pframe.active_main_spec:SetPoint("TOPLEFT", 350, pframe.y_offset);
+    pframe.active_main_spec:SetPoint("TOPLEFT", rhs_offset+150, pframe.y_offset);
     pframe.active_main_spec:SetText("<--- ".. L["Active"]);
     pframe.active_main_spec:SetTextColor(1.0,  0.0,  0.0);
 
@@ -4171,14 +4170,14 @@ local function create_sw_ui_profile_frame(pframe)
     pframe.y_offset = pframe.y_offset - 25;
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 30, pframe.y_offset);
+    f_txt:SetPoint("TOPLEFT", 10, pframe.y_offset);
     f_txt:SetText(L["Secondary spec profile"]);
     f_txt:SetTextColor(1.0, 1.0, 1.0);
 
     pframe.second_spec = 
         --CreateFrame("Button", "__sc_frame_profile_second_spec", pframe, "UIDropDownMenuTemplate");
         libDD:Create_UIDropDownMenu("__sc_frame_profile_second_spec", pframe);
-    pframe.second_spec:SetPoint("TOPLEFT", 170, pframe.y_offset+6);
+    pframe.second_spec:SetPoint("TOPLEFT", rhs_offset-20, pframe.y_offset+6);
     pframe.second_spec.init_func = function()
 
         libDD:UIDropDownMenu_SetText(pframe.second_spec, __sc_p_char.second_spec_profile);
@@ -4213,13 +4212,13 @@ local function create_sw_ui_profile_frame(pframe)
 
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 30, pframe.y_offset);
+    f_txt:SetPoint("TOPLEFT", 10, pframe.y_offset);
     f_txt:SetText(L["Rename active profile"]);
     f_txt:SetTextColor(1.0, 1.0, 1.0);
 
     f = CreateFrame("EditBox", "__sc_frame_profile_name_editbox", pframe, "InputBoxTemplate");
-    f:SetPoint("TOPLEFT", pframe, 195, pframe.y_offset+3);
-    f:SetSize(140, 15);
+    f:SetPoint("TOPLEFT", pframe, rhs_offset+5, pframe.y_offset+3);
+    f:SetSize(195, 15);
     f:SetAutoFocus(false);
     local editbox_save = function(self)
 
@@ -4250,7 +4249,7 @@ local function create_sw_ui_profile_frame(pframe)
 
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 30, pframe.y_offset);
+    f_txt:SetPoint("TOPLEFT", 10, pframe.y_offset);
     f_txt:SetText(L["Reset active profile"]);
     f_txt:SetTextColor(1.0, 1.0, 1.0);
 
@@ -4259,15 +4258,15 @@ local function create_sw_ui_profile_frame(pframe)
 
         config.reset_profile();
     end);
-    f:SetPoint("TOPLEFT", 190, pframe.y_offset+4);
+    f:SetPoint("TOPLEFT", rhs_offset, pframe.y_offset+4);
     f:SetText(L["Reset to defaults"]);
-    f:SetWidth(145);
+    f:SetWidth(200);
 
     pframe.y_offset = pframe.y_offset - 35;
 
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 30, pframe.y_offset);
+    f_txt:SetPoint("TOPLEFT", 10, pframe.y_offset);
     f_txt:SetText(L["Delete active profile"]);
     f_txt:SetTextColor(1.0, 1.0, 1.0);
     pframe.delete_profile_label = f_txt;
@@ -4278,21 +4277,21 @@ local function create_sw_ui_profile_frame(pframe)
         update_profile_frame();
         sc.config.activate_settings();
     end);
-    f:SetPoint("TOPLEFT", 190, pframe.y_offset+4);
+    f:SetPoint("TOPLEFT", rhs_offset, pframe.y_offset+4);
     f:SetText(L["Delete"]);
-    f:SetWidth(145);
+    f:SetWidth(200);
     pframe.delete_profile_button = f;
 
     pframe.y_offset = pframe.y_offset - 35;
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 30, pframe.y_offset);
+    f_txt:SetPoint("TOPLEFT", 10, pframe.y_offset);
     f_txt:SetText(L["New profile name"]);
     f_txt:SetTextColor(1.0, 1.0, 1.0);
 
     f = CreateFrame("EditBox", nil, pframe, "InputBoxTemplate");
-    f:SetPoint("TOPLEFT", pframe, 195, pframe.y_offset+3);
-    f:SetSize(140, 15);
+    f:SetPoint("TOPLEFT", pframe, rhs_offset+5, pframe.y_offset+3);
+    f:SetSize(195, 15);
     f:SetAutoFocus(false);
     local editbox_save = function(self)
         local txt = self:GetText();
@@ -4323,7 +4322,7 @@ local function create_sw_ui_profile_frame(pframe)
     pframe.new_profile_section = {};
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 30, pframe.y_offset);
+    f_txt:SetPoint("TOPLEFT", 10, pframe.y_offset);
     f_txt:SetText(L["Create new profile as:"]);
     f_txt:SetTextColor(1.0,  1.0,  1.0);
     pframe.new_profile_section.txt1 = f_txt;
@@ -4338,7 +4337,7 @@ local function create_sw_ui_profile_frame(pframe)
         update_profile_frame();
         sc.config.activate_settings();
     end);
-    f:SetPoint("TOPLEFT", 190, pframe.y_offset+4);
+    f:SetPoint("TOPLEFT", rhs_offset, pframe.y_offset+4);
     f:SetText(L["Default preset"]);
     f:SetWidth(200);
     pframe.new_profile_section.button1 = f;
@@ -4346,7 +4345,7 @@ local function create_sw_ui_profile_frame(pframe)
     pframe.y_offset = pframe.y_offset - 25;
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 190, pframe.y_offset);
+    f_txt:SetPoint("TOPLEFT", rhs_offset, pframe.y_offset);
     f_txt:SetText(L["or"]);
     f_txt:SetTextColor(1.0,  1.0,  1.0);
     pframe.new_profile_section.txt2 = f_txt;
@@ -4360,7 +4359,7 @@ local function create_sw_ui_profile_frame(pframe)
         update_profile_frame();
         sc.config.activate_settings();
     end);
-    f:SetPoint("TOPLEFT", 190, pframe.y_offset+4);
+    f:SetPoint("TOPLEFT", rhs_offset, pframe.y_offset+4);
     f:SetText(L["Copy of active profile"]);
     f:SetWidth(200);
     pframe.new_profile_section.button2 = f;
@@ -4419,61 +4418,64 @@ local function create_sw_ui_settings_frame(pframe)
 
     pframe.y_offset = pframe.y_offset - 10;
 
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
-    f_txt:SetText(string.format("%s | %s", L["Localization"], sc.locale));
-    f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
+    if sc.loc.locale_found then
 
-    if #sc.loc.missing_strings > 0 then
-        f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
-        f:SetScript("OnClick", function()
+        f_txt = pframe:CreateFontString(nil, "OVERLAY");
+        f_txt:SetFontObject(GameFontNormal);
+        f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
+        f_txt:SetText(string.format("%s | %s", L["Localization"], sc.locale));
+        f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
 
-            dump_text(
-                "Missing strings need to go into SpellCoda/locale/"..sc.locale..".lua",
-                format_locale_dump(sc.loc.missing_strings)
-            );
+        if #sc.loc.missing_strings > 0 then
+            f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
+            f:SetScript("OnClick", function()
+
+                dump_text(
+                    "Missing strings need to go into SpellCoda/locale/"..sc.locale..".lua",
+                    format_locale_dump(sc.loc.missing_strings)
+                );
+            end);
+
+            f:SetPoint("TOPLEFT", 130, pframe.y_offset+5);
+            f:SetHeight(20);
+            f:SetWidth(170);
+            f:SetText(L["Show missing"]..": "..#sc.loc.missing_strings);
+        end
+
+        if #sc.loc.obsolete_strings > 0 then
+            f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
+            f:SetScript("OnClick", function()
+
+                dump_text(
+                    "Obsolete strings should be removed from SpellCoda/locale/"..sc.locale..".lua",
+                    format_locale_dump(sc.loc.obsolete_strings)
+                );
+            end);
+
+            f:SetPoint("TOPLEFT", 300, pframe.y_offset+5);
+            f:SetHeight(20);
+            f:SetWidth(170);
+            f:SetText(L["Show obsolete"]..": "..#sc.loc.obsolete_strings);
+        end
+
+        pframe.y_offset = pframe.y_offset - 15;
+
+        f = CreateFrame("CheckButton", "__spellcoda_localization_btn", pframe, "ChatConfigCheckButtonTemplate");
+        f:SetPoint("TOPLEFT", pframe, 5, pframe.y_offset);
+        getglobal(f:GetName()..'Text'):SetText(L["Localization (requires /reload)"]);
+
+        -- bypass profile storage for this one, make account wide
+        if __sc_p_acc.localization_use then
+            f:SetChecked(true);
+        else
+            f:SetChecked(false);
+        end
+        f:SetScript("OnClick", function(self)
+            __sc_p_acc.localization_use = self:GetChecked();
         end);
 
-        f:SetPoint("TOPLEFT", 130, pframe.y_offset+5);
-        f:SetHeight(20);
-        f:SetWidth(200);
-        f:SetText(L["Show missing"]..": "..#sc.loc.missing_strings);
+        pframe.y_offset = pframe.y_offset - 25;
     end
-
-    if #sc.loc.obsolete_strings > 0 then
-        f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
-        f:SetScript("OnClick", function()
-
-            dump_text(
-                "Obsolete strings should be removed from SpellCoda/locale/"..sc.locale..".lua",
-                format_locale_dump(sc.loc.obsolete_strings)
-            );
-        end);
-
-        f:SetPoint("TOPLEFT", 370, pframe.y_offset+5);
-        f:SetHeight(20);
-        f:SetWidth(200);
-        f:SetText(L["Show obsolete"]..": "..#sc.loc.obsolete_strings);
-    end
-
-    pframe.y_offset = pframe.y_offset - 15;
-
-    f = CreateFrame("CheckButton", "__spellcoda_localization_btn", pframe, "ChatConfigCheckButtonTemplate");
-    f:SetPoint("TOPLEFT", pframe, 5, pframe.y_offset);
-    getglobal(f:GetName()..'Text'):SetText(L["Localization (requires /reload)"]);
-
-    -- bypass profile storage for this one, make account wide
-    if __sc_p_acc.localization_use then
-        f:SetChecked(true);
-    else
-        f:SetChecked(false);
-    end
-    f:SetScript("OnClick", function(self)
-        __sc_p_acc.localization_use = self:GetChecked();
-    end);
-
-    pframe.y_offset = pframe.y_offset - 25;
 
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
@@ -4691,79 +4693,40 @@ local function create_sw_base_ui()
         end
     );
 
-    create_sw_spell_id_viewer();
-    create_sw_item_id_viewer();
-
     __sc_frame.tabs = {};
 
     local i = 1;
 
     __sc_frame.tabs[i] = CreateFrame("Button", "__sc_frame_tab_button"..i, __sc_frame, "PanelTopTabButtonTemplate");
-    __sc_frame.tabs[i]:SetHeight(25);
-    __sc_frame.tabs[i]:SetText(L["Spells"]);
     __sc_frame.tabs[i]:SetID(1);
     __sc_frame.tabs[i]:SetScript("OnClick", function(self)
         sw_activate_tab(self);
     end);
     __sc_frame.tabs[i].frame_to_open = __sc_frame.spells_frame;
-    PanelTemplates_TabResize(__sc_frame.tabs[i], 0)
 
     i = i + 1;
     __sc_frame.tabs[i] = CreateFrame("Button", "__sc_frame_tab_button"..i, __sc_frame, "PanelTopTabButtonTemplate");
-    __sc_frame.tabs[i]:SetText(L["Tooltip"]);
     __sc_frame.tabs[i].frame_to_open = __sc_frame.tooltip_frame;
 
     i = i + 1;
     __sc_frame.tabs[i] = CreateFrame("Button", "__sc_frame_tab_button"..i, __sc_frame, "PanelTopTabButtonTemplate");
-    __sc_frame.tabs[i]:SetText(L["Overlay"]);
     __sc_frame.tabs[i].frame_to_open = __sc_frame.overlay_frame;
 
     i = i + 1;
     __sc_frame.tabs[i] = CreateFrame("Button", "__sc_frame_tab_button"..i, __sc_frame, "PanelTopTabButtonTemplate");
-    __sc_frame.tabs[i]:SetText(L["Calculator"]);
     __sc_frame.tabs[i].frame_to_open = __sc_frame.calculator_frame;
 
     i = i + 1;
     __sc_frame.tabs[i] = CreateFrame("Button", "__sc_frame_tab_button"..i, __sc_frame, "PanelTopTabButtonTemplate");
-    __sc_frame.tabs[i]:SetText(L["Profile"]);
     __sc_frame.tabs[i].frame_to_open = __sc_frame.profile_frame;
 
     i = i + 1;
     __sc_frame.tabs[i] = CreateFrame("Button", "__sc_frame_tab_button"..i, __sc_frame, "PanelTopTabButtonTemplate");
-    __sc_frame.tabs[i]:SetText(L["Loadout"]);
     __sc_frame.tabs[i].frame_to_open = __sc_frame.loadout_frame;
 
     i = i + 1;
     __sc_frame.tabs[i] = CreateFrame("Button", "__sc_frame_tab_button"..i, __sc_frame, "PanelTopTabButtonTemplate");
-    __sc_frame.tabs[i]:SetText(L["Buffs"]);
     __sc_frame.tabs[i].frame_to_open = __sc_frame.buffs_frame;
-
-    local max_chars_width = 300;
-    local total_tabs_strlen = 0;
-    for k, v in pairs(__sc_frame.tabs) do
-        total_tabs_strlen = total_tabs_strlen + v:GetFontString():GetStringWidth();
-    end
-
-    local x = 5;
-    --local tab_spacing = 33;
-    local tab_spacing = 10;
-    local tab_pad = 0;
-    for k, v in pairs(__sc_frame.tabs) do
-
-        local w = 1.1*v:GetFontString():GetStringWidth() + tab_pad;
-        v:SetPoint("TOPLEFT", x, -25);
-        v:SetWidth(w);
-        print(w);
-        v:SetHeight(25);
-        x = x + w + tab_spacing;
-
-        v:SetScript("OnClick", function(self)
-            sw_activate_tab(self);
-        end);
-        v:SetID(k);
-        PanelTemplates_TabResize(v, 0);
-    end
-    PanelTemplates_SetNumTabs(__sc_frame, i);
 
     i = i + 1;
     -- Set settings cogwheel button
@@ -4794,6 +4757,27 @@ local function create_sw_base_ui()
 end
 
 local function load_sw_ui()
+
+    local x = 5;
+    for k, tab_name in ipairs({L["Spells"], L["Tooltip"], L["Overlay"], L["Calculator"], L["Profile"], L["Loadout"], L["Buffs"]}) do
+        local v = __sc_frame.tabs[k];
+
+        v:SetText(tab_name);
+        PanelTemplates_TabResize(v, -10);
+
+        local w = v:GetWidth();
+        v:SetPoint("TOPLEFT", x, -20);
+        x = x + w;
+
+        v:SetScript("OnClick", function(self)
+            sw_activate_tab(self);
+        end);
+        v:SetID(k);
+    end
+    PanelTemplates_SetNumTabs(__sc_frame, #__sc_frame.tabs);
+
+    create_sw_spell_id_viewer();
+    create_sw_item_id_viewer();
 
     if libstub_data_broker then
         local tooltip_show_fn = function(tooltip)
@@ -4849,7 +4833,6 @@ local function load_sw_ui()
     create_sw_ui_settings_frame(__sc_frame.settings_frame);
     create_sw_ui_profile_frame(__sc_frame.profile_frame);
 
-    sw_activate_tab(__sc_frame.tabs[1]);
     __sc_frame:Hide();
 end
 

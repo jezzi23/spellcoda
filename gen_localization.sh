@@ -2,7 +2,7 @@
 
 OUTPUT_FILE="locale/default.lua"
 
-TEMP_FILE="localstrstmp"
+TEMP_FILE=".localstrstmp"
 
 #  L["..."] patterns in .lua files
 grep -rhoP 'L\["\K[^"]+(?="\])' . --include="*.lua" | sort -u > "$TEMP_FILE"

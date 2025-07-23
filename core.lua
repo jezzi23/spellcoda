@@ -1,5 +1,7 @@
 local _, sc                    = ...;
 
+local L                         = sc.L;
+
 local spells                    = sc.spells;
 local spell_flags               = sc.spell_flags;
 
@@ -230,14 +232,14 @@ local event_dispatch = {
         if arg == "SpellCoda" then
             load_config();
             load_localization();
+            sc.overlay.init_label_handler();
+            sc.overlay.init_ccfs();
             core.active_spec = GetActiveTalentGroup();
             set_active_settings();
             set_active_loadout(__sc_p_char.active_loadout);
             load_sw_ui();
-            sc.overlay.init_ccfs();
             activate_settings();
             update_profile_frame();
-            --activate_loadout_config();
             update_loadout_frame(); -- activates activate_loadout_config()
         end
     end,
@@ -287,33 +289,31 @@ local event_dispatch = {
             print(core.addon_name..": "..L["detected client and addon data mismatch for over 2 weeks. Consider checking for an update."]);
         end
 
-        -- temporary popup for first time using SpellCoda,
-        -- delete this at some point including special case in config on key "swc_to_sc_transition_popup_shown"
-        if not __sc_p_acc.swc_to_sc_transition_popup_shown then
-            local frame = CreateFrame("Frame", "__sc__transition_popup", UIParent, "DialogBoxFrame")
-            frame:SetSize(400, 200);
+        if not __sc_p_acc.localization_notified and sc.loc.locale_found then
+            local frame = CreateFrame("Frame", "__sc__localization_notified", UIParent, "DialogBoxFrame")
+            frame:SetSize(470, 240);
             frame:SetPoint("CENTER", 0, 100);
 
             local icon = frame:CreateTexture(nil, "ARTWORK");
-            icon:SetSize(32, 32);
-            icon:SetPoint("TOPLEFT", 12, -12);
+            icon:SetSize(24, 24);
+            icon:SetPoint("TOPLEFT", 0, 0);
             icon:SetTexture("Interface\\Icons\\spell_fire_elementaldevastation");
 
             local text = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight");
-            text:SetPoint("TOPLEFT", 25, -60);
+            text:SetPoint("TOPLEFT", 25, -30);
             text:SetPoint("RIGHT", -10, 0);
             text:SetJustifyH("LEFT");
             text:SetJustifyV("TOP");
-            text:SetText("|cFFFF0000StatWeightsClassic|r has been largely overhauled and renamed\nto |cFFFF0000SpellCoda|r. All classes are now implemented.\n\nInteract with |cFFFF0000SpellCoda|r by typing:\n\n   |cFF00FF00/spellcoda|r");
+            text:SetText("SpellCoda has localization support but is turned off by default.\n\nStrings have been translated using an AI LLM model and may be terribly wrong.\n\nIf you are interested in improving some string translations you can make a pull request on GitHub or upload a modified localization lua file on Discord.\n\nTurn on localization in settings:\n\n            |cFF00FF00/spellcoda config|r");
 
-            __sc__transition_popupButton:SetSize(180, 24);
-            __sc__transition_popupButton:SetPoint("BOTTOM", 0, 20);
-            __sc__transition_popupButton:SetText("Okay! Don't show again");
-            __sc__transition_popupButton:SetNormalFontObject("GameFontNormal");
-            __sc__transition_popupButton:SetDisabledFontObject("GameFontDisable");
-            __sc__transition_popupButton:SetHighlightFontObject("GameFontHighlight");
-            __sc__transition_popupButton:SetScript("OnClick", function()
-                __sc_p_acc.swc_to_sc_transition_popup_shown = true;
+            __sc__localization_notifiedButton:SetSize(180, 24);
+            __sc__localization_notifiedButton:SetPoint("BOTTOM", 0, 20);
+            __sc__localization_notifiedButton:SetText("Okay! Don't show again");
+            __sc__localization_notifiedButton:SetNormalFontObject("GameFontNormal");
+            __sc__localization_notifiedButton:SetDisabledFontObject("GameFontDisable");
+            __sc__localization_notifiedButton:SetHighlightFontObject("GameFontHighlight");
+            __sc__localization_notifiedButton:SetScript("OnClick", function()
+                __sc_p_acc.localization_notified = true;
                 frame:Hide();
             end)
             frame:Show()
