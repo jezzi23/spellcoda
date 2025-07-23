@@ -2017,21 +2017,11 @@ local function doing_raid_update()
     local in_instance, instance_type = IsInInstance();
     sc.core.doing_raid = in_instance and (instance_type == "pvp" or (IsInRaid() and instance_type == "raid"));
     local should_mute_overlay = config.settings.overlay_disable_in_raid and sc.core.doing_raid;
-    if sc.core.doing_raid then
-        print("Doing raid content");
-    else
-        print("Not doing raid content");
-    end
-    if sc.core.mute_overlay ~= should_mute_overlay then
-        print("Overlay mute change");
-    end
     if not sc.core.mute_overlay and should_mute_overlay then
-        print("Muting overlays");
         sc.overlay.clear_overlays();
         sc.core.old_ranks_checks_needed = true;
     end
     sc.core.mute_overlay = should_mute_overlay;
-    print("---");
 end
 
 local function create_sw_ui_overlay_frame(pframe)
