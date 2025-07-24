@@ -8575,7 +8575,7 @@ local items = {
 	[13701] = {23483,},
 	[1254] = {23480,},
 };
-for k, v in pairs(items) do sc.items[k] = v; end
+for k, v in pairs(items) do if sc.items[k] then for _, vv in ipairs(v) do sc.items[k][#sc.items[k] + 1] = vv; end else sc.items[k] = v; end end
 local item_effects = {
 	[37386] = {
 			{"by_school", "sp_dmg_flat", 48, {1,2,3,4,5,6,7,}, 2, 1},

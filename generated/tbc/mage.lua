@@ -7879,7 +7879,7 @@ local items = {
 	[16487] = {23037,},
 	[22870] = {23037,},
 };
-for k, v in pairs(items) do sc.items[k] = v; end
+for k, v in pairs(items) do if sc.items[k] then for _, vv in ipairs(v) do sc.items[k][#sc.items[k] + 1] = vv; end else sc.items[k] = v; end end
 local item_effects = {
 	[23037] = {
 			{"aura_pts_flat", -1, 2.85, {32932,31635,}, 0, 0},
