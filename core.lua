@@ -1,13 +1,18 @@
 local _, sc                    = ...;
 
+local L                         = sc.L;
+
 local spells                    = sc.spells;
 local spell_flags               = sc.spell_flags;
+
+local load_localization         = sc.loc.load_localization;
 
 local load_sw_ui                = sc.ui.load_sw_ui;
 local create_sw_base_ui         = sc.ui.create_sw_base_ui;
 local sw_activate_tab           = sc.ui.sw_activate_tab;
 local update_profile_frame      = sc.ui.update_profile_frame;
 local update_loadout_frame      = sc.ui.update_loadout_frame;
+local doing_raid_update         = sc.ui.doing_raid_update;
 
 local config                    = sc.config;
 local load_config               = sc.config.load_config;
@@ -46,6 +51,8 @@ core.sw_addon_loaded            = false;
 sc.sequence_counter             = 0;
 core.addon_running_time         = 0;
 core.active_spec                = 1;
+core.doing_raid                 = false;
+core.mute_overlay               = false;
 
 core.talents_update_needed      = true;
 core.equipment_update_needed    = true;
@@ -224,14 +231,15 @@ local event_dispatch = {
     ["ADDON_LOADED"] = function(_, arg)
         if arg == "SpellCoda" then
             load_config();
+            load_localization();
+            sc.overlay.init_label_handler();
+            sc.overlay.init_ccfs();
             core.active_spec = GetActiveTalentGroup();
             set_active_settings();
             set_active_loadout(__sc_p_char.active_loadout);
             load_sw_ui();
-            sc.overlay.init_ccfs();
             activate_settings();
             update_profile_frame();
-            --activate_loadout_config();
             update_loadout_frame(); -- activates activate_loadout_config()
         end
     end,
@@ -278,36 +286,34 @@ local event_dispatch = {
         if config.settings.general_version_mismatch_notify and
             generated_data_is_outdated(sc.client_version_loaded, sc.client_version_src) and
             client_age_days() > version_warning_build_threshold_days then
-            print(core.addon_name..": detected client and addon data mismatch for over 2 weeks. Consider checking for an update.");
+            print(core.addon_name..": "..L["detected client and addon data mismatch for over 2 weeks. Consider checking for an update."]);
         end
 
-        -- temporary popup for first time using SpellCoda,
-        -- delete this at some point including special case in config on key "swc_to_sc_transition_popup_shown"
-        if not __sc_p_acc.swc_to_sc_transition_popup_shown then
-            local frame = CreateFrame("Frame", "__sc__transition_popup", UIParent, "DialogBoxFrame")
-            frame:SetSize(400, 200);
+        if not __sc_p_acc.localization_notified and sc.loc.locale_found then
+            local frame = CreateFrame("Frame", "__sc__localization_notified", UIParent, "DialogBoxFrame")
+            frame:SetSize(470, 240);
             frame:SetPoint("CENTER", 0, 100);
 
             local icon = frame:CreateTexture(nil, "ARTWORK");
-            icon:SetSize(32, 32);
-            icon:SetPoint("TOPLEFT", 12, -12);
+            icon:SetSize(24, 24);
+            icon:SetPoint("TOPLEFT", 0, 0);
             icon:SetTexture("Interface\\Icons\\spell_fire_elementaldevastation");
 
             local text = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight");
-            text:SetPoint("TOPLEFT", 25, -60);
+            text:SetPoint("TOPLEFT", 25, -30);
             text:SetPoint("RIGHT", -10, 0);
             text:SetJustifyH("LEFT");
             text:SetJustifyV("TOP");
-            text:SetText("|cFFFF0000StatWeightsClassic|r has been largely overhauled and renamed\nto |cFFFF0000SpellCoda|r. All classes are now implemented.\n\nInteract with |cFFFF0000SpellCoda|r by typing:\n\n   |cFF00FF00/spellcoda|r");
+            text:SetText("SpellCoda has localization support but is turned off by default.\n\nStrings have been translated using an AI LLM model and may be terribly wrong.\n\nIf you are interested in improving some string translations you can make a pull request on GitHub or upload a modified localization lua file on Discord.\n\nTurn on localization in settings:\n\n            |cFF00FF00/spellcoda config|r");
 
-            __sc__transition_popupButton:SetSize(180, 24);
-            __sc__transition_popupButton:SetPoint("BOTTOM", 0, 20);
-            __sc__transition_popupButton:SetText("Okay! Don't show again");
-            __sc__transition_popupButton:SetNormalFontObject("GameFontNormal");
-            __sc__transition_popupButton:SetDisabledFontObject("GameFontDisable");
-            __sc__transition_popupButton:SetHighlightFontObject("GameFontHighlight");
-            __sc__transition_popupButton:SetScript("OnClick", function()
-                __sc_p_acc.swc_to_sc_transition_popup_shown = true;
+            __sc__localization_notifiedButton:SetSize(180, 24);
+            __sc__localization_notifiedButton:SetPoint("BOTTOM", 0, 20);
+            __sc__localization_notifiedButton:SetText("Okay! Don't show again");
+            __sc__localization_notifiedButton:SetNormalFontObject("GameFontNormal");
+            __sc__localization_notifiedButton:SetDisabledFontObject("GameFontDisable");
+            __sc__localization_notifiedButton:SetHighlightFontObject("GameFontHighlight");
+            __sc__localization_notifiedButton:SetScript("OnClick", function()
+                __sc_p_acc.localization_notified = true;
                 frame:Hide();
             end)
             frame:Show()
@@ -416,6 +422,12 @@ local event_dispatch = {
         -- Currently only registered when in Hardcore mode
         -- Hide addon UI when in combat
         __sc_frame:Hide();
+    end,
+    ["PLAYER_ENTERING_WORLD"] = function()
+        doing_raid_update();
+    end,
+    ["GROUP_ROSTER_UPDATE"] = function()
+        doing_raid_update();
     end,
 };
 
@@ -564,7 +576,7 @@ local function command(arg)
         sw_activate_tab(__sc_frame.tabs[6]);
     elseif arg == "buffs" or arg == "auras" then
         sw_activate_tab(__sc_frame.tabs[7]);
-    elseif arg == "settings" or arg == "opt" or arg == "options" or arg == "conf" or arg == "configure" then
+    elseif arg == "settings" or arg == "opt" or arg == "options" or arg == "conf" or arg == "config" or arg == "configure" then
         sw_activate_tab(__sc_frame.tabs[8]);
     elseif string.find(arg, "force set") then
         local substrs = {};

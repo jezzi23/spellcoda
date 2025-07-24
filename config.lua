@@ -80,6 +80,7 @@ local default_settings     = {
     overlay_display_effect_until_oom                            = false,
     overlay_display_time_until_oom                              = false,
 
+    overlay_disable_in_raid                                     = false,
     overlay_disable                                             = false,
     overlay_old_rank                                            = false,
     overlay_old_rank_limit_to_known                             = true,
@@ -325,10 +326,8 @@ local function load_persistent_data(persistent_data, template_data)
     -- purge obsolete settings
     for k, v in pairs(persistent_data) do
 
-        if k ~= "swc_to_sc_transition_popup_shown" then -- TEMPORARY: delete this when popup is removed later on
-            if template_data[k] == nil then
-                persistent_data[k] = nil;
-            end
+        if template_data[k] == nil then
+            persistent_data[k] = nil;
         end
     end
     -- load defaults for new settings
@@ -350,7 +349,9 @@ local function default_p_acc()
     return {
         profiles = {
             ["Primary"] = default_profile()
-        }
+        },
+        localization_use = false,
+        localization_notified = false,
     };
 end
 
