@@ -1925,9 +1925,32 @@ local fonts = {
 };
 
 local font_dropdowns = {};
-for _, font_path in ipairs(fonts) do
-    font_dropdowns[#font_dropdowns + 1] = {font_path, "OUTLINE"};
-    font_dropdowns[#font_dropdowns + 1] = {font_path, "THICKOUTLINE"};
+
+local external_fonts_found = {};
+
+local function get_font(font_id)
+    -- font_id's are typically paths but fonts from LibSharedMedia identified from name
+    return external_fonts_found[font_id] or font_id;
+end
+
+local function fonts_setup()
+
+    local lsm = LibStub and LibStub("LibSharedMedia-3.0", true);
+    if lsm then
+        local external_fonts = lsm:List("font");
+        local external_fonts_max = 18;
+        local external_fonts_num = math.min(external_fonts_max, #external_fonts);
+        for _, font_name in ipairs(external_fonts) do
+            external_fonts_found[font_name] = lsm:Fetch("font", font_name);
+        end
+        for i = 1, external_fonts_num do
+            fonts[#fonts+1] = external_fonts[i];
+        end
+    end
+    for _, font_path in ipairs(fonts) do
+        font_dropdowns[#font_dropdowns + 1] = { font_path, "OUTLINE" };
+        font_dropdowns[#font_dropdowns + 1] = { font_path, "THICKOUTLINE" };
+    end
 end
 
 local function create_font_dropdown(parent_frame, dropdown_name, font_config_key, callback_fn)
@@ -1937,11 +1960,11 @@ local function create_font_dropdown(parent_frame, dropdown_name, font_config_key
 
     dropdown_frame.init_func = function()
         libDD:UIDropDownMenu_Initialize(dropdown_frame, function()
-
+            local using_external_font = true;
             for k, v in pairs(font_dropdowns) do
-                local txt = (v[1]:match("([^\\]+)$") or v[1]).."   0123456789  " .. v[2];
-                local font_object = CreateFont("__sc_font_dropdown_font_"..k);
-                font_object:SetFont(v[1], 12, v[2]);
+                local txt = (v[1]:match("([^\\]+)$") or v[1]) .. "   0123456789  " .. v[2];
+                local font_object = CreateFont("__sc_font_dropdown_font_" .. k);
+                font_object:SetFont(get_font(v[1]), 12, v[2]);
 
                 local btn = {
                     text = txt,
@@ -1953,16 +1976,36 @@ local function create_font_dropdown(parent_frame, dropdown_name, font_config_key
                         config.settings[font_config_key][1] = v[1];
                         config.settings[font_config_key][2] = v[2];
                         callback_fn();
-                    end;
+                    end,
                 };
 
                 if config.settings[font_config_key][1] == v[1] and config.settings[font_config_key][2] == v[2] then
+                    using_external_font = false;
                     libDD:UIDropDownMenu_SetText(dropdown_frame, txt);
                     btn.checked = true;
                     callback_fn();
                 end
-
                 libDD:UIDropDownMenu_AddButton(btn);
+
+            end
+            if using_external_font then
+
+                -- to show font used not in addon fonts list but either
+                --  1) set manually through SpellCoda SavedVariables
+                --  or
+                --  2) originates from LibSharedMedia but path no longer existing
+                --
+                --  There appears to be no way to safely test for bad font paths
+
+                if not config.settings[font_config_key][1]:find("\\") and not external_fonts_found[config.settings[font_config_key][1]] then
+                    -- font id should have been a name key into external fonts but no longer exists
+                    config.settings[font_config_key][1] = config.default_settings[font_config_key][1];
+                    config.settings[font_config_key][2] = config.default_settings[font_config_key][2];
+                end
+                local txt = (config.settings[font_config_key][1]:match(
+                    "([^\\]+)$") or v[1]) .. "   0123456789  " .. config.settings[font_config_key][2];
+                libDD:UIDropDownMenu_SetText(dropdown_frame, txt);
+
             end
         end);
 
@@ -1970,7 +2013,6 @@ local function create_font_dropdown(parent_frame, dropdown_name, font_config_key
         libDD:UIDropDownMenu_SetWidth(dropdown_frame, 200);
         libDD:UIDropDownMenu_SetButtonWidth(dropdown_frame, 224);
         libDD:UIDropDownMenu_JustifyText(dropdown_frame, "LEFT");
-
     end;
 
     return dropdown_frame;
@@ -4824,6 +4866,8 @@ local function load_sw_ui()
     create_sw_ui_profile_frame(__sc_frame.profile_frame);
 
     __sc_frame:Hide();
+
+    fonts_setup();
 end
 
 local function add_spell_book_button()
@@ -4934,6 +4978,7 @@ ui.update_spells_frame                  = update_spells_frame;
 ui.post_login_load                      = post_login_load;
 ui.forced_buffs_lname_to_id             = forced_buffs_lname_to_id;
 ui.doing_raid_update                    = doing_raid_update;
+ui.get_font                             = get_font;
 
 sc.ui = ui;
 
