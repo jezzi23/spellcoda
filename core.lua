@@ -588,8 +588,8 @@ local function command(arg)
         if set_id and num_pieces then
             core.equipment_update_needed = true;
             sc.equipment.force_item_sets[set_id] = num_pieces;
+            print(string.format("Forcing item set %d to have %d pieces", set_id, num_pieces));
         end
-        print(string.format("Forcing item set %d to have %d pieces", set_id, num_pieces));
     elseif string.find(arg, "force item") then
         local substrs = {};
         for s in arg:gmatch("%S+") do
@@ -599,8 +599,8 @@ local function command(arg)
         if item_id then
             core.equipment_update_needed = true;
             sc.equipment.force_items[item_id] = item_id;
+            print(string.format("Forcing item %d", item_id));
         end
-        print(string.format("Forcing item %d", item_id));
     elseif arg == "reset" then
         core.use_char_defaults = 1;
         core.use_acc_defaults = 1;
