@@ -106,21 +106,24 @@ local function client_age_days()
     return diff_days;
 end
 
-local cc_spell_id        = 0;
-local cc_noexpire        = false;
-local cc_channel         = true;
-local cc_expire_timer    = 0;
-local cc_waiting_on_anim = false;
+local cc_spell_id           = 0;
+local cc_noexpire           = false;
+local cc_channel            = true;
+local cc_expire_timer       = 0;
+local cc_waiting_on_anim    = false;
+local cc_enqueued_spell_id  = 0;
 
 local function cc_enqueue(spell_id)
 
-    if sc.overlay.cc_f1.animating and not config.settings.overlay_cc_transition_nocd then
+    if sc.overlay.cc_f1.icon_frame.animating and not config.settings.overlay_cc_transition_nocd then
         cc_waiting_on_anim = true;
+        cc_enqueued_spell_id = spell_id;
     else
+        cc_spell_id = spell_id;
         sc.overlay.cc_new_spell(spell_id);
         cc_waiting_on_anim = false;
+        cc_enqueued_spell_id = 0;
     end
-    cc_spell_id = spell_id;
 end
 
 local function set_cc_spell(spell_id)
@@ -133,7 +136,6 @@ local function set_cc_spell(spell_id)
         if cc_spell_id ~= spell_id then
             cc_enqueue(spell_id);
         end
-        cc_spell_id = spell_id;
     end
 end
 
@@ -171,7 +173,7 @@ local function spell_tracking(dt)
     end
 
     if cc_waiting_on_anim then
-        cc_enqueue(cc_spell_id);
+        cc_enqueue(cc_enqueued_spell_id);
     end
 end
 
