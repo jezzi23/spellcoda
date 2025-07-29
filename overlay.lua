@@ -1296,7 +1296,7 @@ cc_new_spell = function(spell_id)
         not ccf_parent.config_mode then
         return;
     end
-    if config.settings.overlay_disable or sc.core.mute_overlay then
+    if config.settings.overlay_disable or sc.core.mute_overlay or not effects then
         loadout, _, effects = update_loadout_and_effects();
     end
 

@@ -12,7 +12,7 @@ local create_sw_base_ui         = sc.ui.create_sw_base_ui;
 local sw_activate_tab           = sc.ui.sw_activate_tab;
 local update_profile_frame      = sc.ui.update_profile_frame;
 local update_loadout_frame      = sc.ui.update_loadout_frame;
-local doing_raid_update         = sc.ui.doing_raid_update;
+local locale_warning_popup      = sc.ui.locale_warning_popup;
 
 local config                    = sc.config;
 local load_config               = sc.config.load_config;
@@ -20,7 +20,6 @@ local save_config               = sc.config.save_config;
 local set_active_settings       = sc.config.set_active_settings;
 local set_active_loadout        = sc.config.set_active_loadout;
 local activate_settings         = sc.config.activate_settings;
-local activate_loadout_config   = sc.config.activate_loadout_config;
 
 local reassign_overlay_icon     = sc.overlay.reassign_overlay_icon;
 local update_overlay            = sc.overlay.update_overlay;
@@ -38,7 +37,7 @@ sc.core                         = core;
 core.addon_name                 = "SpellCoda";
 
 local version_major             = 0;
-local version_minor             = 4;
+local version_minor             = 5;
 local version_build             = sc.addon_build_id;
 
 core.version_id                 = version_build + version_minor*1000 + version_major*1000000;
@@ -177,6 +176,19 @@ local function spell_tracking(dt)
     end
 end
 
+local function doing_raid_update()
+    local in_instance, instance_type = IsInInstance();
+    sc.core.doing_raid = in_instance and (instance_type == "pvp" or (IsInRaid() and instance_type == "raid"));
+    local should_mute_overlay = config.settings.overlay_disable_in_raid and sc.core.doing_raid;
+    if not sc.core.mute_overlay and should_mute_overlay then
+        sc.overlay.clear_overlays();
+        sc.core.old_ranks_checks_needed = true;
+    end
+    sc.core.mute_overlay = should_mute_overlay;
+end
+core.doing_raid_update = doing_raid_update;
+
+
 local event_dispatch = {
     ["UNIT_SPELLCAST_SUCCEEDED"] = function(self, caster, _, spell_id)
         if caster == "player" then
@@ -292,33 +304,7 @@ local event_dispatch = {
         end
 
         if not __sc_p_acc.localization_notified and sc.loc.locale_found then
-            local frame = CreateFrame("Frame", "__sc__localization_notified", UIParent, "DialogBoxFrame")
-            frame:SetSize(470, 240);
-            frame:SetPoint("CENTER", 0, 100);
-
-            local icon = frame:CreateTexture(nil, "ARTWORK");
-            icon:SetSize(24, 24);
-            icon:SetPoint("TOPLEFT", 0, 0);
-            icon:SetTexture("Interface\\Icons\\spell_fire_elementaldevastation");
-
-            local text = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight");
-            text:SetPoint("TOPLEFT", 25, -30);
-            text:SetPoint("RIGHT", -10, 0);
-            text:SetJustifyH("LEFT");
-            text:SetJustifyV("TOP");
-            text:SetText("SpellCoda has localization support but is turned off by default.\n\nStrings have been translated using an AI LLM model and may be terribly wrong.\n\nIf you are interested in improving some string translations you can make a pull request on GitHub or upload a modified localization lua file on Discord.\n\nTurn on localization in settings:\n\n            |cFF00FF00/spellcoda config|r");
-
-            __sc__localization_notifiedButton:SetSize(180, 24);
-            __sc__localization_notifiedButton:SetPoint("BOTTOM", 0, 20);
-            __sc__localization_notifiedButton:SetText("Okay! Don't show again");
-            __sc__localization_notifiedButton:SetNormalFontObject("GameFontNormal");
-            __sc__localization_notifiedButton:SetDisabledFontObject("GameFontDisable");
-            __sc__localization_notifiedButton:SetHighlightFontObject("GameFontHighlight");
-            __sc__localization_notifiedButton:SetScript("OnClick", function()
-                __sc_p_acc.localization_notified = true;
-                frame:Hide();
-            end)
-            frame:Show()
+            locale_warning_popup();
         end
     end,
     ["ACTIONBAR_SLOT_CHANGED"] = function(_, slot)

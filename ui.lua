@@ -2055,17 +2055,6 @@ local overlay_components_selection_display = {
 };
 
 
-local function doing_raid_update()
-    local in_instance, instance_type = IsInInstance();
-    sc.core.doing_raid = in_instance and (instance_type == "pvp" or (IsInRaid() and instance_type == "raid"));
-    local should_mute_overlay = config.settings.overlay_disable_in_raid and sc.core.doing_raid;
-    if not sc.core.mute_overlay and should_mute_overlay then
-        sc.overlay.clear_overlays();
-        sc.core.old_ranks_checks_needed = true;
-    end
-    sc.core.mute_overlay = should_mute_overlay;
-end
-
 local function create_sw_ui_overlay_frame(pframe)
 
     local f, f_txt;
@@ -2078,7 +2067,7 @@ local function create_sw_ui_overlay_frame(pframe)
             txt = L["Disable all overlays in raid instances"],
             tooltip = L["Eliminates dynamic overlay calculations making CPU usage negligible"],
             func = function()
-                doing_raid_update();
+                sc.core.doing_raid_update();
             end
         },
     }, pframe, 1);
@@ -4826,6 +4815,7 @@ local function load_sw_ui()
             tooltip:AddLine("    "..sc.client_name_src.." "..sc.client_version_src);
             tooltip:AddLine("|cFF9CD6DE"..L["Current client build"]..":|r "..sc.client_version_loaded);
             tooltip:AddLine("|cFF9CD6DE"..L["Factory reset (reloads UI)"]..":|r /sc reset");
+            tooltip:AddLine("https://discord.gg/9ATBkzRQ74");
             tooltip:AddLine("https://www.curseforge.com/wow/addons/spellcoda");
         end;
 
@@ -4957,6 +4947,36 @@ local function add_to_options()
     Settings.RegisterAddOnCategory(category)
 end
 
+local function locale_warning_popup()
+            local frame = CreateFrame("Frame", "__sc__localization_notified", UIParent, "DialogBoxFrame")
+            frame:SetSize(470, 240);
+            frame:SetPoint("CENTER", 0, 100);
+
+            local icon = frame:CreateTexture(nil, "ARTWORK");
+            icon:SetSize(24, 24);
+            icon:SetPoint("TOPLEFT", 0, 0);
+            icon:SetTexture("Interface\\Icons\\spell_fire_elementaldevastation");
+
+            local text = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight");
+            text:SetPoint("TOPLEFT", 25, -30);
+            text:SetPoint("RIGHT", -10, 0);
+            text:SetJustifyH("LEFT");
+            text:SetJustifyV("TOP");
+            text:SetText("SpellCoda has localization support but is turned off by default.\n\nStrings have been translated using an AI LLM model and may be terribly wrong.\n\nIf you are interested in improving some string translations you can make a pull request on GitHub or upload a modified localization lua file on Discord.\n\nTurn on localization in settings:\n\n            |cFF00FF00/spellcoda config|r");
+
+            __sc__localization_notifiedButton:SetSize(180, 24);
+            __sc__localization_notifiedButton:SetPoint("BOTTOM", 0, 20);
+            __sc__localization_notifiedButton:SetText("Okay! Don't show again");
+            __sc__localization_notifiedButton:SetNormalFontObject("GameFontNormal");
+            __sc__localization_notifiedButton:SetDisabledFontObject("GameFontDisable");
+            __sc__localization_notifiedButton:SetHighlightFontObject("GameFontHighlight");
+            __sc__localization_notifiedButton:SetScript("OnClick", function()
+                __sc_p_acc.localization_notified = true;
+                frame:Hide();
+            end)
+            frame:Show()
+end
+
 local function post_login_load()
     -- some things must be done after PLAYER_LOGIN event
     add_spell_book_button();
@@ -4977,8 +4997,8 @@ ui.update_loadout_frame                 = update_loadout_frame;
 ui.update_spells_frame                  = update_spells_frame;
 ui.post_login_load                      = post_login_load;
 ui.forced_buffs_lname_to_id             = forced_buffs_lname_to_id;
-ui.doing_raid_update                    = doing_raid_update;
 ui.get_font                             = get_font;
+ui.locale_warning_popup                 = locale_warning_popup;
 
 sc.ui = ui;
 
