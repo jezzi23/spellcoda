@@ -516,8 +516,10 @@ local function stats_sp(bid, comp, spell, loadout, effects)
                 (effects.by_school.sp_dmg_flat[comp.school1] - effects.by_school.sp_dmg_flat[schools.physical]);
             i = i + 1;
         end
-        sp = sp_school + (effects.ability.sp_flat[bid] or 0);
+        sp = sp_school;
     end
+
+    sp = sp + (effects.ability.sp_flat[bid] or 0);
 
     return sp;
 end

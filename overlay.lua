@@ -60,14 +60,16 @@ end
 
 local function overlay_frames_config(overlay_frames)
 
+    local font = sc.ui.get_font(config.settings.overlay_font[1]);
+
     overlay_frames[1]:SetPoint("TOP", config.settings.overlay_top_x, config.settings.overlay_top_y);
-    overlay_frames[1]:SetFont(config.settings.overlay_font[1], config.settings.overlay_top_fsize, config.settings.overlay_font[2]);
+    overlay_frames[1]:SetFont(font, config.settings.overlay_top_fsize, config.settings.overlay_font[2]);
 
     overlay_frames[2]:SetPoint("CENTER", config.settings.overlay_center_x, config.settings.overlay_center_y);
-    overlay_frames[2]:SetFont(config.settings.overlay_font[1], config.settings.overlay_center_fsize, config.settings.overlay_font[2]);
+    overlay_frames[2]:SetFont(font, config.settings.overlay_center_fsize, config.settings.overlay_font[2]);
 
     overlay_frames[3]:SetPoint("BOTTOM", config.settings.overlay_bottom_x, config.settings.overlay_bottom_y);
-    overlay_frames[3]:SetFont(config.settings.overlay_font[1], config.settings.overlay_bottom_fsize, config.settings.overlay_font[2]);
+    overlay_frames[3]:SetFont(font, config.settings.overlay_bottom_fsize, config.settings.overlay_font[2]);
 end
 
 local function init_frame_overlay(frame_info)
@@ -181,6 +183,7 @@ local function overlay_reconfig()
         end
     end
 end
+
 local function clear_overlays()
 
     for _, v in pairs(action_id_frames) do
@@ -1193,10 +1196,12 @@ local function ccf_anim_reconfig()
 end
 
 local function ccf_label_reconfig(label_id)
+
+    local font = sc.ui.get_font(config.settings.overlay_cc_font[1]);
     for _, v in pairs(ccfs) do
         local label = v.labels[label_id];
         label:SetFont(
-            config.settings.overlay_cc_font[1],
+            font,
             config.settings["overlay_cc_"..label_id.."_fsize"],
             config.settings.overlay_cc_font[2]
         );
@@ -1291,7 +1296,7 @@ cc_new_spell = function(spell_id)
         not ccf_parent.config_mode then
         return;
     end
-    if config.settings.overlay_disable or sc.core.mute_overlay then
+    if config.settings.overlay_disable or sc.core.mute_overlay or not effects then
         loadout, _, effects = update_loadout_and_effects();
     end
 
