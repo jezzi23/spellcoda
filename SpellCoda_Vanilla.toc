@@ -1,4 +1,4 @@
-## Interface: 11507
+## Interface: 11508
 ## Title: SpellCoda
 ## Notes: All things Spells!
 ## Notes-enUS: All things Spells!
