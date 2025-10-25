@@ -4815,7 +4815,7 @@ local function load_sw_ui()
             tooltip:AddLine("    "..sc.client_name_src.." "..sc.client_version_src);
             tooltip:AddLine("|cFF9CD6DE"..L["Current client build"]..":|r "..sc.client_version_loaded);
             tooltip:AddLine("|cFF9CD6DE"..L["Factory reset (reloads UI)"]..":|r /sc reset");
-            tooltip:AddLine("https://discord.gg/9ATBkzRQ74");
+            --tooltip:AddLine("https://discord.gg/9ATBkzRQ74");
             tooltip:AddLine("https://www.curseforge.com/wow/addons/spellcoda");
         end;
 
