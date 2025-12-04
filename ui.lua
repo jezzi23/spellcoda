@@ -1889,6 +1889,11 @@ local function create_sw_ui_tooltip_frame(pframe)
             txt = L["Show skill levels for weapons"],
         },
         {
+            id = "tooltip_item_diff_debug",
+            txt = L["Show stat changes"],
+            tooltip = "Intended for debugging."
+        },
+        {
             id = "tooltip_item_ignore_unequippable",
             txt = L["Ignore unequippable by class"],
         },
@@ -4701,7 +4706,10 @@ local function create_sw_base_ui()
     for k, _ in pairs(sc.core.event_dispatch) do
         if not sc.core.event_dispatch_client_exceptions[k] or
                 sc.core.event_dispatch_client_exceptions[k] == sc.expansion then
-            __sc_frame:RegisterEvent(k);
+            local ok, err = pcall(function() __sc_frame:RegisterEvent(k) end);
+            if sc.core.__sw__debug__ and not ok then
+                print("DEBUG: Event does not exist:", k);
+            end
         end
     end
 

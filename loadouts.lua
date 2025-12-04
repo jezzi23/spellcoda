@@ -1,5 +1,7 @@
 local _, sc = ...;
 
+local L                                 = sc.L;
+
 local attr                              = sc.attr;
 local classes                           = sc.classes;
 local powers                            = sc.powers;
@@ -39,9 +41,6 @@ local loadout_numbers = {
     "flags",
     "lvl",
     "target_lvl",
-    "haste_rating",
-    "crit_rating",
-    "hit_rating",
     "phys_hit",
     "spell_dmg",
     "healing_power",
@@ -77,6 +76,17 @@ local loadout_numbers = {
     "target_defense",
     "target_creature_mask",
     "target_res",
+
+    "spell_haste_rating",
+    "melee_haste_rating",
+    "ranged_haste_rating",
+    "spell_hit_rating",
+    "melee_hit_rating",
+    "ranged_hit_rating",
+    "spell_crit_rating",
+    "melee_crit_rating",
+    "ranged_crit_rating",
+    "expertise_rating",
 };
 
 local loadout_tables = {
@@ -273,18 +283,25 @@ local effects_additive = {
         "phys_dmg_flat",
         "ap_flat",
         "rap_flat",
-        "cast_haste",
         "cost_mod",
         "phys_hit",
         "phys_crit",
         "phys_crit_forced",
         "offhand_mod",
         "extra_hits_flat",
-        "haste_rating",
-        "crit_rating",
-        "hit_rating",
         "skill",
         "class_misc",
+
+        "spell_haste_rating_flat",
+        "melee_haste_rating_flat",
+        "ranged_haste_rating_flat",
+        "spell_hit_rating_flat",
+        "melee_hit_rating_flat",
+        "ranged_hit_rating_flat",
+        "spell_crit_rating_flat",
+        "melee_crit_rating_flat",
+        "ranged_crit_rating_flat",
+        "expertise_rating_flat",
 
         "wpn_subclass_mh",
         "wpn_subclass_oh",
@@ -429,7 +446,7 @@ local function cpy_effects(dst, src)
         end
     end
 
-   dst.finalized = src.finalized;
+    dst.finalized = src.finalized;
 end
 
 local function zero_effects(effects)
@@ -497,7 +514,6 @@ local function effects_add(dst, src)
         print("FAILURE: Adding effects with finalized");
         --print ("\nCall stack: \n" .. debugstack(2, 3, 2));
     end
-
 end
 
 local function effects_zero_diff()
@@ -512,6 +528,7 @@ local function effects_zero_diff()
         hit_rating = 0,
         haste_rating = 0,
         crit_rating = 0,
+        expertise_rating = 0,
         spell_pen = 0,
 
         weapon_skill = 0,
@@ -585,9 +602,16 @@ local function effects_add_diff(effects, diff)
 
     effects.raw.mp5_flat = effects.raw.mp5_flat + diff.mp5;
 
-    effects.raw.haste_rating = effects.raw.haste_rating + diff.haste_rating;
-    effects.raw.crit_rating = effects.raw.crit_rating + diff.crit_rating;
-    effects.raw.hit_rating = effects.raw.hit_rating + diff.hit_rating;
+    effects.raw.spell_haste_rating_flat = effects.raw.spell_haste_rating_flat + diff.haste_rating;
+    effects.raw.melee_haste_rating_flat = effects.raw.melee_haste_rating_flat + diff.haste_rating;
+    effects.raw.ranged_haste_rating_flat = effects.raw.ranged_haste_rating_flat + diff.haste_rating;
+    effects.raw.spell_crit_rating_flat = effects.raw.spell_crit_rating_flat + diff.crit_rating;
+    effects.raw.melee_crit_rating_flat = effects.raw.melee_crit_rating_flat + diff.crit_rating;
+    effects.raw.ranged_crit_rating_flat = effects.raw.ranged_crit_rating_flat + diff.crit_rating;
+    effects.raw.spell_hit_rating_flat = effects.raw.spell_hit_rating_flat + diff.hit_rating;
+    effects.raw.melee_hit_rating_flat = effects.raw.melee_hit_rating_flat + diff.hit_rating;
+    effects.raw.ranged_hit_rating_flat = effects.raw.ranged_hit_rating_flat + diff.hit_rating;
+    effects.raw.expertise_rating_flat = effects.raw.expertise_rating_flat + diff.expertise_rating;
 
     for i = 2, 7 do
         effects.by_school.target_res_flat[i] = effects.by_school.target_res_flat[i] - diff.spell_pen;
@@ -720,16 +744,49 @@ local function dynamic_loadout(loadout)
         loadout.base_mana = sc.base_mana_by_lvl[loadout.lvl];
     end
 
+    if sc.expansion ~= sc.expansions.vanilla then
+        loadout.spell_haste_rating = GetCombatRating(CR_HASTE_SPELL);
+        loadout.melee_haste_rating = GetCombatRating(CR_HASTE_MELEE);
+        loadout.ranged_haste_ratin = GetCombatRating(CR_HASTE_RANGED);
+        loadout.spell_hit_rating   = GetCombatRating(CR_HIT_SPELL);
+        loadout.melee_hit_rating   = GetCombatRating(CR_HIT_MELEE);
+        loadout.ranged_hit_rating  = GetCombatRating(CR_HIT_RANGED);
+        loadout.spell_crit_rating  = GetCombatRating(CR_CRIT_SPELL);
+        loadout.melee_crit_rating  = GetCombatRating(CR_CRIT_MELEE);
+        loadout.ranged_crit_rating = GetCombatRating(CR_CRIT_RANGED);
+        loadout.expertise_rating   = GetCombatRating(CR_EXPERTISE);
 
-    loadout.haste_rating = 0;
-    loadout.hit_rating = 0;
+        if loadout.lvl <= 60 then
+            loadout.cr_scaling = (loadout.lvl - 8) / 52
+        elseif loadout.lvl <= 70 then
+            loadout.cr_scaling = 82 / (262 - 3 * loadout.lvl)
+        else
+            loadout.cr_scaling = (41/26) * ((131/63)^((loadout.lvl - 70) / 10))
+        end
+    else
+        loadout.spell_haste_rating = 0;
+        loadout.melee_haste_rating = 0;
+        loadout.ranged_haste_ratin = 0;
+        loadout.spell_hit_rating   = 0;
+        loadout.melee_hit_rating   = 0;
+        loadout.ranged_hit_rating  = 0;
+        loadout.spell_crit_rating  = 0;
+        loadout.melee_crit_rating  = 0;
+        loadout.ranged_crit_rating = 0;
+        loadout.expertise_rating   = 0;
+
+        -- combat rating 1 always yield 1% in vanilla
+        loadout.cr_scaling = 1;
+    end
+
+
     loadout.phys_hit = 0;
     local phys_hit = GetHitModifier();
     if phys_hit then
         loadout.phys_hit = 0.01*phys_hit;
     end
 
-    if sc.expansion == sc.expansions.vanilla then
+    if sc.expansion ~= sc.expansions.wotlk then
         loadout.healing_power = GetSpellBonusHealing();
         for i = 1, 7 do
             loadout.spell_dmg_by_school[i] = GetSpellBonusDamage(i);
@@ -737,10 +794,6 @@ local function dynamic_loadout(loadout)
         loadout.spell_dmg_by_school[1] = loadout.spell_dmg_by_school[2];
         -- use holy as +all schools baseline, write to physical so singular sp by schools can be 
         -- detected for multischool spells
-        --for i = 3, 7 do
-        --    loadout.spell_dmg_by_school[i] = math.min(loadout.spell_dmg_by_school[1],
-        --                                              loadout.spell_dmg_by_school[i]);
-        --end
 
         -- right after load GetSpellHitModifier seems to sometimes returns a nil.... so check first I guess
        local spell_hit = 0;
@@ -757,10 +810,6 @@ local function dynamic_loadout(loadout)
         for i = 1, 7 do
             loadout.spell_dmg_by_school[i] = GetSpellBonusDamage(i) - loadout.spell_power;
         end
-
-        -- crit and hit is already gathered indirectly from rating, but not haste
-        loadout.haste_rating = GetCombatRating(CR_HASTE_SPELL);
-        loadout.hit_rating = GetCombatRating(CR_HIT_SPELL);
     end
 
     for i = 1, 7 do
@@ -1066,6 +1115,97 @@ local function update_loadout_and_effects()
     return loadout_front, buffed, final, effects_update_id;
 end
 
+local function category_subtable_lnames()
+    -- just used for easier to read debugging data
+    -- call delayed for dynamic localization
+
+    return {
+        by_attr =
+            {L["Strength"], L["Agility"], L["Stamina"], L["Intellect"], L["Spirit"]},
+        by_school =
+            {L["Physical"], L["Holy"], L["Fire"], L["Nature"], L["Frost"], L["Nature"], L["Shadow"], L["Arcane"]},
+    };
+end
+
+local cat_subtable_lnames;
+
+local function effects_diff_str_debug(lhs, rhs)
+    local diffs_str = "";
+
+
+    if not cat_subtable_lnames then
+        cat_subtable_lnames = category_subtable_lnames();
+    end
+
+    for _, cat in ipairs(effect_categories) do
+        local rhs_cat = rhs[cat];
+        local lhs_cat = lhs[cat];
+        for i, lhs_e in pairs(lhs_cat) do
+
+            if type(lhs_e) == "table" then
+                local rhs_e = rhs_cat[i];
+                for j, v in pairs(lhs_e) do
+
+                local d = (rhs_e[j] or 0.0) - v;
+                    local pretty_str;
+                    if cat == "ability" then
+                        pretty_str = GetSpellInfo(j);
+                    elseif cat_subtable_lnames[cat] and cat_subtable_lnames[cat][j] then
+                        pretty_str = cat_subtable_lnames[cat][j];
+                    end
+                    if d > 0 then
+                        diffs_str = diffs_str.."  |cFF21B915+ "..cat..":"..i..":"..(pretty_str or j)..": "..d.."|r\n";
+                    elseif d < 0 then
+                        diffs_str = diffs_str.."  |cFFC32C0B- "..cat..":"..i..":"..(pretty_str or j)..": "..-d.."|r\n";
+                    end
+                end
+            else
+                local d = rhs_cat[i] - lhs_cat[i];
+                if d > 0 then
+                    diffs_str = diffs_str.."  |cFF21B915+ "..cat..":"..i..": "..d.."|r\n";
+                elseif d < 0 then
+                    diffs_str = diffs_str.."  |cFFC32C0B- "..cat..":"..i..": "..-d.."|r\n";
+                end
+            end
+        end
+    end
+    for _, cat in ipairs(effect_categories) do
+        local rhs_cat = rhs.mul[cat];
+        local lhs_cat = lhs.mul[cat];
+        for i, lhs_e in pairs(lhs_cat) do
+            if type(lhs_e) == "table" then
+                local rhs_e = rhs_cat[i];
+                for j, v in pairs(lhs_e) do
+
+                    local d = (rhs_e[j] or 1.0) / v;
+                    d = d - 1;
+                    local pretty_str;
+                    if cat == "ability" then
+                        pretty_str = GetSpellInfo(j);
+                    elseif cat_subtable_lnames[cat] and cat_subtable_lnames[cat][j] then
+                        pretty_str = cat_subtable_lnames[cat][j];
+                    end
+                    if d > 0 then
+                        diffs_str = diffs_str.."  |cFF21B915+ "..cat..":"..i..":"..(pretty_str or j)..": "..d.."|r\n";
+                    elseif d < 0 then
+                        diffs_str = diffs_str.."  |cFFC32C0B- "..cat..":"..i..":"..(pretty_str or j)..": "..-d.."|r\n";
+                    end
+                end
+            else
+                local d = rhs_cat[i] / lhs_cat[i];
+                d = d - 1;
+                if d > 0 then
+                    diffs_str = diffs_str.."  |cFF21B915+ "..cat..":"..i..": "..d.."|r\n";
+                elseif d < 0 then
+                    diffs_str = diffs_str.."  |cFFC32C0B- "..cat..":"..i..": "..-d.."|r\n";
+                end
+            end
+        end
+    end
+
+    return diffs_str;
+end
+
 local function update_loadout_and_effects_diffed_from_ui(dont_finalize)
 
     local loadout, effects, effects_finalized = update_loadout_and_effects();
@@ -1099,6 +1239,7 @@ loadouts.update_loadout_and_effects                   = update_loadout_and_effec
 loadouts.update_loadout_and_effects_diffed_from_ui    = update_loadout_and_effects_diffed_from_ui;
 loadouts.loadout_flags                                = loadout_flags;
 loadouts.apply_effect                                 = apply_effect;
+loadouts.effects_diff_str_debug                       = effects_diff_str_debug;
 
 sc.loadouts = loadouts;
 

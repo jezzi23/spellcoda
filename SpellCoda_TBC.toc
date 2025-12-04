@@ -1,0 +1,75 @@
+## Interface: 20505
+## Title: SpellCoda
+## Notes: All things Spells!
+## Notes-enUS: All things Spells!
+## Notes-enGB: All things Spells!
+## Notes-frFR: Tout sur les sorts !
+## Notes-deDE: Alles über Zauber!
+## Notes-itIT: Tutto sugli incantesimi!
+## Notes-koKR: 모든 주문 정보!
+## Notes-zhCN: 全部法术一览！
+## Notes-zhTW: 法術大全！
+## Notes-ruRU: Всё о заклинаниях!
+## Notes-esES: ¡Todo sobre hechizos!
+## Notes-esMX: ¡Todo sobre hechizos!
+## Notes-ptBR: Tudo sobre feitiços!
+## SavedVariablesPerCharacter: __sc_p_char
+## SavedVariables: __sc_p_acc
+## OptionalDeps: LibStub, CallbackHandler-1.0, LibUIDropDownMenu
+
+lib/LibStub/Libstub.lua
+lib/CallbackHandler-1.0/CallbackHandler-1.0.xml
+lib/LibDataBroker-1.1/LibDataBroker-1.1.lua
+lib/LibDBIcon-1.0/LibDBIcon-1.0.lua
+lib/LibUIDropDownMenu/LibUIDropDownMenu.xml
+lib/LibUIDropDownMenu/LibUIDropDownMenu.lua
+
+generated/tbc/defs.lua
+generated/tbc/localized_defs.lua
+generated/tbc/all.lua
+          
+generated/tbc/druid.lua
+generated/tbc/hunter.lua
+generated/tbc/mage.lua
+generated/tbc/paladin.lua
+generated/tbc/priest.lua
+generated/tbc/rogue.lua
+generated/tbc/shaman.lua
+generated/tbc/warlock.lua
+generated/tbc/warrior.lua
+
+locale/default.lua
+
+locale/ptBR.lua
+locale/zhCN.lua
+locale/zhTW.lua
+locale/frFR.lua
+locale/deDE.lua
+locale/itIT.lua
+locale/esMX.lua
+locale/ptPT.lua
+locale/koKR.lua
+locale/ruRU.lua
+locale/esES.lua
+
+localization.lua
+
+utils.lua
+
+override.lua
+
+tbc/override.lua
+tbc/scaling.lua
+
+config.lua
+loadouts.lua
+equipment.lua
+buffs.lua
+talents.lua
+calc.lua
+tbc/mechanics.lua
+overlay.lua
+tooltip.lua
+ui.lua
+core.lua
+

@@ -38,7 +38,6 @@ local get_buff                                      = sc.buffs.get_buff;
 local get_buff_by_lname                             = sc.buffs.get_buff_by_lname;
 
 local dps_per_ap                                    = sc.scaling.dps_per_ap;
-local get_combat_rating_effect                      = sc.scaling.get_combat_rating_effect;
 local spirit_mana_regen                             = sc.scaling.spirit_mana_regen;
 
 --------------------------------------------------------------------------------
@@ -53,6 +52,38 @@ local secondary_stats = {};
 local fight_types   = {
     repeated_casts = 1,
     cast_until_oom = 2
+};
+
+-- combat rating defs not in vanilla client but needed here for generality
+local CR_HIT_MELEE                      = CR_HIT_MELEE                   or 6;
+local CR_HIT_RANGED                     = CR_HIT_RANGED                  or 7;
+local CR_CRIT_MELEE                     = CR_CRIT_MELEE                  or 9;
+local CR_CRIT_RANGED                    = CR_CRIT_RANGED                 or 10;
+local CR_HASTE_MELEE                    = CR_HASTE_MELEE                 or 18;
+local CR_HASTE_RANGED                   = CR_HASTE_RANGED                or 19;
+local CR_EXPERTISE                      = CR_EXPERTISE                   or 24;
+local CR_HIT_SPELL                      = CR_HIT_SPELL                   or 8;
+local CR_CRIT_SPELL                     = CR_CRIT_SPELL                  or 11;
+local CR_HASTE_SPELL                    = CR_HASTE_SPELL                 or 20;
+local CR_RESILIENCE_CRIT_TAKEN          = CR_RESILIENCE_CRIT_TAKEN       or 15;
+local CR_RESILIENCE_SPELL_CRIT_TAKEN    = CR_RESILIENCE_SPELL_CRIT_TAKEN or 17;
+
+-- combat rating weights are multiplied by the general combat rating level scaling formula
+local cr_weights = {
+    [CR_HIT_MELEE]       = 10,
+    [CR_HIT_RANGED]      = 10,
+    [CR_CRIT_MELEE]      = 14,
+    [CR_CRIT_RANGED]     = 14,
+    [CR_HASTE_MELEE]     = 10,
+    [CR_HASTE_RANGED]    = 10,
+    [CR_EXPERTISE]       = 2.5,
+
+    [CR_HIT_SPELL]       = 8,
+    [CR_CRIT_SPELL]      = 14,
+    [CR_HASTE_SPELL]     = 10,
+
+    [CR_RESILIENCE_CRIT_TAKEN]     = 25,
+    [CR_RESILIENCE_SPELL_CRIT_TAKEN] = 25,
 };
 
 local evaluation_flags = {
@@ -236,11 +267,7 @@ end
 
 local function stats_crit(extra, attack_skill, attack_subclass, bid, comp, spell, loadout, effects)
 
-    -- rating may come from diffed loadout
-    local crit_rating_per_perc = get_combat_rating_effect(CR_CRIT_SPELL, loadout.lvl);
-    local crit_from_rating = 0.01 * (loadout.crit_rating + effects.raw.crit_rating) / crit_rating_per_perc;
-
-    local crit = crit_from_rating + (effects.ability.crit[bid] or 0) + extra;
+    local crit = (effects.ability.crit[bid] or 0) + extra;
 
     if bit.band(spell.flags, spell_flags.requires_ranged_slot) ~= 0 or
         (comp.school1 == schools.physical and bit.band(comp.flags, comp_flags.no_attack) == 0) then
@@ -250,9 +277,13 @@ local function stats_crit(extra, attack_skill, attack_subclass, bid, comp, spell
                 crit = crit + effects.by_school.crit[comp.school1] +
                     effects.by_school.crit_forced[comp.school1];
             end
-            crit = crit + loadout.ranged_crit;
+            -- rating may come from diffed loadout
+            crit = crit + loadout.ranged_crit +
+                0.01*effects.raw.ranged_crit_rating_flat/(loadout.cr_scaling * cr_weights[CR_CRIT_RANGED]);
         else
-            crit = crit + loadout.melee_crit;
+            crit = crit + loadout.melee_crit +
+                0.01*effects.raw.melee_crit_rating_flat/(loadout.cr_scaling * cr_weights[CR_CRIT_MELEE]);
+
         end
         local wpn_subclass_crit_active = 0.0;
         local wpn_subclass_crit_forced = 0.0;
@@ -283,7 +314,9 @@ local function stats_crit(extra, attack_skill, attack_subclass, bid, comp, spell
             crit = crit + (attack_skill - loadout.target_defense) * 0.0004;
         end
     else
-        crit = crit + loadout.spell_crit_by_school[comp.school1] + effects.by_school.crit_forced[comp.school1];
+        crit = crit + loadout.spell_crit_by_school[comp.school1] +
+            effects.by_school.crit_forced[comp.school1] +
+            0.01*effects.raw.spell_crit_rating_flat/(loadout.cr_scaling * cr_weights[CR_CRIT_SPELL]);
         local i = 2;
         while (comp["school"..i]) do
             local s = comp["school"..i];
@@ -380,10 +413,6 @@ local function stats_hit(res_mitigation, attack_skill, attack_subclass, bid, com
 
     local hit_extra = effects.ability.hit[bid] or 0.0;
 
-    local hit_rating_per_perc = get_combat_rating_effect(CR_HIT_SPELL, loadout.lvl);
-    local hit_from_rating = 0.01 * (loadout.hit_rating + effects.raw.hit_rating) / hit_rating_per_perc
-    hit_extra = hit_extra + hit_from_rating;
-
     if comp.school1 == schools.physical and
         bit.band(comp.flags, comp_flags.no_attack) == 0 then
 
@@ -394,6 +423,16 @@ local function stats_hit(res_mitigation, attack_skill, attack_subclass, bid, com
                     hit_extra = hit_extra + v;
                 end
             end
+        end
+
+        if bit.band(spell.flags, spell_flags.requires_ranged_slot) ~= 0 then
+            hit_extra = hit_extra +
+                0.01*(loadout.ranged_hit_rating + effects.raw.ranged_hit_rating_flat)/
+                    (loadout.cr_scaling * cr_weights[CR_HIT_RANGED]);
+        else
+            hit_extra = hit_extra +
+                0.01*(loadout.melee_hit_rating + effects.raw.melee_hit_rating_flat)/
+                    (loadout.cr_scaling * cr_weights[CR_HIT_MELEE]);
         end
 
         local miss;
@@ -419,7 +458,9 @@ local function stats_hit(res_mitigation, attack_skill, attack_subclass, bid, com
     else
         hit_extra = hit_extra +
             loadout.spell_dmg_hit_by_school[comp.school1] +
-            effects.by_school.spell_hit[comp.school1];
+            effects.by_school.spell_hit[comp.school1] +
+            0.01*(loadout.spell_hit_rating + effects.raw.spell_hit_rating_flat)/
+                (loadout.cr_scaling * cr_weights[CR_HIT_SPELL]);
 
         local i = 2;
         while (comp["school"..i]) do
@@ -552,6 +593,8 @@ local function stats_coef(combo_pts, bid, comp, spell, loadout, effects, eval_fl
             else
                 if bit.band(comp.flags, comp_flags.normalized_weapon) ~= 0 then
                     speed = sc.wep_subclass_to_normalized_speed[effects.raw.wpn_subclass_mh] or 2.4;
+                elseif effects.raw.wpn_delay_mh == 0 then
+                    speed = 2.0;
                 else
                     speed = effects.raw.wpn_delay_mh;
                 end
@@ -699,7 +742,7 @@ end
 -- Execution time of spell
 local function stats_cast_time(stats, bid, comp, spell, loadout, effects, eval_flags)
 
-    local gcd = math.min(spell.gcd, 1.5) + (effects.ability.gcd_flat[bid] or 0.0);
+    local gcd = math.min(spell.gcd, sc.mechanics.gcd) + (effects.ability.gcd_flat[bid] or 0.0);
 
     local cast_time;
     if bit.band(spell.flags, spell_flags.uses_attack_speed) ~= 0 then
@@ -707,50 +750,77 @@ local function stats_cast_time(stats, bid, comp, spell, loadout, effects, eval_f
         if effects.raw.wpn_delay_oh > 0 and
             bit.band(comp.flags, comp_flags.applies_oh) ~= 0 and
             bit.band(eval_flags, evaluation_flags.isolate_oh) ~= 0 then
-            cast_time = effects.raw.wpn_delay_oh / (effects.mul.raw.melee_haste*effects.mul.raw.melee_haste_forced);
+
+            local haste_mul_from_rating = 1.0 +
+                0.01*(loadout.melee_haste_rating+effects.raw.melee_haste_rating_flat)/
+                    (loadout.cr_scaling * cr_weights[CR_HASTE_MELEE]);
+            cast_time = effects.raw.wpn_delay_oh /
+                (effects.mul.raw.melee_haste*effects.mul.raw.melee_haste_forced*haste_mul_from_rating);
         elseif bit.band(comp.flags, comp_flags.applies_mh) ~= 0 then
+
             if loadout.shapeshift_no_weapon ~= 0 then
-                cast_time = loadout.attack_delay_mh / effects.mul.raw.melee_haste_forced;
+                -- based on game API attack speed query which already includes sheet rating
+                local haste_mul_from_rating = 1.0 +
+                    0.01*effects.raw.melee_haste_rating_flat/(loadout.cr_scaling * cr_weights[CR_HASTE_MELEE]);
+                cast_time = loadout.attack_delay_mh / (effects.mul.raw.melee_haste_forced*haste_mul_from_rating);
             else
-                cast_time = effects.raw.wpn_delay_mh / (effects.mul.raw.melee_haste*effects.mul.raw.melee_haste_forced);
+                -- not based on API attack delay; calculated from scratch
+                local haste_mul_from_rating = 1.0 +
+                    0.01*(loadout.melee_haste_rating+effects.raw.melee_haste_rating_flat)/
+                        (loadout.cr_scaling * cr_weights[CR_HASTE_MELEE]);
+                local mh_delay;
+                if effects.raw.wpn_delay_mh == 0 then
+                    mh_delay = 2.0;
+                else
+                    mh_delay = effects.raw.wpn_delay_mh;
+                end
+                cast_time = mh_delay /
+                    (effects.mul.raw.melee_haste*effects.mul.raw.melee_haste_forced*haste_mul_from_rating);
             end
         elseif bit.band(comp.flags, comp_flags.applies_ranged) ~= 0 then
-            cast_time = effects.raw.wpn_delay_ranged / (effects.mul.raw.ranged_haste*effects.mul.raw.ranged_haste_forced);
+            local haste_mul_from_rating = 1.0 +
+                0.01*(loadout.ranged_haste_rating+effects.raw.ranged_haste_rating_flat)/
+                    (loadout.cr_scaling * cr_weights[CR_HASTE_RANGED]);
+            cast_time = effects.raw.wpn_delay_ranged /
+                (effects.mul.raw.ranged_haste*effects.mul.raw.ranged_haste_forced*haste_mul_from_rating);
         end
         return cast_time, cast_time;
+    end
+
+    local spell_haste_mul_from_rating = 1.0 +
+        0.01*(loadout.spell_haste_rating+effects.raw.spell_haste_rating_flat)/
+            (loadout.cr_scaling * cr_weights[CR_HASTE_SPELL]);
+
+    if comp.school1 ~= schools.physical or bit.band(comp.flags, comp_flags.no_attack) ~= 0 then
+        -- spell haste rating may reduce gcd of spells that don't involve physical attack
+        gcd = math.max(sc.mechanics.gcd_min, gcd/spell_haste_mul_from_rating);
     end
 
     if bit.band(spell.flags, spell_flags.instant) ~= 0 then
         cast_time = gcd;
     elseif bit.band(spell.flags, spell_flags.channel) ~= 0 then
+        -- dur_ot already haste improved
         cast_time = stats.dur_ot;
     else
-        cast_time = spell.cast_time;
+
+        cast_time =
+            (1.0 + (effects.ability.cast_mod[bid] or 0.0))
+            *
+            (spell.cast_time + (effects.ability.cast_mod_flat[bid] or 0.0))
+
+        if comp.school1 ~= schools.physical or bit.band(comp.flags, comp_flags.no_attack) ~= 0 then
+            cast_time = cast_time/(effects.mul.raw.cast_haste*spell_haste_mul_from_rating);
+        end
     end
-
-    if comp.school1 == schools.physical then
-        return cast_time, cast_time;
-    end
-    cast_time = cast_time + (effects.ability.cast_mod_flat[bid] or 0.0);
-
-    local haste_rating_per_perc = get_combat_rating_effect(CR_HASTE_SPELL, loadout.lvl);
-    local haste_from_rating = 0.01 * max(0.0, loadout.haste_rating + effects.raw.haste_rating) / haste_rating_per_perc;
-
 
     if bit.band(spell.flags, spell_flags.channel) == 0 then
-        -- TODO: Needs to be changed for non vanilla
-        local cast_mod =
-            -effects.raw.cast_haste +
-            -haste_from_rating +
-            (effects.ability.cast_mod[bid] or 0.0);
-        cast_time = cast_time * (1.0 + cast_mod);
 
         if config.settings.general_average_proc_effects then
             stats.cast_time = (1.0 - stats.becomes_instant_p) * cast_time +
                 stats.becomes_instant_p * gcd;
         end
     elseif bit.band(spell.flags, spell_flags.binary) ~= 0 then
-        -- channeled, binary spells will either miss on the entire cast or fully hit
+        -- channeled binary spells will either miss on the entire cast or fully hit
         -- thus expected cast time changes with hit chance with misses only taking up one gcd
         cast_time = cast_time * (1.0 - stats.miss_ot) + gcd * stats.miss_ot;
     end
@@ -1020,6 +1090,15 @@ local function spell_stats_periodic(stats, spell, loadout, effects, eval_flags)
     end
     stats.tick_time_ot =
         periodic.tick_time + (effects.ability.extra_tick_time_flat[bid] or 0.0);
+
+    if bit.band(spell.flags, spell_flags.ot_haste_improved) ~= 0 then
+        local haste_mul = 1.0 +
+            0.01*(loadout.spell_haste_rating+effects.raw.spell_haste_rating_flat)/
+                (loadout.cr_scaling * cr_weights[CR_HASTE_SPELL]);
+        haste_mul = haste_mul * effects.mul.raw.cast_haste;
+        stats.dur_ot = stats.dur_ot/haste_mul;
+        stats.tick_time_ot = stats.tick_time_ot/haste_mul;
+    end
 end
 
 
@@ -1040,13 +1119,6 @@ local spell_stats_info;
 local class_stats_spell = (function()
     if class == classes.warrior then
         return function(anycomp, bid, stats, spell, loadout, effects)
-            if bid == spids.shield_slam then
-                stats.effect_mod_flat = stats.effect_mod_flat
-                    +
-                    spell.direct.per_resource *
-                        (loadout.stats[attr.strength] + effects.by_attr.stat_flat[attr.strength])
-                    + loadout.block_value;
-            end
         end
     elseif class == classes.paladin then
         return function(anycomp, bid, stats, spell, loadout, effects)
@@ -1412,7 +1484,11 @@ local function stats_for_spell(stats, spell, loadout, effects, eval_flags)
 
     stats.cost = stats_avg_cost(stats.cost_actual, stats, bid, spell, loadout, effects);
 
-    stats.cost_per_sec = stats.cost / stats.cast_time;
+    if stats.cast_time == 0 then
+        stats.cost_per_sec = math.huge;
+    else
+        stats.cost_per_sec = stats.cost / stats.cast_time;
+    end
 end
 
 local function resolve_extra_spell_effects(info, stats)
@@ -1812,8 +1888,6 @@ local function periodic_info(info, spell, loadout, stats, effects, eval_flags)
         info.ot_dur1 = info.ot_dur1 + info.ot_tick_time1 * stats.combo_pts;
     end
 
-    -- round so tooltip is displayed nicely
-    --info.ot_ticks1 = math.floor(0.5 + (info.ot_dur1 / info.ot_tick_time1));
     info.ot_ticks1 = info.ot_dur1 / info.ot_tick_time1;
     info.longest_ot_duration = info.ot_dur1;
 
@@ -1904,8 +1978,13 @@ local function spell_info(info, spell, stats, loadout, effects, eval_flags, spel
             add_expectation_ot_st(info, stats.periodic_jumps);
         end
     end
+    -- shared behaviour
     if special_abilities[spell.base_id] then
         special_abilities[spell.base_id](spell, info, loadout, stats, effects);
+    end
+    -- client specific behaviour injected
+    if sc.mechanics.special_abilities[spell.base_id] then
+        sc.mechanics.special_abilities[spell.base_id](spell, info, loadout, stats, effects);
     end
 
     if bit.band(eval_flags, evaluation_flags.isolate_periodic) ~= 0 then
@@ -1932,7 +2011,11 @@ local function spell_info(info, spell, stats, loadout, effects, eval_flags, spel
         info.threat_ot = 0;
     end
 
-    info.aoe_to_single_ratio = info.expected/info.expected_st;
+    if info.expected_st == 0 then
+        info.aoe_to_single_ratio = math.huge;
+    else
+        info.aoe_to_single_ratio = info.expected/info.expected_st;
+    end
     if info.expected < info.expected_st or
         bit.band(eval_flags, evaluation_flags.assume_single_effect) ~= 0 then
 
@@ -1973,10 +2056,13 @@ local function spell_info(info, spell, stats, loadout, effects, eval_flags, spel
     if stats.cast_time == 0 then
         info.effect_per_sec = math.huge;
         info.threat_per_sec = math.huge
+        info.cost_per_sec = math.huge;
     else
         info.effect_per_sec = info.expected / stats.cast_time;
         info.threat_per_sec = info.threat / stats.cast_time;
+        info.cost_per_sec = stats.cost / stats.cast_time;
     end
+
 
     local dual_wield_flags = bit.bor(comp_flags.applies_mh, comp_flags.applies_oh);
 
@@ -2013,8 +2099,6 @@ local function spell_info(info, spell, stats, loadout, effects, eval_flags, spel
         info.effect_per_cost = info.expected / stats.cost;
         info.threat_per_cost = info.threat / stats.cost;
     end
-
-    info.cost_per_sec = stats.cost / stats.cast_time;
 
     if info.num_direct_effects > 0 then
 
@@ -2088,6 +2172,7 @@ local function cast_until_oom(spell_effect, spell, stats, loadout, effects, calc
     local resource_loss_per_sec = spell_effect.cost_per_sec - mp1_casting;
     spell_effect.mana = mana;
 
+
     if resource_loss_per_sec <= 0 then
         spell_effect.num_casts_until_oom = math.huge;
         spell_effect.effect_until_oom = math.huge;
@@ -2101,22 +2186,22 @@ local function cast_until_oom(spell_effect, spell, stats, loadout, effects, calc
     end
 end
 
-if class == "SHAMAN" then
+if class == classes.shaman then
     special_abilities = {
     };
-elseif class == "PRIEST" then
+elseif class == classes.priest then
     special_abilities = {
     };
-elseif class == "DRUID" then
+elseif class == classes.druid then
     special_abilities = {
     };
-elseif class == "WARLOCK" then
+elseif class == classes.warlock then
     special_abilities = {
     };
-elseif class == "PALADIN" then
+elseif class == classes.paladin then
     special_abilities = {
     };
-elseif class == "MAGE" then
+elseif class == classes.mage then
     special_abilities = {
         [spids.mana_shield] = function(spell, info, loadout, stats)
             local pts = l_talents.pts[110];
@@ -2125,14 +2210,6 @@ elseif class == "MAGE" then
                 drain_mod = drain_mod + 0.5;
             end
             stats.cost = stats.cost + 2 * info.min_noncrit_if_hit1 * (1.0 - drain_mod);
-        end,
-        [spids.mana_shield_2] = function(spell, info, loadout, stats)
-            local pts = l_talents.pts[110];
-            local drain_mod = 0.1 * pts;
-            if loadout.enchants[lookups.rune_advanced_warding] then
-                drain_mod = drain_mod + 0.5;
-            end
-            stats.cost = stats.cost + 1 * info.min_noncrit_if_hit1 * (1.0 - drain_mod);
         end,
     };
 else
@@ -2209,6 +2286,16 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
             (1.0 + (effects.ability.extra_dur[bid] or 0.0));
         info.tick_time =
             periodic.tick_time + (effects.ability.extra_tick_time_flat[bid] or 0.0);
+
+        if bit.band(spell.flags, spell_flags.ot_haste_improved) ~= 0 then
+            local haste_mul = 1.0 +
+                0.01*(loadout.spell_haste_rating+effects.raw.spell_haste_rating_flat)/
+                    (loadout.cr_scaling * cr_weights[CR_HASTE_SPELL]);
+            haste_mul = haste_mul * effects.mul.raw.cast_haste;
+            info.dur = info.dur/haste_mul;
+            info.tick_time = info.tick_time/haste_mul;
+        end
+
         info.ticks = info.dur / info.tick_time;
 
         info.tick_restored = min;
@@ -2322,8 +2409,16 @@ local function only_threat_info(info, stats, spell, loadout, effects, eval_flags
     stats.cast_time, stats.cast_time_nogcd, stats.gcd =
         stats_cast_time(stats, bid, anycomp, spell, loadout, effects, eval_flags);
 
-    info.threat_per_cost = info.threat/stats.cost;
-    info.threat_per_sec = info.threat/stats.cast_time;
+    if stats.cost == 0 then
+        info.threat_per_cost = math.huge;
+    else
+        info.threat_per_cost = info.threat/stats.cost;
+    end
+    if stats.cast_time == 0 then
+        info.threat_per_sec = math.huge;
+    else
+        info.threat_per_sec = info.threat/stats.cast_time;
+    end
 end
 
 local function dummy_cast_until_oom_info(info, stats, spell_id, loadout, effects)
@@ -2405,7 +2500,7 @@ local function stat_weights(normal_info, spell, loadout, effects, eval_flags, sp
     end
     local normalize_table;
 
-    for _, v in ipairs(weights) do
+    for l, v in ipairs(weights) do
         if v.normalize_to then
             normalize_table = v;
         end
@@ -2427,19 +2522,22 @@ local function stat_weights(normal_info, spell, loadout, effects, eval_flags, sp
             diff[v.key] = 0;
         end
 
-        v.effect_per_sec_delta = info_diff.effect_per_sec - normal_info.effect_per_sec;
+        if info_diff.effect_per_sec == math.huge then
+            -- because (math.huge - math.huge) != 0
+            v.effect_per_sec_delta = 0;
+        else
+            v.effect_per_sec_delta = info_diff.effect_per_sec - normal_info.effect_per_sec;
+        end
         v.effect_delta = info_diff.expected - normal_info.expected;
-        if not normal_info.effect_until_oom then
+        if not normal_info.effect_until_oom or normal_info.effect_until_oom == math.huge then
             v.effect_until_oom_delta = nil;
         else
             v.effect_until_oom_delta = info_diff.effect_until_oom - normal_info.effect_until_oom;
         end
     end
-    local normalize_table_preferred = normalize_table;
 
     local eps = 0.000000001;
     if normalize_table.effect_per_sec_delta < eps then
-        normalize_table = nil;
         local lowest = math.huge;
         -- need to find any other field to normalize to
         for _, v in ipairs(weights) do
@@ -2448,26 +2546,27 @@ local function stat_weights(normal_info, spell, loadout, effects, eval_flags, sp
                 normalize_table = v;
             end
         end
-    end
-
-    if not normalize_table or normalize_table.effect_per_sec_delta < eps then
-        -- effect per sec still has no gains, execution time is likely 0
-        --   find new normalize field by expectation
-        normalize_table = normalize_table_preferred;
-        if normalize_table.effect_delta < eps then
-            local lowest = math.huge;
-            -- need to find any other field to normalize to
-            for _, v in ipairs(weights) do
-                if v.effect_delta > eps and v.effect_delta < lowest then
-                    lowest = v.effect_delta;
-                    normalize_table = v;
+        if lowest == math.huge then
+            -- effect per sec still has no gains, execution time is likely 0
+            --   find new normalize field by expectation
+            if normalize_table.effect_delta < eps then
+                for _, v in ipairs(weights) do
+                    if v.effect_delta > eps and v.effect_delta < lowest then
+                        lowest = v.effect_delta;
+                        normalize_table = v;
+                    end
                 end
             end
         end
+        if lowest == math.huge or normalize_table.effect_per_sec_delta == 0 then
+            -- nothing to normalize to
+            normalize_table = nil;
+        end
     end
+
     if normalize_table then
         -- Normalize to first weight
-        for _, v in ipairs(weights) do
+        for j, v in ipairs(weights) do
             v.effect_per_sec_weight = v.effect_per_sec_delta/normalize_table.effect_per_sec_delta;
             v.effect_weight = v.effect_delta/normalize_table.effect_delta;
         end
@@ -2509,7 +2608,7 @@ local function eval_spell_buff_diffed(alias_info, alias_spell_id, table_to_chang
         info.threat_per_sec = -alias_info.threat_per_sec;
         if buff_is_mul then
             table_to_change[table_key] = (table_to_change[table_key] or 1.0)*(1.0 + buff_value);
-        else                                            
+        else
             table_to_change[table_key] = (table_to_change[table_key] or 0.0)+buff_value;
         end
         spell_stats_info(alias_info, stats, spells[alias_spell_id], loadout, effects, eval_flags, alias_spell_id);
@@ -2532,9 +2631,11 @@ local function eval_spell_buff_diffed(alias_info, alias_spell_id, table_to_chang
     if stats.cast_time == 0 then
         info.effect_per_sec = math.huge;
         info.threat_per_sec = math.huge
+        info.cost_per_sec = math.huge
     else
         info.effect_per_sec = info.expected / stats.cast_time;
         info.threat_per_sec = info.threat / stats.cast_time;
+        info.cost_per_sec = stats.cost / stats.cast_time;
     end
 
     if stats.cost == 0 then
@@ -2545,7 +2646,6 @@ local function eval_spell_buff_diffed(alias_info, alias_spell_id, table_to_chang
         info.threat_per_cost = info.threat / stats.cost;
     end
 
-    info.cost_per_sec = stats.cost / stats.cast_time;
 end
 
 local alias_info = {};
@@ -2558,7 +2658,7 @@ spell_stats_info = function(info, stats, spell, loadout, effects, eval_flags, sp
     else
         -- handle spells that fully or partially alias other spells
         if spell.base_id == spids.swiftmend then
-            
+
         elseif spell.base_id == spids.slice_and_dice then
             eval_spell_buff_diffed(alias_info,
                                    spell.alias,
@@ -2640,7 +2740,11 @@ local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_fin
         effects_finalize_forced(loadout, effects_d);
         info = calc_spell_eval(spell, loadout, effects_d, eval_flags, spell_id);
 
-        out.diff_ratio = 100 * (info.effect_per_sec / normal_eps - 1);
+        if normal_eps == 0 then
+            out.diff_ratio = math.huge;
+        else
+            out.diff_ratio = 100 * (info.effect_per_sec / normal_eps - 1);
+        end
         out.first = info.effect_per_sec - normal_eps;
         out.second = info.expected - normal_exp;
     else
@@ -2655,7 +2759,7 @@ local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_fin
         info = calc_spell_eval(spell, loadout, effects_d, eval_flags, spell_id);
         cast_until_oom(info, spell, stats, loadout, effects_d, true, eval_flags);
 
-        if not info.effect_until_oom then
+        if not info.effect_until_oom or normal_exp_until_oom == 0 then
             out.diff_ratio = nil;
             out.first = nil;
             out.second = nil;
@@ -2674,7 +2778,6 @@ calc.stats_for_spell                    = stats_for_spell;
 calc.spell_info                         = spell_info;
 calc.cast_until_oom                     = cast_until_oom;
 calc.stat_weights                       = stat_weights;
-calc.get_combat_rating_effect           = get_combat_rating_effect;
 calc.spell_diff                         = spell_diff;
 calc.resource_regen_info                = resource_regen_info;
 calc.only_threat_info                   = only_threat_info;

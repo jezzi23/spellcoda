@@ -23,6 +23,7 @@ local update_loadout_and_effects_diffed_from_ui = sc.loadouts.update_loadout_and
 local effects_finalize_forced                   = sc.loadouts.effects_finalize_forced;
 local cpy_effects                               = sc.loadouts.cpy_effects;
 local empty_effects                             = sc.loadouts.empty_effects;
+local effects_diff_str_debug                    = sc.loadouts.effects_diff_str_debug;
 
 local apply_item_cmp                            = sc.equipment.apply_item_cmp;
 local slots                                     = sc.equipment.slots;
@@ -1389,7 +1390,9 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
     end
 
     if config.settings.tooltip_display_base_mod then
-        if spell.direct and spell.direct.min ~= info.min_noncrit_if_hit_base1 then
+        if spell.direct and info.min_noncrit_if_hit_base1 and
+            spell.direct.min ~= info.min_noncrit_if_hit_base1 then
+
             local armor_dr_adjusted = 1 / (1 - stats.armor_dr);
             if info.min_noncrit_if_hit_base1 ~= info.max_noncrit_if_hit_base1 then
                 add_line(
@@ -1423,7 +1426,9 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 );
             end
         end
-        if spell.periodic and spell.periodic.min ~= info.ot_min_noncrit_if_hit_base1 then
+        if spell.periodic and info.ot_min_noncrit_if_hit_base1 and
+            spell.periodic.min ~= info.ot_min_noncrit_if_hit_base1 then
+
             local armor_dr_adjusted = 1 / (1 - stats.armor_dr_ot);
             if info.ot_min_noncrit_if_hit_base1 ~= info.ot_max_noncrit_if_hit_base1 then
                 add_line(
@@ -1507,28 +1512,33 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         ((spell.direct and stats.coef > 0) or (spell.periodic and stats.coef_ot > 0)) then
         local effect_base = 0;
         local effect_total = 0;
+        local sp = 0;
         if spell.direct then
             effect_base = effect_base + 0.5 * (info.min_noncrit_if_hit_base1 + info.max_noncrit_if_hit_base1);
             effect_total = effect_total + 0.5 * (info.min_noncrit_if_hit1 + info.max_noncrit_if_hit1);
+            sp = stats.spell_power;
         end
         if spell.periodic then
             effect_base = effect_base + 0.5 * (info.ot_min_noncrit_if_hit_base1 + info.ot_max_noncrit_if_hit_base1);
             effect_total = effect_total + 0.5 * (info.ot_min_noncrit_if_hit1 + info.ot_max_noncrit_if_hit1);
+            sp = math.max(sp, stats.spell_power_ot);
         end
         local effect_sp = effect_total - effect_base;
 
-        add_line(
-            tooltip,
-            string.format("%s %.0f %s:", L["Improved by"], stats.spell_power, pwr),
-            string.format("%.1f%% (%.1f%% %s, %.1f%% %s)",
-                100 * effect_sp / effect_base,
-                100 * effect_base / (effect_base + effect_sp),
-                L["base"],
-                100 * effect_sp / (effect_base + effect_sp),
-                pwr
-            ),
-            effect_color("sp_effect")
-        );
+        if effect_base ~= 0 then
+            add_line(
+                tooltip,
+                string.format("%s %.0f %s:", L["Improved by"], sp, pwr),
+                string.format("%.1f%% (%.1f%% %s, %.1f%% %s)",
+                    100 * effect_sp / effect_base,
+                    100 * effect_base / (effect_base + effect_sp),
+                    L["base"],
+                    100 * effect_sp / (effect_base + effect_sp),
+                    pwr
+                ),
+                effect_color("sp_effect")
+            );
+        end
     end
     if config.settings.tooltip_display_spell_rank then
         append_tooltip_spell_rank(tooltip, spell, loadout.lvl);
@@ -2047,6 +2057,9 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             end
 
             apply_item_cmp(loadout, effects, effects_diffed, tt.new_item, old_item, slot);
+            if config.settings.tooltip_item_diff_debug then
+                tooltip:AddLine(effects_diff_str_debug(effects, effects_diffed));
+            end
 
             local i = 0;
             slot_cmp.len = 0;
