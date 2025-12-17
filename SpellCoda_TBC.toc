@@ -66,8 +66,9 @@ loadouts.lua
 equipment.lua
 buffs.lua
 talents.lua
-calc.lua
+calc_defs.lua
 tbc/mechanics.lua
+calc.lua
 overlay.lua
 tooltip.lua
 ui.lua

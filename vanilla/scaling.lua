@@ -1,3 +1,4 @@
+
 local _, sc = ...;
 
 local classes   = sc.classes;
@@ -7,11 +8,6 @@ local scaling = {};
 
 local dps_per_ap = 1/14;
 local mana_per_int = 15;
-
-local function get_combat_rating_effect(rating_id, level)
-    -- for vanilla, treat rating as same as percentage
-    return 1;
-end
 
 local function spirit_mana_regen(spirit)
     -- src: https://wowwiki-archive.fandom.com/wiki/Spirit
@@ -171,7 +167,6 @@ local function agi_to_physical_crit(agi, lvl)
 end
 
 scaling.dps_per_ap                       = dps_per_ap;
-scaling.get_combat_rating_effect         = get_combat_rating_effect;
 scaling.spirit_mana_regen                = spirit_mana_regen;
 scaling.mana_per_int                     = mana_per_int;
 scaling.int_to_spell_crit                = int_to_spell_crit;

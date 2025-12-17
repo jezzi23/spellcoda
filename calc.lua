@@ -40,8 +40,17 @@ local get_buff_by_lname                             = sc.buffs.get_buff_by_lname
 local dps_per_ap                                    = sc.scaling.dps_per_ap;
 local spirit_mana_regen                             = sc.scaling.spirit_mana_regen;
 
+local effect_flags                                  = sc.calc.effect_flags;
+local add_extra_effect                              = sc.calc.add_extra_effect;
+
+local gcd_max                                       = sc.mechanics.gcd;
+local gcd_min                                       = sc.mechanics.gcd_min;
+local client_class_stats_spell                      = sc.mechanics.client_class_stats_spell;
+local client_special_abilities                      = sc.mechanics.client_special_abilities;
+local stats_glance                                  = sc.mechanics.stats_glance;
+
 --------------------------------------------------------------------------------
-local calc              = {};
+local calc = sc.calc;
 
 local info_buffer = {};
 local stats_buffer = {};
@@ -184,39 +193,6 @@ end
 
 local special_abilities;
 
-local effect_flags = {
-    is_periodic             = bit.lshift(1, 0),
-    triggers_on_crit        = bit.lshift(1, 1),
-    use_flat                = bit.lshift(1, 2),
-    add_flat                = bit.lshift(1, 3),
-    base_on_periodic_effect = bit.lshift(1, 4),
-    should_track_crit_mod   = bit.lshift(1, 5),
-    glance                  = bit.lshift(1, 6),
-    no_crit                 = bit.lshift(1, 7),
-    can_be_blocked          = bit.lshift(1, 8),
-    always_hits             = bit.lshift(1, 9),
-    shares_periodic_type    = bit.lshift(1, 10),
-};
-
--- flexible way to add custom effects that behave according to flags
--- that both go into expectation calculation and tooltip
-local function add_extra_effect(stats, flags,  utilization, description, value, ticks, freq)
-    stats.num_extra_effects = stats.num_extra_effects + 1;
-    local i = stats.num_extra_effects;
-
-    stats["extra_effect_flags" .. i] = flags;
-    stats["extra_effect_val" .. i] = value;
-    stats["extra_effect_desc" .. i] = description;
-    stats["extra_effect_util" .. i] = utilization;
-    if bit.band(flags, effect_flags.is_periodic) ~= 0 then
-        stats["extra_effect_ticks" .. i] = ticks;
-        stats["extra_effect_tick_time" .. i] = freq;
-    end
-    if bit.band(flags, effect_flags.should_track_crit_mod) ~= 0 then
-        stats.num_special_crit_mod_tracked = stats.num_special_crit_mod_tracked + 1;
-        stats["special_crit_mod_tracked"..stats.num_special_crit_mod_tracked] = i;
-    end
-end
 
 -- For physical mechanics, formulas are based on this
 -- @src: https://github.com/magey/classic-warrior/wiki/Attack-table
@@ -437,7 +413,12 @@ local function stats_hit(res_mitigation, attack_skill, attack_subclass, bid, com
 
         local miss;
         if loadout.target_defense - attack_skill >= 11 then
-            miss = 0.05 + (loadout.target_defense - attack_skill) * 0.002;
+            miss = 0.05
+                +
+                (loadout.target_defense - attack_skill) * 0.002
+                +
+                (loadout.target_defense - attack_skill - 10) * 0.002
+
         else
             miss = 0.05 + (loadout.target_defense - attack_skill) * 0.001;
         end
@@ -493,7 +474,7 @@ local function stats_threat_mod(bid, comp, spell, effects)
     return threat_mod_flat, threat_mod;
 end
 
-local function stats_avoidances(attack_skill, comp, spell, loadout)
+local function stats_avoidances(attack_skill, comp, spell, loadout, effects)
     if comp.school1 ~= schools.physical or
         bit.band(comp.flags, bit.bor(comp_flags.no_active_defense, comp_flags.no_attack)) ~= 0 then
         return 0.0, 0.0, 0.0, 0.0, 0.0;
@@ -528,7 +509,15 @@ local function stats_avoidances(attack_skill, comp, spell, loadout)
         parry = 0.0;
     end
 
-    return math.max(0.0, dodge), math.max(0.0, parry), math.max(0.0, block), block_amount;
+    local expertise_reduction =
+        0.0025
+        *
+        effects.raw.expertise_rating_flat/(loadout.cr_scaling * cr_weights[CR_EXPERTISE]);
+
+    dodge = dodge - expertise_reduction;
+    parry = parry - expertise_reduction;
+
+    return math.max(0.0, dodge),math.max(0.0, parry), math.max(0.0, block), block_amount;
 end
 
 local function stats_sp(bid, comp, spell, loadout, effects)
@@ -568,7 +557,9 @@ end
 local function stats_coef(combo_pts, bid, comp, spell, loadout, effects, eval_flags)
 
     local coef, coef_max;
-    if comp.school1 == schools.physical then
+    if bid == auto_wand_spell_id then
+        coef = 0;
+    elseif comp.school1 == schools.physical then
 
         if effects.raw.wpn_delay_oh > 0 and
             bit.band(comp.flags, comp_flags.applies_oh) ~= 0 and
@@ -604,6 +595,8 @@ local function stats_coef(combo_pts, bid, comp, spell, loadout, effects, eval_fl
             local speed;
             if bit.band(comp.flags, comp_flags.normalized_weapon) ~= 0 then
                 speed = sc.wep_subclass_to_normalized_speed[effects.raw.wpn_subclass_ranged] or 2.8;
+            elseif effects.raw.wpn_delay_ranged == 0 then
+                speed = 2.0;
             else
                 speed = effects.raw.wpn_delay_ranged;
             end
@@ -624,12 +617,8 @@ local function stats_coef(combo_pts, bid, comp, spell, loadout, effects, eval_fl
             coef_max = comp.coef_ap_max;
         end
     else
-        if bid == auto_wand_spell_id then
-            coef = 0;
-        else
-            coef = (comp.coef + (effects.ability.coef_mod_flat[bid] or 0.0))
-                * (1.0 + (effects.ability.coef_mod[bid] or 0.0));
-        end
+        coef = (comp.coef + (effects.ability.coef_mod_flat[bid] or 0.0))
+            * (1.0 + (effects.ability.coef_mod[bid] or 0.0));
     end
     return coef, coef_max or coef;
 end
@@ -726,23 +715,10 @@ local function stats_spell_mod(armor_dr, attack_subclass, comp, spell, effects, 
     return spell_mod;
 end
 
-local function stats_glance(stats, bid, loadout)
-    if bid ~= auto_attack_spell_id then
-        return 0.0, 0.0, 0.0;
-    end
-    local glance_p = 0.1 + (loadout.target_lvl*5 - math.min(loadout.lvl*5, stats.attack_skill)) * 0.02;
-    local glance_min =
-        math.max(0.01, math.min(0.91, 1.3 - 0.05*(loadout.target_defense-stats.attack_skill)))
-    local glance_max = 
-        math.max(0.2, math.min(0.99, 1.3 - 0.03*(loadout.target_defense-stats.attack_skill)))
-
-    return math.max(0.0, math.min(1.0, glance_p)), glance_min, glance_max;
-end
-
 -- Execution time of spell
 local function stats_cast_time(stats, bid, comp, spell, loadout, effects, eval_flags)
 
-    local gcd = math.min(spell.gcd, sc.mechanics.gcd) + (effects.ability.gcd_flat[bid] or 0.0);
+    local gcd = math.min(spell.gcd, gcd_max) + (effects.ability.gcd_flat[bid] or 0.0);
 
     local cast_time;
     if bit.band(spell.flags, spell_flags.uses_attack_speed) ~= 0 then
@@ -781,7 +757,13 @@ local function stats_cast_time(stats, bid, comp, spell, loadout, effects, eval_f
             local haste_mul_from_rating = 1.0 +
                 0.01*(loadout.ranged_haste_rating+effects.raw.ranged_haste_rating_flat)/
                     (loadout.cr_scaling * cr_weights[CR_HASTE_RANGED]);
-            cast_time = effects.raw.wpn_delay_ranged /
+            local ranged_delay;
+            if effects.raw.wpn_delay_ranged == 0 then
+                ranged_delay = 2.0;
+            else
+                ranged_delay = effects.raw.wpn_delay_ranged;
+            end
+            cast_time = ranged_delay /
                 (effects.mul.raw.ranged_haste*effects.mul.raw.ranged_haste_forced*haste_mul_from_rating);
         end
         return cast_time, cast_time;
@@ -793,7 +775,7 @@ local function stats_cast_time(stats, bid, comp, spell, loadout, effects, eval_f
 
     if comp.school1 ~= schools.physical or bit.band(comp.flags, comp_flags.no_attack) ~= 0 then
         -- spell haste rating may reduce gcd of spells that don't involve physical attack
-        gcd = math.max(sc.mechanics.gcd_min, gcd/spell_haste_mul_from_rating);
+        gcd = math.max(gcd_min, gcd/spell_haste_mul_from_rating);
     end
 
     if bit.band(spell.flags, spell_flags.instant) ~= 0 then
@@ -962,7 +944,7 @@ local function spell_stats_direct(stats, spell, loadout, effects, eval_flags)
 
     stats.threat_mod_flat, stats.threat_mod = stats_threat_mod(bid, direct, spell, effects);
     stats.glance, stats.glance_min, stats.glance_max = stats_glance(stats, bid, loadout);
-    stats.dodge, stats.parry, stats.block, stats.block_amount = stats_avoidances(stats.attack_skill, direct, spell, loadout);
+    stats.dodge, stats.parry, stats.block, stats.block_amount = stats_avoidances(stats.attack_skill, direct, spell, loadout, effects);
     stats.spell_power = stats_sp(benefit_id, direct, spell, loadout, effects);
     stats.coef, stats.coef_max = stats_coef(stats.combo_pts, benefit_id, direct, spell, loadout, effects, eval_flags);
     stats.armor_dr = stats_armor_dr(stats.armor, direct, loadout);
@@ -1046,7 +1028,7 @@ local function spell_stats_periodic(stats, spell, loadout, effects, eval_flags)
     stats.threat_mod_flat_ot, stats.threat_mod_ot = stats_threat_mod(bid, periodic, spell, effects);
     stats.glance_ot, stats.glance_min_ot, stats.glance_max_ot = stats_glance(stats, bid, loadout);
 
-    stats.dodge_ot, stats.parry_ot, stats.block_ot, stats.block_amount_ot = stats_avoidances(stats.attack_skill_ot, periodic, spell, loadout);
+    stats.dodge_ot, stats.parry_ot, stats.block_ot, stats.block_amount_ot = stats_avoidances(stats.attack_skill_ot, periodic, spell, loadout, effects);
     stats.spell_power_ot = stats_sp(benefit_id, periodic, spell, loadout, effects);
     stats.coef_ot, stats.coef_ot_max = stats_coef(stats.combo_pts, benefit_id, periodic, spell, loadout, effects, eval_flags);
     stats.armor_dr_ot = stats_armor_dr(stats.armor, periodic, loadout);
@@ -1157,7 +1139,7 @@ local class_stats_spell = (function()
         return function(anycomp, bid, stats, spell, loadout, effects)
         end
     elseif class == classes.rogue then
-        return function(stats, spell, loadout, effects)
+        return function(anycomp, bid, stats, spell, loadout, effects)
         end
     elseif class == classes.priest then
         return function(anycomp, bid, stats, spell, loadout, effects)
@@ -1450,7 +1432,7 @@ local function stats_for_spell(stats, spell, loadout, effects, eval_flags)
     -- shared behavior
     class_stats_spell(anycomp, bid, stats, spell, loadout, effects);
     -- client specific behaviour injected
-    sc.mechanics.client_class_stats_spell(anycomp, bid, stats, spell, loadout, effects);
+    client_class_stats_spell(anycomp, bid, stats, spell, loadout, effects);
 
     if spell.direct then
         spell_stats_direct(stats, spell, loadout, effects, eval_flags);
@@ -1983,8 +1965,8 @@ local function spell_info(info, spell, stats, loadout, effects, eval_flags, spel
         special_abilities[spell.base_id](spell, info, loadout, stats, effects);
     end
     -- client specific behaviour injected
-    if sc.mechanics.special_abilities[spell.base_id] then
-        sc.mechanics.special_abilities[spell.base_id](spell, info, loadout, stats, effects);
+    if client_special_abilities[spell.base_id] then
+        client_special_abilities[spell.base_id](spell, info, loadout, stats, effects);
     end
 
     if bit.band(eval_flags, evaluation_flags.isolate_periodic) ~= 0 then
@@ -2350,7 +2332,7 @@ local function only_threat_info(info, stats, spell, loadout, effects, eval_flags
         stats.crit = 0;
         stats.block_amount = 0;
         stats.armor_dr = 0;
-        stats.dodge, stats.parry = stats_avoidances(stats.attack_skill, direct, spell, loadout);
+        stats.dodge, stats.parry = stats_avoidances(stats.attack_skill, direct, spell, loadout, effects);
         stats.hit = 1.0 - stats.miss - stats.dodge - stats.parry;
         -- TODO: avoidances
 
@@ -2444,13 +2426,14 @@ local function dummy_cast_until_oom_info(info, stats, spell_id, loadout, effects
     end
 end
 
+-- vanilla baseline
 local dmg_magic_stat_weights = {
     { display = "SP", key = "sp", normalize_to = true},
     { display = "Int", key = "stats", key2 = attr.intellect},
     { display = "Spirit", key = "stats", key2 = attr.spirit},
     { display = "Crit", key = "crit_rating"},
     { display = "Hit", key = "hit_rating"},
-    { display = "Spell Pen", key = "spell_pen"},
+    { display = "Pen", key = "pen"},
     { display = "MP5", key = "mp5"},
 };
 
@@ -2468,15 +2451,31 @@ local melee_stat_weights = {
     { display = "Agi", key= "stats", key2 = attr.agility},
     { display = "Crit", key = "crit_rating"},
     { display = "Hit", key = "hit_rating"},
-    { display = "Wep skill", key = "weapon_skill"},
 };
 local ranged_stat_weights = {
     { display = "RAP", key = "rap", normalize_to = true},
     { display = "Agi", key= "stats", key2 = attr.agility},
     { display = "Crit", key = "crit_rating"},
     { display = "Hit", key = "hit_rating"},
-    { display = "Wep skill", key = "weapon_skill"},
 };
+
+-- vanilla only
+if sc.expansion == sc.expansions.vanilla then
+    for _, v in ipairs({melee_stat_weights, ranged_stat_weights}) do
+        v[#v+1] = {display = "Skill", key = "weapon_skill"};
+    end
+end
+
+-- tbc and beyond
+if sc.expansion ~= sc.expansions.vanilla then
+    for _, v in ipairs({dmg_magic_stat_weights, heal_stat_weights, melee_stat_weights, ranged_stat_weights}) do
+        v[#v+1] = {display = "Haste", key = "haste_rating"};
+    end
+    for _, v in ipairs({melee_stat_weights, ranged_stat_weights}) do
+        v[#v+1] = {display = "Expr", key = "expertise_rating"};
+        v[#v+1] = {display = "Pen", key = "pen"};
+    end
+end
 
 local info_diff = {};
 local spell_stats_diffed = {};
@@ -2566,11 +2565,11 @@ local function stat_weights(normal_info, spell, loadout, effects, eval_flags, sp
 
     if normalize_table then
         -- Normalize to first weight
-        for j, v in ipairs(weights) do
-            v.effect_per_sec_weight = v.effect_per_sec_delta/normalize_table.effect_per_sec_delta;
-            v.effect_weight = v.effect_delta/normalize_table.effect_delta;
-        end
         for _, v in ipairs(weights) do
+            v.effect_per_sec_weight = v.effect_per_sec_delta/normalize_table.effect_per_sec_delta;
+            if normalize_table.effect_delta ~= 0 then
+                v.effect_weight = v.effect_delta/normalize_table.effect_delta;
+            end
             if v.effect_until_oom_delta then
                 v.effect_until_oom_weight = v.effect_until_oom_delta/normalize_table.effect_until_oom_delta;
             end
@@ -2781,11 +2780,10 @@ calc.stat_weights                       = stat_weights;
 calc.spell_diff                         = spell_diff;
 calc.resource_regen_info                = resource_regen_info;
 calc.only_threat_info                   = only_threat_info;
-calc.add_extra_effect                   = add_extra_effect;
-calc.effect_flags                       = effect_flags;
 calc.calc_spell_eval                    = calc_spell_eval;
 calc.calc_spell_threat                  = calc_spell_threat;
 calc.calc_spell_resource_regen          = calc_spell_resource_regen;
 calc.calc_spell_dummy_cast_until_oom    = calc_spell_dummy_cast_until_oom;
 
 sc.calc                      = calc;
+

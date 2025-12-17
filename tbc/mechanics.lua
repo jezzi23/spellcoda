@@ -11,6 +11,8 @@ local spell_flags                                   = sc.spell_flags;
 local comp_flags                                    = sc.comp_flags;
 local lookups                                       = sc.lookups;
 
+local auto_attack_spell_id                          = sc.auto_attack_spell_id;
+
 local spell_lname                                   = sc.utils.spell_lname;
 local dummy_value                                   = sc.utils.dummy_value;
 
@@ -39,7 +41,7 @@ local class_stats_spell = (function()
         return function(anycomp, bid, stats, spell, loadout, effects)
         end
     elseif class == classes.rogue then
-        return function(stats, spell, loadout, effects)
+        return function(anycomp, bid, stats, spell, loadout, effects)
         end
     elseif class == classes.priest then
         return function(anycomp, bid, stats, spell, loadout, effects)
@@ -91,8 +93,31 @@ else
     special_abilities = {};
 end
 
-mechanics.client_class_stats_spell = class_stats_spell;
-mechanics.special_abilities = special_abilities;
+local function stats_glance(stats, bid, loadout)
+    if bid ~= auto_attack_spell_id then
+        return 0.0, 0.0, 0.0;
+    end
+    local glance_p = 0.06 + (loadout.target_lvl*5-stats.attack_skill)*0.012;
+    local glance_min, glance_max;
+    if loadout.target_lvl*5-stats.attack_skill >= 11 then
+        glance_min =
+            math.max(0.01, math.min(0.91, 1.4 - 0.05*(loadout.target_defense-loadout.lvl*5)))
+        glance_max =
+            math.max(0.2, math.min(0.99, 1.3 - 0.03*(loadout.target_defense-loadout.lvl*5)))
+    else
+        glance_min =
+            math.max(0.01, math.min(0.91, 1.3 - 0.05*(loadout.target_defense-loadout.lvl*5)))
+        glance_max =
+            math.max(0.2, math.min(0.99, 1.2 - 0.03*(loadout.target_defense-loadout.lvl*5)))
+    end
+
+    return math.max(0.0, math.min(1.0, glance_p)), glance_min, glance_max;
+end
+
+--------------------------------------------------------------------------------
+mechanics.client_class_stats_spell          = class_stats_spell;
+mechanics.client_special_abilities          = special_abilities;
+mechanics.stats_glance                      = stats_glance;
 
 sc.mechanics = mechanics;
 

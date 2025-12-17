@@ -59,7 +59,8 @@ local default_settings     = {
     tooltip_item_ignore_leather                                 = false,
     tooltip_item_ignore_mail                                    = false,
     tooltip_item_ignore_plate                                   = false,
-    tooltip_item_diff_debug                                     = false,
+    tooltip_item_stat_diff                                      = false,
+    tooltip_item_stat_diff_resolved                             = false,
 
     -- overlay
     overlay_display_normal                                      = false,

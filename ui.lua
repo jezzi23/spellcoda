@@ -1889,9 +1889,28 @@ local function create_sw_ui_tooltip_frame(pframe)
             txt = L["Show skill levels for weapons"],
         },
         {
-            id = "tooltip_item_diff_debug",
-            txt = L["Show stat changes"],
-            tooltip = "Intended for debugging."
+            id = "tooltip_item_stat_diff",
+            txt = L["Show basic stat changes"],
+            tooltip = "Intended for debugging. Shows direct stat changes detected by calculator.",
+            func = function(self)
+                local other = getglobal("__sc_frame_setting_tooltip_item_stat_diff_resolved");
+                if self:GetChecked() and other:GetChecked() then
+                    -- toggle other stat diff option off
+                    other:Click();
+                end
+            end
+        },
+        {
+            id = "tooltip_item_stat_diff_resolved",
+            txt = L["Show resolved stat changes"],
+            tooltip = "Intended for debugging. Shows all changes detected by calculator, including resolved indirect changes, e.g. critical from intellect, spell power from % of spirit talent etc.",
+            func = function(self)
+                local other = getglobal("__sc_frame_setting_tooltip_item_stat_diff");
+                if self:GetChecked() and other:GetChecked() then
+                    -- toggle other stat diff option off
+                    other:Click();
+                end
+            end
         },
         {
             id = "tooltip_item_ignore_unequippable",
@@ -2987,58 +3006,61 @@ local function create_sw_ui_calculator_frame(pframe)
     f:SetWidth(70);
     f:SetText(L["Clear"]);
 
-     pframe.stats = {
-         int = {
-             label_str = L["Intellect"]
-         },
-         spirit = {
-             label_str = L["Spirit"]
-         },
-         str = {
-             label_str = L["Strength"]
-         },
-         agi = {
-             label_str = L["Agility"]
-         },
-         sp = {
-             label_str = L["Spell Power"]
-         },
-         sd = {
-             label_str = L["Spell Damage"]
-         },
-         hp = {
-             label_str = L["Healing Power"]
-         },
-         ap = {
-             label_str = L["Melee Attack Power"]
-         },
-         rap = {
-             label_str = L["Ranged Attack Power"]
-         },
-         wep = {
-             label_str = L["All Weapon Skill"]
-         },
-         crit_rating = {
-             label_str = L["Critical"]
-         },
-         hit_rating = {
-             label_str = L["Hit"]
-         },
-         haste_rating = {
-             label_str = L["Haste"]
-         },
-         mp5 = {
-             label_str = L["MP5"]
-         },
-         spell_pen = {
-             label_str = L["Spell Penetration"]
-         },
-     };
-     local comparison_stats_listing_order = {
-         "str", "agi", "int", "spirit", "crit_rating", "hit_rating", "haste_rating",
-         "", -- split column delimiter
-         "ap", "rap", "wep", "sp", "sd", "hp", "mp5", "spell_pen",
-     };
+    pframe.stats = {
+        int = {
+            label_str = L["Intellect"]
+        },
+        spirit = {
+            label_str = L["Spirit"]
+        },
+        str = {
+            label_str = L["Strength"]
+        },
+        agi = {
+            label_str = L["Agility"]
+        },
+        sp = {
+            label_str = L["Spell Power"]
+        },
+        sd = {
+            label_str = L["Spell Damage"]
+        },
+        hp = {
+            label_str = L["Healing Power"]
+        },
+        ap = {
+            label_str = L["Melee Attack Power"]
+        },
+        rap = {
+            label_str = L["Ranged Attack Power"]
+        },
+        wep = {
+            label_str = L["All Weapon Skill"]
+        },
+        crit_rating = {
+            label_str = L["Critical"]
+        },
+        hit_rating = {
+            label_str = L["Hit"]
+        },
+        haste_rating = {
+            label_str = L["Haste"]
+        },
+        mp5 = {
+            label_str = L["MP5"]
+        },
+        pen = {
+            label_str = L["Penetration"]
+        },
+        expertise_rating = {
+            label_str = L["Expertise"],
+        },
+    };
+    local comparison_stats_listing_order = {
+        "str", "agi", "int", "spirit", "crit_rating", "hit_rating", "haste_rating", "expertise_rating",
+        "", -- split column delimiter
+        "ap", "rap", "wep", "sp", "sd", "hp", "mp5", "pen",
+    };
 
     local num_stats = 0;
     for _ in pairs(pframe.stats) do
@@ -3112,6 +3134,11 @@ local function create_sw_ui_calculator_frame(pframe)
 
         max_y_offset_stats = math.min(max_y_offset_stats, y_offset_stats);
         i = i + 1;
+    end
+
+    if sc.expansion == sc.expansions.vanilla then
+        pframe.stats.expertise_rating.editbox:Hide();
+        pframe.stats.expertise_rating.label:Hide();
     end
 
     pframe.y_offset = pframe.y_offset + max_y_offset_stats;
@@ -3901,7 +3928,7 @@ local function create_sw_ui_buffs_frame(pframe)
             for _, view in ipairs(buffs_views) do
                 view.filtered = {};
                 for k, v in ipairs(view.buffs) do
-                    if string.find(string.lower(v.lname), string.lower(txt)) or 
+                    if v.lname and string.find(string.lower(v.lname), string.lower(txt)) or
                         (num and num == v.id) then
                         table.insert(view.filtered, k);
                     end
@@ -4706,6 +4733,8 @@ local function create_sw_base_ui()
     for k, _ in pairs(sc.core.event_dispatch) do
         if not sc.core.event_dispatch_client_exceptions[k] or
                 sc.core.event_dispatch_client_exceptions[k] == sc.expansion then
+
+            -- BROKEN PTR TEMPORARY FIX: remember to grep for this phrase to remove later, event missing
             local ok, err = pcall(function() __sc_frame:RegisterEvent(k) end);
             if sc.core.__sw__debug__ and not ok then
                 print("DEBUG: Event does not exist:", k);

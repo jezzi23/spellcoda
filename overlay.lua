@@ -306,14 +306,19 @@ local function gather_spell_icons()
 
     -- gather action bar icons
     local index = 1;
-    if IsAddOnLoaded("Bartender4") then -- check for some common addons if they overrite spellbook frames
+    if not IsAddOnLoaded then
+        -- BROKEN PTR TEMPORARY FIX: remember to grep for this phrase to remove later
+        IsAddOnLoaded = function() return false end;
+    end
+    -- check for some common addons if they overrite spellbook frames
+    if IsAddOnLoaded("Bartender4") then
 
         for i = 1, 120 do
             action_bar_frame_names[i] = "BT4Button"..i;
         end
         action_bar_addon_name = "Bartender4";
 
-    elseif IsAddOnLoaded("ElvUI") then -- check for some common addons if they overrite spellbook frames
+    elseif IsAddOnLoaded("ElvUI") then
 
         for i = 1, 10 do
             for j = 1, 12 do
@@ -325,7 +330,7 @@ local function gather_spell_icons()
         end
         action_bar_addon_name = "ElvUI";
 
-    elseif IsAddOnLoaded("Dominos") then -- check for some common addons if they overrite spellbook frames
+    elseif IsAddOnLoaded("Dominos") then
 
         local bars = {
             "ActionButton", "DominosActionButton", "MultiBarRightButton",

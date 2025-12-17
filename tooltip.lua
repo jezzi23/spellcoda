@@ -1906,7 +1906,10 @@ local empty_tex = "Interface\\Buttons\\UI-Quickslot2";
 local function make_item_tooltip_data(tooltip)
     local data = {
 
-        cached_spells_cmp_item_slots = { [1] = { len = 0, diff_list = {} }, [2] = { len = 0, diff_list = {} } },
+        cached_spells_cmp_item_slots = {
+            [1] = { len = 0, diff_list = {}, diff_str = ""},
+            [2] = { len = 0, diff_list = {}, diff_str = ""}
+        },
         tooltip_item_id_last = 0,
         item_tooltip_frames_hidden = false,
         item_tooltip_effects_update_id = 0,
@@ -2057,8 +2060,11 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             end
 
             apply_item_cmp(loadout, effects, effects_diffed, tt.new_item, old_item, slot);
-            if config.settings.tooltip_item_diff_debug then
-                tooltip:AddLine(effects_diff_str_debug(effects, effects_diffed));
+            if config.settings.tooltip_item_stat_diff then
+                slot_cmp.diff_str = effects_diff_str_debug(effects, effects_diffed);
+            elseif config.settings.tooltip_item_stat_diff_resolved then
+                effects_finalize_forced(loadout, effects_diffed);
+                slot_cmp.diff_str = effects_diff_str_debug(effects_finalized, effects_diffed);
             end
 
             local i = 0;
@@ -2236,6 +2242,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     tt.headers.first_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", -offset_to_first, 0);
     tt.headers.change_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", -offset_to_change, 0);
 
+
     for item_fits_in_slot, _ in pairs(cmp_slots) do
         local slot_cmp;
         if item_fits_in_slot > 1 then
@@ -2347,6 +2354,10 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 v:SetParent(tooltip);
                 v:Show();
             end
+        end
+
+        if config.settings.tooltip_item_stat_diff or config.settings.tooltip_item_stat_diff_resolved then
+            tooltip:AddLine(slot_cmp.diff_str);
         end
     end
     if config.settings.tooltip_item_show_evaluation_modes and
