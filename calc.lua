@@ -48,6 +48,7 @@ local gcd_min                                       = sc.mechanics.gcd_min;
 local client_class_stats_spell                      = sc.mechanics.client_class_stats_spell;
 local client_special_abilities                      = sc.mechanics.client_special_abilities;
 local stats_glance                                  = sc.mechanics.stats_glance;
+local caster_coef_multiplier                        = sc.mechanics.caster_coef_multiplier;
 
 --------------------------------------------------------------------------------
 local calc = sc.calc;
@@ -94,6 +95,12 @@ local cr_weights = {
     [CR_RESILIENCE_CRIT_TAKEN]     = 25,
     [CR_RESILIENCE_SPELL_CRIT_TAKEN] = 25,
 };
+
+if sc.expansion == sc.expansions.vanilla then
+    for k in pairs(cr_weights) do
+        cr_weights[k] = 1;
+    end
+end
 
 local evaluation_flags = {
     assume_single_effect                    = bit.lshift(1, 1),
@@ -619,6 +626,7 @@ local function stats_coef(combo_pts, bid, comp, spell, loadout, effects, eval_fl
     else
         coef = (comp.coef + (effects.ability.coef_mod_flat[bid] or 0.0))
             * (1.0 + (effects.ability.coef_mod[bid] or 0.0));
+        coef = coef * caster_coef_multiplier(spell.lvl_req, spell.lvl_max, loadout.lvl);
     end
     return coef, coef_max or coef;
 end
@@ -635,7 +643,7 @@ local function stats_armor_dr(armor, comp, loadout)
     return dr;
 end
 
-local function stats_spell_mod(armor_dr, attack_subclass, comp, spell, effects, stats)
+local function stats_spell_mod(armor_dr, attack_subclass, bid, comp, spell, effects, stats)
 
     local effect_mod = stats.effect_mod;
     if bit.band(comp.flags, comp_flags.periodic) ~= 0 then
@@ -649,6 +657,8 @@ local function stats_spell_mod(armor_dr, attack_subclass, comp, spell, effects, 
             (stats.target_vuln_mod_mul * effects.mul.raw.vuln_heal)
             *
             effects.mul.raw.heal_mod
+            *
+            (effects.mul.ability.heal_mod[bid] or 1)
             *
             effect_mod;
 
@@ -791,7 +801,8 @@ local function stats_cast_time(stats, bid, comp, spell, loadout, effects, eval_f
             (spell.cast_time + (effects.ability.cast_mod_flat[bid] or 0.0))
 
         if comp.school1 ~= schools.physical or bit.band(comp.flags, comp_flags.no_attack) ~= 0 then
-            cast_time = cast_time/(effects.mul.raw.cast_haste*spell_haste_mul_from_rating);
+            cast_time = cast_time/
+                (effects.mul.raw.cast_haste * (effects.mul.ability.cast_haste[bid] or 1) * spell_haste_mul_from_rating);
         end
     end
 
@@ -948,7 +959,7 @@ local function spell_stats_direct(stats, spell, loadout, effects, eval_flags)
     stats.spell_power = stats_sp(benefit_id, direct, spell, loadout, effects);
     stats.coef, stats.coef_max = stats_coef(stats.combo_pts, benefit_id, direct, spell, loadout, effects, eval_flags);
     stats.armor_dr = stats_armor_dr(stats.armor, direct, loadout);
-    stats.spell_mod = stats_spell_mod(stats.armor_dr, stats.attack_subclass, direct, spell, effects, stats);
+    stats.spell_mod = stats_spell_mod(stats.armor_dr, stats.attack_subclass, bid, direct, spell, effects, stats);
 
     write_attack_table(stats, true);
     -- hit used as probability to do any kind of damage, allowing procs of attack
@@ -1032,7 +1043,7 @@ local function spell_stats_periodic(stats, spell, loadout, effects, eval_flags)
     stats.spell_power_ot = stats_sp(benefit_id, periodic, spell, loadout, effects);
     stats.coef_ot, stats.coef_ot_max = stats_coef(stats.combo_pts, benefit_id, periodic, spell, loadout, effects, eval_flags);
     stats.armor_dr_ot = stats_armor_dr(stats.armor, periodic, loadout);
-    stats.spell_mod_ot = stats_spell_mod(stats.armor_dr_ot, stats.attack_subclass_ot, periodic, spell, effects, stats);
+    stats.spell_mod_ot = stats_spell_mod(stats.armor_dr_ot, stats.attack_subclass_ot, bid, periodic, spell, effects, stats);
 
     write_attack_table(stats, false);
     -- hit used as probability to do any kind of damage, allowing procs of attack
@@ -1077,7 +1088,7 @@ local function spell_stats_periodic(stats, spell, loadout, effects, eval_flags)
         local haste_mul = 1.0 +
             0.01*(loadout.spell_haste_rating+effects.raw.spell_haste_rating_flat)/
                 (loadout.cr_scaling * cr_weights[CR_HASTE_SPELL]);
-        haste_mul = haste_mul * effects.mul.raw.cast_haste;
+        haste_mul = haste_mul * effects.mul.raw.cast_haste * (effects.mul.ability.cast_haste[bid] or 1);
         stats.dur_ot = stats.dur_ot/haste_mul;
         stats.tick_time_ot = stats.tick_time_ot/haste_mul;
     end
@@ -1105,11 +1116,6 @@ local class_stats_spell = (function()
     elseif class == classes.paladin then
         return function(anycomp, bid, stats, spell, loadout, effects)
             if bit.band(spell.flags, spell_flags.heal) ~= 0 then
-                -- illumination
-                local pts = l_talents.pts[109];
-                if pts ~= 0 then
-                    stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + pts * 0.2 * stats.original_base_cost;
-                end
 
                 if bid == spids.holy_light and spell.rank < 4 then
                     -- Subtract healing to account for blessing of light coef for low rank holy light
@@ -2273,7 +2279,7 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
             local haste_mul = 1.0 +
                 0.01*(loadout.spell_haste_rating+effects.raw.spell_haste_rating_flat)/
                     (loadout.cr_scaling * cr_weights[CR_HASTE_SPELL]);
-            haste_mul = haste_mul * effects.mul.raw.cast_haste;
+            haste_mul = haste_mul * effects.mul.raw.cast_haste * (effects.mul.ability.cast_haste[bid] or 1);
             info.dur = info.dur/haste_mul;
             info.tick_time = info.tick_time/haste_mul;
         end

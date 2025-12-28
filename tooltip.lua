@@ -99,7 +99,9 @@ local function format_bounce_spell(min_hit, max_hit, bounces, falloff)
 end
 
 local function stat_weights_tooltip(tooltip, weights_list, key, weight_normalize_to, effect_type_str)
-    if config.settings["tooltip_display_stat_weights_" .. key] and weight_normalize_to[key .. "_delta"] > 0 then
+    if config.settings["tooltip_display_stat_weights_" .. key] and
+        weight_normalize_to[key .. "_delta"] and
+        weight_normalize_to[key .. "_delta"] > 0 then
         local num_weights = #weights_list;
         local max_weights_per_line = 4;
 
@@ -1011,8 +1013,8 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                     string.format("%s:", effect),
                     string.format("%.1f %s %.0fs (%.1f;%.1f;%.1f;%.1f;%.1f;%.1f;%.1f %s %.1fs x %.0f)",
                         info.ot_min_noncrit_if_hit1,
-                        info.ot_dur1,
                         L["over"],
+                        info.ot_dur1,
                         ((3 * 0.1425 + 1.0) * heal_wo_sp + heal_from_sp) / info.ot_ticks1,
                         ((2 * 0.1425 + 1.0) * heal_wo_sp + heal_from_sp) / info.ot_ticks1,
                         ((1 * 0.1425 + 1.0) * heal_wo_sp + heal_from_sp) / info.ot_ticks1,
@@ -2060,9 +2062,8 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             end
 
             apply_item_cmp(loadout, effects, effects_diffed, tt.new_item, old_item, slot);
+
             if config.settings.tooltip_item_stat_diff then
-                slot_cmp.diff_str = effects_diff_str_debug(effects, effects_diffed);
-            elseif config.settings.tooltip_item_stat_diff_resolved then
                 effects_finalize_forced(loadout, effects_diffed);
                 slot_cmp.diff_str = effects_diff_str_debug(effects_finalized, effects_diffed);
             end
@@ -2356,7 +2357,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             end
         end
 
-        if config.settings.tooltip_item_stat_diff or config.settings.tooltip_item_stat_diff_resolved then
+        if config.settings.tooltip_item_stat_diff then
             tooltip:AddLine(slot_cmp.diff_str);
         end
     end

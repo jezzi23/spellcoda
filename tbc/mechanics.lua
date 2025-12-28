@@ -11,6 +11,8 @@ local spell_flags                                   = sc.spell_flags;
 local comp_flags                                    = sc.comp_flags;
 local lookups                                       = sc.lookups;
 
+local l_talents                                     = sc.loadouts.active_loadout().talents;
+
 local auto_attack_spell_id                          = sc.auto_attack_spell_id;
 
 local spell_lname                                   = sc.utils.spell_lname;
@@ -36,6 +38,13 @@ local class_stats_spell = (function()
         end
     elseif class == classes.paladin then
         return function(anycomp, bid, stats, spell, loadout, effects)
+            if bit.band(spell.flags, spell_flags.heal) ~= 0 then
+                -- illumination
+                local pts = l_talents.pts[109];
+                if pts ~= 0 then
+                    stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + 0.6 * pts * 0.2 * stats.original_base_cost;
+                end
+            end
         end
     elseif class == classes.hunter then
         return function(anycomp, bid, stats, spell, loadout, effects)
@@ -114,10 +123,16 @@ local function stats_glance(stats, bid, loadout)
     return math.max(0.0, math.min(1.0, glance_p)), glance_min, glance_max;
 end
 
+local function caster_coef_multiplier(slvl, mlvl, clvl)
+    local mod = math.min(1, (slvl + 11)/clvl);
+    return mod;
+end
+
 --------------------------------------------------------------------------------
 mechanics.client_class_stats_spell          = class_stats_spell;
 mechanics.client_special_abilities          = special_abilities;
 mechanics.stats_glance                      = stats_glance;
+mechanics.caster_coef_multiplier            = caster_coef_multiplier;
 
 sc.mechanics = mechanics;
 
