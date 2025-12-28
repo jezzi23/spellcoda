@@ -53,12 +53,13 @@ local default_settings     = {
     tooltip_item_leveling_skill_normalize                       = true,
     tooltip_item_weapon_skill                                   = true,
     tooltip_item_smart                                          = true,
-    tooltip_item_show_evaluation_modes                          = true,
+    tooltip_item_show_evaluation_modes                          = false,
     tooltip_item_ignore_unequippable                            = false,
     tooltip_item_ignore_cloth                                   = false,
     tooltip_item_ignore_leather                                 = false,
     tooltip_item_ignore_mail                                    = false,
     tooltip_item_ignore_plate                                   = false,
+    tooltip_item_stat_diff                                      = false,
 
     -- overlay
     overlay_display_normal                                      = false,
@@ -366,7 +367,9 @@ local default_loadout_config = {
     lvl = 1,
     default_target_lvl_diff = 3,
     default_target_hp_perc = 100.0,
+    default_target_creature_type = 0,
     target_res = 0,
+    target_pvpres = 0,
     target_automatic_armor = true,
     target_automatic_armor_pct = 100,
     target_armor = 0,
@@ -434,49 +437,9 @@ local function set_active_settings()
     config.active_profile_name = __sc_p_char[spec_keys[sc.core.active_spec]];
 end
 
-local function activate_settings()
-    for k, v in pairs(config.settings) do
-        local f = getglobal("__sc_frame_setting_" .. k);
-        if f then
-            local ft = f._type;
-            if ft == "CheckButton" then
-                if f:GetChecked() ~= v then
-                    f:Click();
-                end
-            elseif ft == "Slider" then
-                f:SetValue(v);
-            elseif ft == "EditBox" then
-                if f.number_editbox then
-                    if tonumber(f:GetText()) ~= v then
-                        f:SetText(tostring(v));
-                    end
-                else
-                    if f:GetText() ~= v then
-                        f:SetText(v);
-                    end
-                end
-            elseif ft == "DropDownMenu" then
-                f:init_func();
-            end
-        end
-    end
-
-    sc.overlay.ccf_parent:ClearAllPoints();
-    sc.overlay.ccf_parent:SetPoint(
-        config.settings.overlay_cc_info_region,
-        config.settings.overlay_cc_info_x,
-        config.settings.overlay_cc_info_y
-    );
-end
-
-local function set_active_loadout(idx)
-    __sc_p_char.active_loadout = idx;
-    config.loadout = __sc_p_char.loadouts[idx];
-end
-
-local function activate_loadout_config()
-    for k, v in pairs(config.loadout) do
-        local f = getglobal("__sc_frame_loadout_" .. k);
+local function activate_config(config_type, prefix)
+    for k, v in pairs(config[config_type]) do
+        local f = getglobal(prefix .. k);
         if f and f._type then
             local ft = f._type;
             if ft == "CheckButton" then
@@ -492,14 +455,38 @@ local function activate_loadout_config()
                     if tonumber(f:GetText()) ~= v then
                         f:SetText(tostring(v));
                     end
-                else
-                    if f:GetText() ~= v then
-                        f:SetText(v);
-                    end
+                end
+
+            elseif ft == "DropDownMenu" then
+                f:init_func();
+            else
+                if f:GetText() ~= v then
+                    f:SetText(v);
                 end
             end
         end
     end
+end
+
+local function activate_settings()
+    
+    activate_config("settings", "__sc_frame_setting_");
+
+    sc.overlay.ccf_parent:ClearAllPoints();
+    sc.overlay.ccf_parent:SetPoint(
+        config.settings.overlay_cc_info_region,
+        config.settings.overlay_cc_info_x,
+        config.settings.overlay_cc_info_y
+    );
+end
+
+local function set_active_loadout(idx)
+    __sc_p_char.active_loadout = idx;
+    config.loadout = __sc_p_char.loadouts[idx];
+end
+
+local function activate_loadout_config()
+    activate_config("loadout", "__sc_frame_loadout_");
 end
 
 local function save_config()

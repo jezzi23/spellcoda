@@ -11,6 +11,10 @@ local spell_flags                                   = sc.spell_flags;
 local comp_flags                                    = sc.comp_flags;
 local lookups                                       = sc.lookups;
 
+local l_talents                                     = sc.loadouts.active_loadout().talents;
+
+local auto_attack_spell_id                          = sc.auto_attack_spell_id;
+
 local spell_lname                                   = sc.utils.spell_lname;
 local dummy_value                                   = sc.utils.dummy_value;
 
@@ -24,6 +28,8 @@ local get_buff_by_lname                             = sc.buffs.get_buff_by_lname
 ---------------------------------------------------------------------------------------------------
 local mechanics = {};
 -- Vanilla specific behaviour uncompatible with other version
+mechanics.gcd = 1.5;
+mechanics.gcd_min = 1.5;
 
 local class_stats_spell = (function()
     if class == classes.warrior then
@@ -32,6 +38,13 @@ local class_stats_spell = (function()
     elseif class == classes.paladin then
         return function(anycomp, bid, stats, spell, loadout, effects)
             if bit.band(spell.flags, spell_flags.heal) ~= 0 then
+
+                -- illumination
+                local pts = l_talents.pts[109];
+                if pts ~= 0 then
+                    stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + pts * 0.2 * stats.original_base_cost;
+                end
+
                 if loadout.enchants[lookups.rune_fanaticism] and spell.direct then
                     add_extra_effect(
                         stats,
@@ -200,7 +213,60 @@ local class_stats_spell = (function()
     end
 end)();
 
-mechanics.client_class_stats_spell = class_stats_spell;
+local special_abilities;
+if class == classes.shaman then
+    special_abilities = {
+    };
+--elseif class == classes.priest then
+--    special_abilities = {
+--    };
+--elseif class == classes.druid then
+--    special_abilities = {
+--    };
+--elseif class == classes.warlock then
+--    special_abilities = {
+--    };
+--elseif class == classes.paladin then
+--    special_abilities = {
+--    };
+--elseif class == classes.mage then
+--    special_abilities = {
+--    };
+--elseif class == classes.rogue then
+--    special_abilities = {
+--    };
+--elseif class == classes.warrior then
+--    special_abilities = {
+--    };
+--elseif class == classes.hunter then
+--    special_abilities = {
+--    };
+else
+    special_abilities = {};
+end
+
+local function stats_glance(stats, bid, loadout)
+    if bid ~= auto_attack_spell_id then
+        return 0.0, 0.0, 0.0;
+    end
+    local glance_p = 0.1 + (loadout.target_lvl*5 - math.min(loadout.lvl*5, stats.attack_skill)) * 0.02;
+    local glance_min =
+        math.max(0.01, math.min(0.91, 1.3 - 0.05*(loadout.target_defense-stats.attack_skill)))
+    local glance_max = 
+        math.max(0.2, math.min(0.99, 1.3 - 0.03*(loadout.target_defense-stats.attack_skill)))
+
+    return math.max(0.0, math.min(1.0, glance_p)), glance_min, glance_max;
+end
+
+local function caster_coef_multiplier(slvl, mlvl, clvl)
+    return 1;
+end
+
+--------------------------------------------------------------------------------
+mechanics.client_class_stats_spell          = class_stats_spell;
+mechanics.client_special_abilities          = special_abilities;
+mechanics.stats_glance                      = stats_glance;
+mechanics.caster_coef_multiplier            = caster_coef_multiplier;
 
 sc.mechanics = mechanics;
 

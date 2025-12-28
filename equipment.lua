@@ -67,47 +67,35 @@ local function num_set_pieces(loadout, set_id)
         return 0;
     end
 end
-local GetItemStats = GetItemStats or C_Item.GetItemStats
+
+local GetItemStats = GetItemStats or C_Item.GetItemStats;
+
+local function flat_add(val, forced, undo, attr_table, attr)
+    if not forced then
+        return;
+    end
+    if undo then
+        val = -val;
+    end
+    attr_table[attr] = attr_table[attr] + val;
+end
 
 -- Generated spell effects handle most item effects but some require special handling
 local item_stats_handler = {
     ITEM_MOD_INTELLECT_SHORT = function(effects, val, _, forced, undo)
-        if not forced then
-            return;
-        end
-        if undo then
-            val = -val;
-        end
-        effects.by_attr.stat_flat[attr.intellect] = effects.by_attr.stat_flat[attr.intellect] + val;
+        flat_add(val, forced, undo, effects.by_attr.stat_flat, attr.intellect);
     end,
     ITEM_MOD_SPIRIT_SHORT = function(effects, val, _, forced, undo)
-        if not forced then
-            return;
-        end
-        if undo then
-            val = -val;
-        end
-        effects.by_attr.stat_flat[attr.spirit] = effects.by_attr.stat_flat[attr.spirit] + val;
+        flat_add(val, forced, undo, effects.by_attr.stat_flat, attr.spirit);
     end,
     ITEM_MOD_STRENGTH_SHORT = function(effects, val, _, forced, undo)
-        if not forced then
-            return;
-        end
-        if undo then
-            val = -val;
-        end
-        effects.by_attr.stat_flat[attr.strength] = effects.by_attr.stat_flat[attr.strength] + val;
+        flat_add(val, forced, undo, effects.by_attr.stat_flat, attr.strength);
     end,
     ITEM_MOD_AGILITY_SHORT = function(effects, val, _, forced, undo)
-        if not forced then
-            return;
-        end
-        if undo then
-            val = -val;
-        end
-        effects.by_attr.stat_flat[attr.agility] = effects.by_attr.stat_flat[attr.agility] + val;
+        flat_add(val, forced, undo, effects.by_attr.stat_flat, attr.agility);
     end,
 };
+
 
 local function apply_weapon(effects, id, slot, subclass_id, undo)
 

@@ -23,6 +23,7 @@ local update_loadout_and_effects_diffed_from_ui = sc.loadouts.update_loadout_and
 local effects_finalize_forced                   = sc.loadouts.effects_finalize_forced;
 local cpy_effects                               = sc.loadouts.cpy_effects;
 local empty_effects                             = sc.loadouts.empty_effects;
+local effects_diff_str_debug                    = sc.loadouts.effects_diff_str_debug;
 
 local apply_item_cmp                            = sc.equipment.apply_item_cmp;
 local slots                                     = sc.equipment.slots;
@@ -98,7 +99,9 @@ local function format_bounce_spell(min_hit, max_hit, bounces, falloff)
 end
 
 local function stat_weights_tooltip(tooltip, weights_list, key, weight_normalize_to, effect_type_str)
-    if config.settings["tooltip_display_stat_weights_" .. key] and weight_normalize_to[key .. "_delta"] > 0 then
+    if config.settings["tooltip_display_stat_weights_" .. key] and
+        weight_normalize_to[key .. "_delta"] and
+        weight_normalize_to[key .. "_delta"] > 0 then
         local num_weights = #weights_list;
         local max_weights_per_line = 4;
 
@@ -1010,8 +1013,8 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                     string.format("%s:", effect),
                     string.format("%.1f %s %.0fs (%.1f;%.1f;%.1f;%.1f;%.1f;%.1f;%.1f %s %.1fs x %.0f)",
                         info.ot_min_noncrit_if_hit1,
-                        info.ot_dur1,
                         L["over"],
+                        info.ot_dur1,
                         ((3 * 0.1425 + 1.0) * heal_wo_sp + heal_from_sp) / info.ot_ticks1,
                         ((2 * 0.1425 + 1.0) * heal_wo_sp + heal_from_sp) / info.ot_ticks1,
                         ((1 * 0.1425 + 1.0) * heal_wo_sp + heal_from_sp) / info.ot_ticks1,
@@ -1389,7 +1392,9 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
     end
 
     if config.settings.tooltip_display_base_mod then
-        if spell.direct and spell.direct.min ~= info.min_noncrit_if_hit_base1 then
+        if spell.direct and info.min_noncrit_if_hit_base1 and
+            spell.direct.min ~= info.min_noncrit_if_hit_base1 then
+
             local armor_dr_adjusted = 1 / (1 - stats.armor_dr);
             if info.min_noncrit_if_hit_base1 ~= info.max_noncrit_if_hit_base1 then
                 add_line(
@@ -1423,7 +1428,9 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 );
             end
         end
-        if spell.periodic and spell.periodic.min ~= info.ot_min_noncrit_if_hit_base1 then
+        if spell.periodic and info.ot_min_noncrit_if_hit_base1 and
+            spell.periodic.min ~= info.ot_min_noncrit_if_hit_base1 then
+
             local armor_dr_adjusted = 1 / (1 - stats.armor_dr_ot);
             if info.ot_min_noncrit_if_hit_base1 ~= info.ot_max_noncrit_if_hit_base1 then
                 add_line(
@@ -1507,28 +1514,33 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         ((spell.direct and stats.coef > 0) or (spell.periodic and stats.coef_ot > 0)) then
         local effect_base = 0;
         local effect_total = 0;
+        local sp = 0;
         if spell.direct then
             effect_base = effect_base + 0.5 * (info.min_noncrit_if_hit_base1 + info.max_noncrit_if_hit_base1);
             effect_total = effect_total + 0.5 * (info.min_noncrit_if_hit1 + info.max_noncrit_if_hit1);
+            sp = stats.spell_power;
         end
         if spell.periodic then
             effect_base = effect_base + 0.5 * (info.ot_min_noncrit_if_hit_base1 + info.ot_max_noncrit_if_hit_base1);
             effect_total = effect_total + 0.5 * (info.ot_min_noncrit_if_hit1 + info.ot_max_noncrit_if_hit1);
+            sp = math.max(sp, stats.spell_power_ot);
         end
         local effect_sp = effect_total - effect_base;
 
-        add_line(
-            tooltip,
-            string.format("%s %.0f %s:", L["Improved by"], stats.spell_power, pwr),
-            string.format("%.1f%% (%.1f%% %s, %.1f%% %s)",
-                100 * effect_sp / effect_base,
-                100 * effect_base / (effect_base + effect_sp),
-                L["base"],
-                100 * effect_sp / (effect_base + effect_sp),
-                pwr
-            ),
-            effect_color("sp_effect")
-        );
+        if effect_base ~= 0 then
+            add_line(
+                tooltip,
+                string.format("%s %.0f %s:", L["Improved by"], sp, pwr),
+                string.format("%.1f%% (%.1f%% %s, %.1f%% %s)",
+                    100 * effect_sp / effect_base,
+                    100 * effect_base / (effect_base + effect_sp),
+                    L["base"],
+                    100 * effect_sp / (effect_base + effect_sp),
+                    pwr
+                ),
+                effect_color("sp_effect")
+            );
+        end
     end
     if config.settings.tooltip_display_spell_rank then
         append_tooltip_spell_rank(tooltip, spell, loadout.lvl);
@@ -1896,7 +1908,10 @@ local empty_tex = "Interface\\Buttons\\UI-Quickslot2";
 local function make_item_tooltip_data(tooltip)
     local data = {
 
-        cached_spells_cmp_item_slots = { [1] = { len = 0, diff_list = {} }, [2] = { len = 0, diff_list = {} } },
+        cached_spells_cmp_item_slots = {
+            [1] = { len = 0, diff_list = {}, diff_str = ""},
+            [2] = { len = 0, diff_list = {}, diff_str = ""}
+        },
         tooltip_item_id_last = 0,
         item_tooltip_frames_hidden = false,
         item_tooltip_effects_update_id = 0,
@@ -2047,6 +2062,11 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             end
 
             apply_item_cmp(loadout, effects, effects_diffed, tt.new_item, old_item, slot);
+
+            if config.settings.tooltip_item_stat_diff then
+                effects_finalize_forced(loadout, effects_diffed);
+                slot_cmp.diff_str = effects_diff_str_debug(effects_finalized, effects_diffed);
+            end
 
             local i = 0;
             slot_cmp.len = 0;
@@ -2223,6 +2243,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     tt.headers.first_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", -offset_to_first, 0);
     tt.headers.change_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", -offset_to_change, 0);
 
+
     for item_fits_in_slot, _ in pairs(cmp_slots) do
         local slot_cmp;
         if item_fits_in_slot > 1 then
@@ -2334,6 +2355,10 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 v:SetParent(tooltip);
                 v:Show();
             end
+        end
+
+        if config.settings.tooltip_item_stat_diff then
+            tooltip:AddLine(slot_cmp.diff_str);
         end
     end
     if config.settings.tooltip_item_show_evaluation_modes and

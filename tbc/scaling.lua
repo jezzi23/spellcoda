@@ -1,4 +1,3 @@
-
 local _, sc = ...;
 
 local classes   = sc.classes;
