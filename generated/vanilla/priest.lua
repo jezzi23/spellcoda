@@ -5892,7 +5892,7 @@ sc.class_buffs = {
 			{"raw", "phys_dmg_flat", -4, nil, 0, 1},
 	},
 	[402794] = {
-			{"raw", "cast_haste", -0.59999996, nil, 0, 0},
+			{"raw", "cast_haste", -0.59999996, nil, 1, 0},
 	},
 };
 local class_hostile_buffs = {

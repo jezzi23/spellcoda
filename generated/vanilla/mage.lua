@@ -5469,7 +5469,7 @@ sc.class_buffs = {
 			{"ability", "cast_mod", -100, {133,401502,428878,412532,}, 64, 1},
 	},
 	[425121] = {
-			{"raw", "cast_haste", 0.19999999, nil, 0, 0},
+			{"raw", "cast_haste", 0.19999999, nil, 1, 0},
 	},
 	[12051] = {
 			{"raw", "regen_while_casting", 1, nil, 0, 1},
@@ -5514,7 +5514,7 @@ sc.class_buffs = {
 			{"raw", "melee_haste", -0.25, nil, 33, 1},
 	},
 	[429125] = {
-			{"raw", "cast_haste", 0.19999999, nil, 0, 0},
+			{"raw", "cast_haste", 0.19999999, nil, 1, 0},
 	},
 	[1218701] = {
 			{"raw", "phys_mod", 0.049999997, nil, 1, 0},

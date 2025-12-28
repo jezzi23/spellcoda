@@ -5968,7 +5968,7 @@ sc.talent_ranks = {
 sc.class_buffs = {
 	[20882] = {
 			{"raw", "melee_haste", -0.42999998, nil, 33, 1},
-			{"raw", "cast_haste", -0.29999998, nil, 0, 2},
+			{"raw", "cast_haste", -0.29999998, nil, 1, 2},
 	},
 	[11708] = {
 			{"raw", "phys_dmg_flat", -31, nil, 0, 0},
@@ -6014,7 +6014,7 @@ sc.class_buffs = {
 			{"by_school", "dmg_mod", 0.14999999, {3,}, 1, 0},
 	},
 	[1714] = {
-			{"raw", "cast_haste", -0.5, nil, 0, 0},
+			{"raw", "cast_haste", -0.5, nil, 1, 0},
 	},
 	[7659] = {
 			{"raw", "ap_flat", 65, nil, 2, 0},
@@ -6027,7 +6027,7 @@ sc.class_buffs = {
 	},
 	[1098] = {
 			{"raw", "melee_haste", -0.39999998, nil, 33, 1},
-			{"raw", "cast_haste", -0.29999998, nil, 0, 2},
+			{"raw", "cast_haste", -0.29999998, nil, 1, 2},
 	},
 	[440873] = {
 			{"ability", "cast_mod", -0.39999998, {6353,}, 0, 0},
@@ -6036,14 +6036,14 @@ sc.class_buffs = {
 			{"ability", "effect_mod_ot_flat", 222, {1120,}, 0, 0},
 	},
 	[11719] = {
-			{"raw", "cast_haste", -0.59999996, nil, 0, 0},
+			{"raw", "cast_haste", -0.59999996, nil, 1, 0},
 	},
 	[469225] = {
 			{"by_school", "dmg_mod", 0.14999999, {6,}, 1, 0},
 	},
 	[11725] = {
 			{"raw", "melee_haste", -0.39999998, nil, 33, 1},
-			{"raw", "cast_haste", -0.29999998, nil, 0, 2},
+			{"raw", "cast_haste", -0.29999998, nil, 1, 2},
 	},
 	[18791] = {
 			{"by_school", "dmg_mod", 0.14999999, {6,}, 1, 0},
@@ -6068,7 +6068,7 @@ sc.class_buffs = {
 			{"ability", "gcd_flat", 0, {1949,348,403629,17962,603,980,403677,403501,5676,426320,1120,6353,5740,172,412758,689,427717,17877,686,3110,460692,6789,18265,}, 0, 0},
 	},
 	[1227200] = {
-			{"raw", "cast_haste", 0.19999999, nil, 0, 0},
+			{"raw", "cast_haste", 0.19999999, nil, 1, 0},
 	},
 	[468540] = {
 			{"by_school", "crit", 0.099999994, {1,2,3,4,5,6,7,}, 32, 0},
@@ -6079,7 +6079,7 @@ sc.class_buffs = {
 	},
 	[11726] = {
 			{"raw", "melee_haste", -0.39999998, nil, 33, 1},
-			{"raw", "cast_haste", -0.29999998, nil, 0, 2},
+			{"raw", "cast_haste", -0.29999998, nil, 1, 2},
 	},
 	[450013] = {
 			{"ability", "cast_mod", -0.5, {348,426320,}, 64, 0},
@@ -6101,7 +6101,7 @@ sc.class_buffs = {
 			{"raw", "ap_flat", 90, nil, 2, 0},
 	},
 	[427714] = {
-			{"raw", "cast_haste", 0.29999998, nil, 0, 0},
+			{"raw", "cast_haste", 0.29999998, nil, 1, 0},
 	},
 	[1214166] = {
 			{"by_school", "dmg_mod", 0.14999999, {1,2,3,4,5,6,7,}, 1, 0},
