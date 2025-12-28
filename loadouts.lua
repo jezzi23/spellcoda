@@ -327,6 +327,8 @@ local effects_multiplicative = {
     },
     ability = {
         "vuln_mod",
+        "cast_haste",
+        "heal_mod",
     },
     wpn_subclass = {
         "phys_mod",
@@ -529,7 +531,7 @@ local function effects_zero_diff()
         haste_rating = 0,
         crit_rating = 0,
         expertise_rating = 0,
-        spell_pen = 0,
+        pen = 0,
 
         weapon_skill = 0,
     };
@@ -575,6 +577,7 @@ local function effects_from_ui_diff(frame)
     diff.crit_rating = stats.crit_rating.editbox_val;
     diff.hit_rating = stats.hit_rating.editbox_val;
     diff.haste_rating = stats.haste_rating.editbox_val;
+    diff.expertise_rating = stats.expertise_rating.editbox_val;
 
     diff.sp = stats.sp.editbox_val;
     diff.sd = stats.sd.editbox_val;
@@ -582,7 +585,7 @@ local function effects_from_ui_diff(frame)
     diff.ap = stats.ap.editbox_val;
     diff.rap = stats.rap.editbox_val;
     diff.weapon_skill = stats.wep.editbox_val;
-    diff.spell_pen = stats.spell_pen.editbox_val;
+    diff.pen = stats.pen.editbox_val;
 
     frame.is_valid = true;
 
@@ -613,8 +616,8 @@ local function effects_add_diff(effects, diff)
     effects.raw.ranged_hit_rating_flat = effects.raw.ranged_hit_rating_flat + diff.hit_rating;
     effects.raw.expertise_rating_flat = effects.raw.expertise_rating_flat + diff.expertise_rating;
 
-    for i = 2, 7 do
-        effects.by_school.target_res_flat[i] = effects.by_school.target_res_flat[i] - diff.spell_pen;
+    for i = 1, 7 do
+        effects.by_school.target_res_flat[i] = effects.by_school.target_res_flat[i] - diff.pen;
     end
 
     -- physical stuff
@@ -757,7 +760,7 @@ local function dynamic_loadout(loadout)
         loadout.expertise_rating   = GetCombatRating(CR_EXPERTISE);
 
         if loadout.lvl <= 60 then
-            loadout.cr_scaling = (loadout.lvl - 8) / 52
+            loadout.cr_scaling = (math.max(loadout.lvl, 10) - 8) / 52
         elseif loadout.lvl <= 70 then
             loadout.cr_scaling = 82 / (262 - 3 * loadout.lvl)
         else
@@ -775,7 +778,7 @@ local function dynamic_loadout(loadout)
         loadout.ranged_crit_rating = 0;
         loadout.expertise_rating   = 0;
 
-        -- combat rating 1 always yield 1% in vanilla
+        -- dummy combat rating 1 always yield 1% in vanilla
         loadout.cr_scaling = 1;
     end
 
@@ -863,7 +866,11 @@ local function dynamic_loadout(loadout)
 
     loadout.enemy_hp_perc = config.loadout.default_target_hp_perc*0.01;
 
-    loadout.target_creature_mask = 0;
+    if config.loadout.default_target_creature_type > 0 then
+        loadout.target_creature_mask = bit.lshift(1, config.loadout.default_target_creature_type-1);
+    else
+        loadout.target_creature_mask = 0;
+    end
 
     loadout.target_lvl = config.loadout.default_target_lvl_diff + loadout.lvl;
 
@@ -879,20 +886,20 @@ local function dynamic_loadout(loadout)
             loadout.flags = bit.bor(loadout.flags, loadout_flags.target_pvp);
         end
 
-        local creature = UnitCreatureType("target");
-        if creature then
-            local creature_id = sc.creature_lname_to_id[creature];
-            if creature_id then
-                loadout.target_creature_mask = bit.lshift(1, creature_id-1);
-            end
-        end
-
         if bit.band(loadout.flags, loadout_flags.target_friendly) == 0 then
             local target_lvl = UnitLevel("target");
             if target_lvl == -1 then
                 loadout.target_lvl = loadout.lvl + 3;
             else
                 loadout.target_lvl = target_lvl;
+            end
+
+            local creature = UnitCreatureType("target");
+            if creature then
+                local creature_id = sc.creature_lname_to_id[creature];
+                if creature_id then
+                    loadout.target_creature_mask = bit.lshift(1, creature_id-1);
+                end
             end
         end
     end
@@ -1128,10 +1135,19 @@ local function category_subtable_lnames()
 end
 
 local cat_subtable_lnames;
+local school_group_skip_types = {
+    none    = 0,
+    magical = 2, -- all but physical
+    all     = 3,
+};
 
+local format_as_percentage = {
+};
+
+-- Dump effects diff into a str using internal format,
+-- with some small attempt to make it easier to read
 local function effects_diff_str_debug(lhs, rhs)
     local diffs_str = "";
-
 
     if not cat_subtable_lnames then
         cat_subtable_lnames = category_subtable_lnames();
@@ -1142,29 +1158,61 @@ local function effects_diff_str_debug(lhs, rhs)
         local lhs_cat = lhs[cat];
         for i, lhs_e in pairs(lhs_cat) do
 
+            local school_skip = school_group_skip_types.none;
+            if cat == "by_school" then
+                school_skip = school_group_skip_types.all;
+                local rhs_e = rhs_cat[i];
+                local d = rhs_e[3] - lhs_e[3];
+                if d ~= rhs_e[1]  - lhs_e[1] then
+                    school_skip = school_group_skip_types.magical;
+                end
+                -- ignore holy, since magic pen seems to ignore holy and physcal
+                for j = 4, 7 do
+                    if d ~= rhs_e[j] - lhs_e[j] then
+                        school_skip = school_group_skip_types.none;
+                        break;
+                    end
+                end
+            end
+
             if type(lhs_e) == "table" then
                 local rhs_e = rhs_cat[i];
+                for j, _ in pairs(rhs_e) do
+                    if not lhs_e[j] then
+                        lhs_e[j] = 0;
+                    end
+                end
                 for j, v in pairs(lhs_e) do
 
-                local d = (rhs_e[j] or 0.0) - v;
                     local pretty_str;
-                    if cat == "ability" then
+                    if school_skip == school_group_skip_types.all then
+                        j = 1;
+                        pretty_str = L["All"];
+                    elseif school_skip == school_group_skip_types.magical and j ~= 1 then
+                        pretty_str = L["Magical"];
+                    elseif cat == "ability" then
                         pretty_str = GetSpellInfo(j);
                     elseif cat_subtable_lnames[cat] and cat_subtable_lnames[cat][j] then
                         pretty_str = cat_subtable_lnames[cat][j];
                     end
-                    if d > 0 then
-                        diffs_str = diffs_str.."  |cFF21B915+ "..cat..":"..i..":"..(pretty_str or j)..": "..d.."|r\n";
-                    elseif d < 0 then
-                        diffs_str = diffs_str.."  |cFFC32C0B- "..cat..":"..i..":"..(pretty_str or j)..": "..-d.."|r\n";
+                    local d = (rhs_e[j] or 0.0) - v;
+                    if school_skip ~= school_group_skip_types.magical or j == 3 then
+                        if d > 0 then
+                            diffs_str = diffs_str.."  |cFF21B915+ "..string.format("%.5g", d).." "..cat..":"..i..":"..(pretty_str or j).."|r\n";
+                        elseif d < 0 then
+                            diffs_str = diffs_str.."  |cFFC32C0B- "..string.format("%.5g", -d).." "..cat..":"..i..":"..(pretty_str or j).."|r\n";
+                        end
+                    end
+                    if school_skip == school_group_skip_types.all then
+                        break;
                     end
                 end
             else
                 local d = rhs_cat[i] - lhs_cat[i];
                 if d > 0 then
-                    diffs_str = diffs_str.."  |cFF21B915+ "..cat..":"..i..": "..d.."|r\n";
+                    diffs_str = diffs_str.."  |cFF21B915+ "..string.format("%.5g", d).." "..cat..":"..i.."|r\n";
                 elseif d < 0 then
-                    diffs_str = diffs_str.."  |cFFC32C0B- "..cat..":"..i..": "..-d.."|r\n";
+                    diffs_str = diffs_str.."  |cFFC32C0B- "..string.format("%.5g", -d).." "..cat..":"..i.."|r\n";
                 end
             end
         end
@@ -1175,6 +1223,11 @@ local function effects_diff_str_debug(lhs, rhs)
         for i, lhs_e in pairs(lhs_cat) do
             if type(lhs_e) == "table" then
                 local rhs_e = rhs_cat[i];
+                for j, _ in pairs(rhs_e) do
+                    if not lhs_e[j] then
+                        lhs_e[j] = 1.0;
+                    end
+                end
                 for j, v in pairs(lhs_e) do
 
                     local d = (rhs_e[j] or 1.0) / v;
@@ -1186,18 +1239,18 @@ local function effects_diff_str_debug(lhs, rhs)
                         pretty_str = cat_subtable_lnames[cat][j];
                     end
                     if d > 0 then
-                        diffs_str = diffs_str.."  |cFF21B915+ "..cat..":"..i..":"..(pretty_str or j)..": "..d.."|r\n";
+                        diffs_str = diffs_str.."  |cFF21B915+ "..string.format("%.5g", d).." "..cat..":"..i..":"..(pretty_str or j).."|r\n";
                     elseif d < 0 then
-                        diffs_str = diffs_str.."  |cFFC32C0B- "..cat..":"..i..":"..(pretty_str or j)..": "..-d.."|r\n";
+                        diffs_str = diffs_str.."  |cFFC32C0B- "..string.format("%.5g", -d).." "..cat..":"..i..":"..(pretty_str or j).."|r\n";
                     end
                 end
             else
                 local d = rhs_cat[i] / lhs_cat[i];
                 d = d - 1;
                 if d > 0 then
-                    diffs_str = diffs_str.."  |cFF21B915+ "..cat..":"..i..": "..d.."|r\n";
+                    diffs_str = diffs_str.."  |cFF21B915+ "..string.format("%.5g", d).." "..cat..":"..i.."|r\n";
                 elseif d < 0 then
-                    diffs_str = diffs_str.."  |cFFC32C0B- "..cat..":"..i..": "..-d.."|r\n";
+                    diffs_str = diffs_str.."  |cFFC32C0B- "..string.format("%.5g", -d).." "..cat..":"..i.."|r\n";
                 end
             end
         end

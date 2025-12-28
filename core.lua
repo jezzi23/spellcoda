@@ -9,7 +9,7 @@ local load_localization         = sc.loc.load_localization;
 
 local load_sw_ui                = sc.ui.load_sw_ui;
 local create_sw_base_ui         = sc.ui.create_sw_base_ui;
-local sw_activate_tab           = sc.ui.sw_activate_tab;
+local sw_activate_frame         = sc.ui.sw_activate_frame;
 local update_profile_frame      = sc.ui.update_profile_frame;
 local update_loadout_frame      = sc.ui.update_loadout_frame;
 local locale_warning_popup      = sc.ui.locale_warning_popup;
@@ -37,7 +37,7 @@ sc.core                         = core;
 core.addon_name                 = "SpellCoda";
 
 local version_major             = 0;
-local version_minor             = 5;
+local version_minor             = 6;
 local version_build             = sc.addon_build_id;
 
 core.version_id                 = version_build + version_minor*1000 + version_major*1000000;
@@ -551,21 +551,21 @@ local function command(arg)
     arg = string.lower(arg);
 
     if arg == "spell" or arg == "spells" then
-        sw_activate_tab(__sc_frame.tabs[1]);
-    elseif arg == "tooltip" then
-        sw_activate_tab(__sc_frame.tabs[2]);
-    elseif arg == "overlay" then
-        sw_activate_tab(__sc_frame.tabs[3]);
+        sw_activate_frame("spells_frame");
     elseif arg == "compare" or arg == "stat" or arg == "calc" or arg == "calculator" then
-        sw_activate_tab(__sc_frame.tabs[4]);
+        sw_activate_frame("calculator_frame");
+    elseif arg == "tooltip" then
+        sw_activate_frame("tooltip_frame");
+    elseif arg == "overlay" then
+        sw_activate_frame("overlay_frame");
     elseif arg == "profile" or arg == "profiles" then
-        sw_activate_tab(__sc_frame.tabs[5]);
+        sw_activate_frame("profile_frame");
     elseif arg == "loadout" or arg == "loadouts" then
-        sw_activate_tab(__sc_frame.tabs[6]);
+        sw_activate_frame("loadout_frame");
     elseif arg == "buffs" or arg == "auras" then
-        sw_activate_tab(__sc_frame.tabs[7]);
+        sw_activate_frame("buffs_frame");
     elseif arg == "settings" or arg == "opt" or arg == "options" or arg == "conf" or arg == "config" or arg == "configure" then
-        sw_activate_tab(__sc_frame.tabs[8]);
+        sw_activate_frame("settings_frame");
     elseif string.find(arg, "force set") then
         local substrs = {};
         for s in arg:gmatch("%S+") do
@@ -594,7 +594,7 @@ local function command(arg)
         core.use_acc_defaults = 1;
         ReloadUI();
     else
-        sw_activate_tab(__sc_frame.tabs[1]);
+        sw_activate_frame("spells_frame");
     end
 end
 

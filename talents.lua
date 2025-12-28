@@ -6,9 +6,14 @@ local apply_effect          = sc.loadouts.apply_effect;
 ---------------------------------------------------------------------------------------------------
 local talents_export        = {};
 
+local expansion_short = "classic";
+if sc.expansion == sc.expansions.tbc then
+    expansion_short = "tbc";
+end
+
 local function wowhead_talent_link(code)
     local lowercase_class = string.lower(class);
-    return "https://classic.wowhead.com/talent-calc/" .. lowercase_class .. "/" .. code;
+    return "https://wowhead.com/"..expansion_short.."/talent-calc/" .. lowercase_class .. "/" .. code;
 end
 
 local function wowhead_talent_code_from_url(link)
