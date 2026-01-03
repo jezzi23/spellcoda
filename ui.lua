@@ -1909,9 +1909,8 @@ local function create_sw_ui_tooltip_frame(pframe)
         pframe,
         L["Item comparison in tooltips"],
             " * ".."Hold ALT key to switch between evaluation modes".."\n"..
-            " * ".."Intentionally compares only the raw items, stripped of enchants, gems, etc".."\n"..
             " * ".."Evaluation is fully computed, not extrapolated from stat weights".."\n"..
-            " * ".."Item tooltips are never parsed, making this feature localization proof"
+            " * ".."Item tooltips are never parsed for its text, making this feature localization agnostic"
     );
     help_icon:SetPoint("TOPRIGHT", -20, pframe.y_offset);
 
@@ -1962,6 +1961,21 @@ local function create_sw_ui_tooltip_frame(pframe)
             id = "tooltip_item_stat_diff",
             txt = L["Show stat changes"],
             tooltip = "Intended for debugging, not human friendly. Shows all changes detected by calculator, including resolved indirect changes, e.g. spell power from % of spirit talent etc.",
+        },
+        {
+            id = "tooltip_item_apply_enchant",
+            txt = L["Apply enchant changes"],
+            tooltip = "Includes enchant changes for tooltip comparison",
+        },
+        {
+            id = "tooltip_item_apply_gems",
+            txt = L["Apply gem changes"],
+            tooltip = "Includes gem changes for tooltip comparison",
+        },
+        {
+            id = "tooltip_item_apply_set_bonuses",
+            txt = L["Apply set bonus changes"],
+            tooltip = "Includes set bonus changes for tooltip comparison",
         },
         {
             id = "tooltip_item_show_evaluation_modes",

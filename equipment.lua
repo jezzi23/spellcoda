@@ -43,6 +43,16 @@ local wpn_strs = {
     [slots.RangedSlot] = "ranged"
 };
 
+local function add_item_set_piece(num_set_pieces, item_id)
+    local set_id = sc.set_items[item_id];
+    if set_id then
+        if not num_set_pieces[set_id] then
+            num_set_pieces[set_id] = 0;
+        end
+        num_set_pieces[set_id] = num_set_pieces[set_id] + 1;
+    end
+end
+
 local function detect_sets(loadout)
 
     for k, _ in pairs(sc.set_bonuses) do
@@ -50,13 +60,7 @@ local function detect_sets(loadout)
     end
 
     for _, id in pairs(loadout.items) do
-        local set_id = sc.set_items[id];
-        if set_id then
-            if not loadout.num_set_pieces[set_id] then
-                loadout.num_set_pieces[set_id] = 0;
-            end
-            loadout.num_set_pieces[set_id] = loadout.num_set_pieces[set_id] + 1;
-        end
+        add_item_set_piece(loadout.num_set_pieces, id);
     end
 end
 
@@ -163,87 +167,194 @@ local function apply_item_stats(effects, item_info, forced, undo)
     end
 end
 
-local function apply_item_cmp(loadout, effects, effects_diffed, new, old, slot)
+local gems_buffer = {};
 
-    cpy_effects(effects_diffed, effects);
-    -- Force undo old item
-    old.wpn_skill = 0;
-    if old.id then
+local function apply_gems(effects, forced, undo, item_id, gem1, gem2, gem3, gem4)
 
-        if sc.items[old.id] then
-            for _, id in pairs(sc.items[old.id]) do
-                if sc.item_effects[id] then
-                    apply_effect(effects_diffed, id, sc.item_effects[id], true, 1, true, false)
-                end
-            end
+    local item_sockets = sc.item_sockets[item_id];
+    if not item_sockets then
+        return;
+    end
+
+    gems_buffer[1] = gem1;
+    gems_buffer[2] = gem2;
+    gems_buffer[3] = gem3;
+    gems_buffer[4] = gem4;
+
+    local socket_bonus_matched = true;
+
+    for i = 1, 4 do
+        local socket = item_sockets[i+1]; -- first index reserved for bonus id
+        if not socket then
+            break;
+        end
+        if not gems_buffer[i] then
+            socket_bonus_matched = false;
         end
 
-        apply_item_stats(effects_diffed, old, true, true);
+        local gem_item_id = gems_buffer[i];
+        local gem_id = gem_item_id and sc.gem_items[gem_item_id];
+        local gem = gem_id and sc.gems[gem_id];
+        local ench = gem and sc.enchants[gem[1]];
 
-        if old.suffix_id and sc.suffix_ids[old.suffix_id] then
-            for _, ench_id in pairs(sc.suffix_ids[old.suffix_id]) do
-                if sc.enchants[ench_id] then
-                    for _, effect_id in pairs(sc.enchants[ench_id]) do
-                        apply_effect(effects_diffed, effect_id, sc.enchant_effects[effect_id], true, 1, true, false);
-                    end
-                end
-            end
+        local gem_type = (gem and gem[2]) or 0;
+        if bit.band(item_sockets[i+1], gem_type) == 0 then
+            -- gem and socket color mismatch
+            socket_bonus_matched = false;
         end
-        if wpn_strs[slot] then  
-
-            if old.subclass_id and loadout.wpn_skills[old.subclass_id] then
-                local wpn_skill = loadout.wpn_skills[old.subclass_id];
-                for mask, v in pairs(effects.wpn_subclass.skill_flat) do
-                    if bit.band(mask, bit.lshift(1, old.subclass_id)) ~= 0 then
-                        wpn_skill = wpn_skill + v;
-                    end
-                end
-                old.wpn_skill = wpn_skill;
+        if ench then
+            for _, effect_id in pairs(ench) do
+                apply_effect(effects, effect_id, sc.enchant_effects[effect_id], forced, 1.0, undo, false);
+                print("applied gem with effect_id", effect_id);
             end
-            apply_weapon(effects_diffed, old.id, slot, old.subclass_id, true);
-
-        elseif slot == slots.AmmoSlot then
-            -- ammo
-            apply_ammo(effects_diffed, sc.weapons[old.id], true);
         end
     end
 
-    -- Force add new item
-    if sc.items[new.id] then
-        for _, id in pairs(sc.items[new.id]) do
+    if socket_bonus_matched then
+        print("socket bonus match!!!", item_sockets[1]);
+        local ench = sc.enchants[item_sockets[1]];
+        if ench then
+            for _, effect_id in pairs(ench) do
+                apply_effect(effects, effect_id, sc.enchant_effects[effect_id], forced, 1.0, undo, false);
+                print("applied socket bonus match", effect_id);
+            end
+        end
+    end
+end
+
+local function wpn_skill_for_slot(loadout, effects, slot, weapon_subclass_id)
+
+    local wpn_skill = 0;
+
+    if not wpn_strs[slot] then
+        return wpn_skill;
+    end
+
+    if weapon_subclass_id and loadout.wpn_skills[weapon_subclass_id] then
+        wpn_skill = loadout.wpn_skills[weapon_subclass_id];
+        for mask, v in pairs(effects.wpn_subclass.skill_flat) do
+            if bit.band(mask, bit.lshift(1, weapon_subclass_id)) ~= 0 then
+                wpn_skill = wpn_skill + v;
+            end
+        end
+    end
+    return wpn_skill;
+end
+
+local function apply_item_cmp(effects_diffed, item_info, slot, undo, should_apply_gems, should_apply_enchant)
+
+    item_info.wpn_skill = 0;
+
+    if sc.items[item_info.id] then
+        for _, id in pairs(sc.items[item_info.id]) do
             if sc.item_effects[id] then
-                apply_effect(effects_diffed, id, sc.item_effects[id], true, 1, false, false);
+                apply_effect(effects_diffed, id, sc.item_effects[id], true, 1, undo, false)
             end
         end
     end
-    apply_item_stats(effects_diffed, new, true, false);
 
-    if new.suffix_id and sc.suffix_ids[new.suffix_id] then
-        for _, ench_id in pairs(sc.suffix_ids[new.suffix_id]) do
+    apply_item_stats(effects_diffed, item_info, true, undo);
+
+    if should_apply_gems then
+        print("item diff gems:", "1", item_info.gem1, "2", item_info.gem2, "3", item_info.gem3, "4", item_info.gem4);
+        apply_gems(effects_diffed, true, undo, item_info.id,
+                   item_info.gem1, item_info.gem2, item_info.gem3, item_info.gem4);
+    end
+
+    if item_info.suffix_id and sc.suffix_ids[item_info.suffix_id] then
+        for _, ench_id in pairs(sc.suffix_ids[item_info.suffix_id]) do
             if sc.enchants[ench_id] then
                 for _, effect_id in pairs(sc.enchants[ench_id]) do
-                    apply_effect(effects_diffed, effect_id, sc.enchant_effects[effect_id], true, 1, false, false);
+                    apply_effect(effects_diffed, effect_id, sc.enchant_effects[effect_id], true, 1, undo, false);
                 end
             end
         end
     end
 
-    new.wpn_skill = 0;
-    if wpn_strs[slot] then  
-        if new.subclass_id and loadout.wpn_skills[new.subclass_id] then
-            local wpn_skill = loadout.wpn_skills[new.subclass_id];
-            for mask, v in pairs(effects_diffed.wpn_subclass.skill_flat) do
-                if bit.band(mask, bit.lshift(1, new.subclass_id)) ~= 0 then
-                    wpn_skill = wpn_skill + v;
-                end
-            end
-            new.wpn_skill = wpn_skill;
-        end
-        apply_weapon(effects_diffed, new.id, slot, new.subclass_id, false);
+    if wpn_strs[slot] then
+        apply_weapon(effects_diffed, item_info.id, slot, item_info.subclass_id, undo);
 
     elseif slot == slots.AmmoSlot then
         -- ammo
-        apply_ammo(effects_diffed, sc.weapons[new.id], false);
+        apply_ammo(effects_diffed, sc.weapons[item_info.id], undo);
+    end
+end
+
+local function apply_set_bonuses(num_set_pieces, effects, force, undo)
+
+    for set_id, num in pairs(num_set_pieces) do
+        if num > 1 then
+            local bonuses = sc.set_bonuses[set_id];
+            if bonuses then -- remove this check when old sets handling is gone
+                for _, v in pairs(bonuses) do
+                    local threshold = v[1];
+                    local effect_id = v[2];
+                    if num < threshold then
+                        break;
+                    end
+                    apply_effect(effects, effect_id, sc.set_effects[effect_id], force, 1.0, undo);
+                end
+            end
+        end
+    end
+end
+
+
+
+local function apply_items_cmp(loadout, effects, effects_diffed, new_items, old_items,
+                               should_apply_gems, should_apply_enchant, should_apply_set_bonuses)
+
+    -- TODO: make this thing pass slots 1-20 list
+    -- apply enchants
+    -- apply set bonuses
+
+    print("doing gems:", should_apply_gems, "doing enchants", should_apply_enchant, "doing sets", should_apply_set_bonuses);
+    cpy_effects(effects_diffed, effects);
+
+    for slot, new_info in pairs(new_items) do
+
+        local old_info = old_items[slot];
+
+        if old_info and old_info.id then
+            -- Force undo on old item
+            apply_item_cmp(effects_diffed, old_info, slot, true, should_apply_gems, should_apply_enchant)
+        end
+        -- Force apply new item
+        apply_item_cmp(effects_diffed, new_info, slot, false, should_apply_gems, should_apply_enchant)
+    end
+
+    if should_apply_set_bonuses then
+
+        local num_set_pieces_tmp = {};
+        for slot, new_info in pairs(new_items) do
+
+            local old_info = old_items[slot];
+            if old_info and old_info.id then
+                add_item_set_piece(num_set_pieces_tmp, old_info.id);
+            end
+        end
+        -- negate old
+        for set_id, num_pieces in pairs(num_set_pieces_tmp) do
+            num_set_pieces_tmp[set_id] = -num_pieces;
+        end
+        -- add new
+        for _, new_info in pairs(new_items) do
+
+            add_item_set_piece(num_set_pieces_tmp, new_info.id);
+        end
+
+        -- combine with loadout set pieces
+        for set_id, num_pieces_diff in pairs(loadout.num_set_pieces) do
+            if not num_set_pieces_tmp[set_id] then
+                num_set_pieces_tmp[set_id] = 0;
+            end
+            num_set_pieces_tmp[set_id] = num_set_pieces_tmp[set_id] + num_pieces_diff;
+        end
+
+        -- force undo active
+        apply_set_bonuses(loadout.num_set_pieces, effects_diffed, true, true);
+        -- force apply with changes
+        apply_set_bonuses(num_set_pieces_tmp, effects_diffed, true, false);
     end
 end
 
@@ -261,21 +372,7 @@ local function apply_equipment(loadout, effects)
 
     local found_anything = false;
 
-    for set_id, num in pairs(loadout.num_set_pieces) do
-        if num > 1 then
-            local bonuses = sc.set_bonuses[set_id];
-            if bonuses then -- remove this check when old sets handling is gone
-                for _, v in pairs(bonuses) do
-                    local threshold = v[1];
-                    local effect_id = v[2];
-                    if num < threshold then
-                        break;
-                    end
-                    apply_effect(effects, effect_id, sc.set_effects[effect_id], false, 1.0);
-                end
-            end
-        end
-    end
+    apply_set_bonuses(loadout.num_set_pieces, effects, false, false);
 
     for force_set_id, force_threshold in pairs(force_item_sets) do
         local bonuses = sc.set_bonuses[force_set_id];
@@ -304,7 +401,8 @@ local function apply_equipment(loadout, effects)
     --       (but does for /reload). Track if we get nothing so we can signal
     --       that equipment scanning needs to be done again on next update
 
-    for _, item in pairs(slots) do
+    --for _, item in pairs(slots) do
+    for slot, item in pairs(slots) do
         local item_link = GetInventoryItemLink("player", item);
         local id = loadout.items[item];
         if item_link then
@@ -327,6 +425,9 @@ local function apply_equipment(loadout, effects)
                     apply_damage_enchant(effects, sc.damage_enchants[enchant_id], item, false);
                 end
             end
+
+            apply_gems(effects, false, false, id,
+                       tonumber(gem1), tonumber(gem2), tonumber(gem3), tonumber(gem4));
 
             suffix_id = tonumber(suffix_id);
             if suffix_id and sc.suffix_ids[suffix_id] then
@@ -430,7 +531,8 @@ equipment.num_set_pieces = num_set_pieces;
 equipment.apply_equipment = apply_equipment;
 equipment.force_item_sets = force_item_sets;
 equipment.force_items = force_items;
-equipment.apply_item_cmp = apply_item_cmp;
+equipment.apply_items_cmp = apply_items_cmp;
+equipment.wpn_skill_for_slot = wpn_skill_for_slot;
 equipment.slots = slots;
 
 sc.equipment = equipment;

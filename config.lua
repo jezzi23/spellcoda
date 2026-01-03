@@ -53,6 +53,11 @@ local default_settings     = {
     tooltip_item_leveling_skill_normalize                       = true,
     tooltip_item_weapon_skill                                   = true,
     tooltip_item_smart                                          = true,
+
+    tooltip_item_apply_set_bonuses                              = false,
+    tooltip_item_apply_gems                                     = false,
+    tooltip_item_apply_enchant                                  = false,
+
     tooltip_item_show_evaluation_modes                          = false,
     tooltip_item_ignore_unequippable                            = false,
     tooltip_item_ignore_cloth                                   = false,

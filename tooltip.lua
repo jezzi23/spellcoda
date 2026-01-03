@@ -25,8 +25,10 @@ local cpy_effects                               = sc.loadouts.cpy_effects;
 local empty_effects                             = sc.loadouts.empty_effects;
 local effects_diff_str_debug                    = sc.loadouts.effects_diff_str_debug;
 
-local apply_item_cmp                            = sc.equipment.apply_item_cmp;
+local apply_items_cmp                           = sc.equipment.apply_items_cmp;
 local slots                                     = sc.equipment.slots;
+local wpn_skill_for_slot                        = sc.equipment.wpn_skill_for_slot;
+
 
 local fight_types                               = sc.calc.fight_types;
 local stat_weights                              = sc.calc.stat_weights;
@@ -1926,6 +1928,10 @@ local function make_item_tooltip_data(tooltip)
     };
     return data;
 end
+
+local new_items_buffer, old_items_buffer = {}, {};
+
+
 -- need two separate because both these tooltips may be open at same time
 local game_tooltip_item_cmp = make_item_tooltip_data(GameTooltip);
 local ref_tooltip_item_cmp = make_item_tooltip_data(ItemRefTooltip);
@@ -1958,11 +1964,17 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         if not link_fields then
             return;
         end
-        local item_id, _, _, _, _, _, suffix_id =
+        local item_id, enchant_id, gem1, gem2, gem3, gem4, suffix_id =
         --strsplit(":", tt.new_item.link:match("|Hitem:(.+)|h"));
             strsplit(":", link_fields); -- works for link from SetHyperLink link too
         tt.new_item.id = tonumber(item_id);
         tt.new_item.suffix_id = tonumber(suffix_id);
+        tt.new_item.ench_id = tonumber(enchant_id);
+        tt.new_item.gem1 = tonumber(gem1);
+        tt.new_item.gem2 = tonumber(gem2);
+        tt.new_item.gem3 = tonumber(gem3);
+        tt.new_item.gem4 = tonumber(gem4);
+
     else
         return;
     end
@@ -2034,6 +2046,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     end
 
     local effects_diffed = sc.loadouts.diffed;
+    -- TODO: might want to compare item link string
     if tt.tooltip_item_id_last ~= tt.new_item.id or updated or mod_change then
         -- actual evaluation update step and overwrites cache
 
@@ -2050,18 +2063,41 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             old_item.link = GetInventoryItemLink("player", slot);
             old_item.id = GetInventoryItemID("player", slot);
             if old_item.link then
-                local _, _, _, _, _, _, suffix_id =
+                local _, enchant_id, gem1, gem2, gem3, gem4, suffix_id =
                     strsplit(":", old_item.link:match("|Hitem:(.+)|h"));
+
+                old_item.suffix_id = tonumber(suffix_id);
+                old_item.ench_id = tonumber(enchant_id);
+                old_item.gem1 = tonumber(gem1);
+                old_item.gem2 = tonumber(gem2);
+                old_item.gem3 = tonumber(gem3);
+                old_item.gem4 = tonumber(gem4);
 
                 _, _, old_item.quality, _, _, _, _, _, old_item.inv_type, old_item.tex, _, _, old_item.subclass_id =
                     GetItemInfo(old_item.link);
-                old_item.suffix_id = tonumber(suffix_id);
             else
                 old_item.tex = empty_tex;
                 old_item.subclass_id = nil;
+                old_item.gems1 = nil;
+                old_item.ench_id = nil;
+                old_item.suffix_id = nil;
             end
 
-            apply_item_cmp(loadout, effects, effects_diffed, tt.new_item, old_item, slot);
+            old_items_buffer[slot] = old_item;
+            new_items_buffer[slot] = tt.new_item;
+            apply_items_cmp(
+                loadout, effects, effects_diffed, new_items_buffer, old_items_buffer,
+                config.settings.tooltip_item_apply_gems,
+                config.settings.tooltip_item_apply_enchant,
+                config.settings.tooltip_item_apply_set_bonuses
+            );
+            -- Do a special thing here were we get weapon skill before and after for this slot 
+            -- for displaying purposes, not in the context of any spell
+            old_item.wpn_skill = wpn_skill_for_slot(loadout, effects, slot, old_item.subclass_id);
+            tt.new_item.wpn_skill = wpn_skill_for_slot(loadout, effects_diffed, slot, tt.new_item.subclass_id);
+
+            old_items_buffer[slot] = nil;
+            new_items_buffer[slot] = nil;
 
             if config.settings.tooltip_item_stat_diff then
                 effects_finalize_forced(loadout, effects_diffed);
