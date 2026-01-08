@@ -15,11 +15,14 @@ local flags_idx                         = sc.aura_idx_flags;
 local iid_idx                           = sc.aura_idx_iid; -- internal index within this spell id
 
 local mana_per_int                      = sc.scaling.mana_per_int;
+local hp_per_stam                       = sc.scaling.hp_per_stam;
 local int_to_spell_crit                 = sc.scaling.int_to_spell_crit;
 local agi_to_physical_crit              = sc.scaling.agi_to_physical_crit;
 local ap_per_str                        = sc.scaling.ap_per_str;
 local ap_per_agi                        = sc.scaling.ap_per_agi;
 local rap_per_agi                       = sc.scaling.rap_per_agi;
+
+local write_item_info_from_link         = sc.utils.write_item_info_from_link;
 
 local config                            = sc.config;
 
@@ -36,6 +39,7 @@ local loadout_flags = {
 -- not need a slower general purpose recursive implementation
 local loadout_numbers = {
     "armor",
+    "player_hp_max",
     "player_hp_perc",
     "enemy_hp_perc",
     "flags",
@@ -76,18 +80,28 @@ local loadout_numbers = {
     "target_defense",
     "target_creature_mask",
     "target_res",
-
-    "spell_haste_rating",
-    "melee_haste_rating",
-    "ranged_haste_rating",
-    "spell_hit_rating",
-    "melee_hit_rating",
-    "ranged_hit_rating",
-    "spell_crit_rating",
-    "melee_crit_rating",
-    "ranged_crit_rating",
-    "expertise_rating",
 };
+
+local ratings = {
+    {CR_DEFENSE_SKILL,      "defense_skill_rating"},
+    {CR_DODGE,              "dodge_rating"},
+    {CR_PARRY,              "parry_rating"},
+    {CR_BLOCK,              "block_rating"},
+    {CR_HASTE_SPELL,        "spell_haste_rating"},
+    {CR_HASTE_MELEE,        "melee_haste_rating"},
+    {CR_HASTE_RANGED,       "ranged_haste_rating"},
+    {CR_HIT_SPELL,          "spell_hit_rating"},
+    {CR_HIT_MELEE,          "melee_hit_rating"},
+    {CR_HIT_RANGED,         "ranged_hit_rating"},
+    {CR_CRIT_SPELL,         "spell_crit_rating"},
+    {CR_CRIT_MELEE,         "melee_crit_rating"},
+    {CR_CRIT_RANGED,        "ranged_crit_rating"},
+    {CR_EXPERTISE,          "expertise_rating"},
+};
+for _, v in ipairs(ratings) do
+    loadout_numbers[#loadout_numbers + 1] = v[2];
+end
+
 
 local loadout_tables = {
     stats = {0, 0, 0, 0, 0},
@@ -275,6 +289,9 @@ local effects_additive = {
         "mana_mod",
         "mana_mod_forced",
         "mana",
+        "hp",
+        "hp_mod",
+        "hp_mod_forced",
         "mp5_from_int_mod",
         "mp5_flat",
         "perc_max_mana_as_mp5",
@@ -292,17 +309,6 @@ local effects_additive = {
         "skill",
         "class_misc",
 
-        "spell_haste_rating_flat",
-        "melee_haste_rating_flat",
-        "ranged_haste_rating_flat",
-        "spell_hit_rating_flat",
-        "melee_hit_rating_flat",
-        "ranged_hit_rating_flat",
-        "spell_crit_rating_flat",
-        "melee_crit_rating_flat",
-        "ranged_crit_rating_flat",
-        "expertise_rating_flat",
-
         "wpn_subclass_mh",
         "wpn_subclass_oh",
         "wpn_subclass_ranged",
@@ -319,6 +325,12 @@ local effects_additive = {
         "ammo_dps",
     },
 };
+
+
+for _, v in ipairs(ratings) do
+    local raw = effects_additive.raw;
+    raw[#raw + 1] = v[2].."_flat";
+end
 
 local effects_multiplicative = {
     by_school = {
@@ -518,9 +530,13 @@ local function effects_add(dst, src)
     end
 end
 
-local function effects_zero_diff()
+local function manual_effects_zero_diff()
     return {
-        stats = {0, 0, 0, 0, 0},
+        int = 0,
+        agi = 0,
+        spirit = 0,
+        str = 0,
+        stam = 0,
         mp5 = 0,
         sp = 0,
         sd = 0,
@@ -532,71 +548,17 @@ local function effects_zero_diff()
         crit_rating = 0,
         expertise_rating = 0,
         pen = 0,
-
         weapon_skill = 0,
     };
 end
 
-local function effects_from_ui_diff(frame)
+local function effects_add_manual_diff(effects, diff)
 
-    local stats = frame.stats;
-    local diff = effects_zero_diff();
-
-    -- verify validity and run input expr 
-    for _, v in pairs(stats) do
-
-        local expr_str = v.editbox:GetText();
-
-        local is_whitespace_expr = expr_str and string.match(expr_str, "%S") == nil;
-        local is_valid_expr = string.match(expr_str, "[^-+0123456789. ()]") == nil
-
-        local expr = nil;
-        if is_valid_expr then
-            expr = loadstring("return "..expr_str..";");
-            if expr then
-                v.editbox_val = expr();
-                frame.is_valid = true;
-            end
-        end
-        if is_whitespace_expr or not is_valid_expr or not expr then
-
-            v.editbox_val = 0;
-            if not is_whitespace_expr then
-                frame.is_valid = false;
-                return diff;
-            end
-        end
-    end
-
-    diff.stats[attr.intellect] = stats.int.editbox_val;
-    diff.stats[attr.spirit] = stats.spirit.editbox_val;
-    diff.stats[attr.strength] = stats.str.editbox_val;
-    diff.stats[attr.agility] = stats.agi.editbox_val;
-    diff.mp5 = stats.mp5.editbox_val;
-
-    diff.crit_rating = stats.crit_rating.editbox_val;
-    diff.hit_rating = stats.hit_rating.editbox_val;
-    diff.haste_rating = stats.haste_rating.editbox_val;
-    diff.expertise_rating = stats.expertise_rating.editbox_val;
-
-    diff.sp = stats.sp.editbox_val;
-    diff.sd = stats.sd.editbox_val;
-    diff.hp = stats.hp.editbox_val;
-    diff.ap = stats.ap.editbox_val;
-    diff.rap = stats.rap.editbox_val;
-    diff.weapon_skill = stats.wep.editbox_val;
-    diff.pen = stats.pen.editbox_val;
-
-    frame.is_valid = true;
-
-    return diff;
-end
-
-local function effects_add_diff(effects, diff)
-
-    for i = 1, 5 do
-        effects.by_attr.stat_flat[i] = effects.by_attr.stat_flat[i] + diff.stats[i];
-    end
+    effects.by_attr.stat_flat[attr.stamina] = effects.by_attr.stat_flat[attr.stamina] + diff.stam;
+    effects.by_attr.stat_flat[attr.strength] = effects.by_attr.stat_flat[attr.strength] + diff.str;
+    effects.by_attr.stat_flat[attr.agility] = effects.by_attr.stat_flat[attr.agility] + diff.agi;
+    effects.by_attr.stat_flat[attr.intellect] = effects.by_attr.stat_flat[attr.intellect] + diff.int;
+    effects.by_attr.stat_flat[attr.spirit] = effects.by_attr.stat_flat[attr.spirit] + diff.spirit;
 
     for i = 1, 7 do
         effects.by_school.sp_dmg_flat[i] = effects.by_school.sp_dmg_flat[i] + diff.sd + diff.sp;
@@ -694,6 +656,15 @@ local function effects_finalize_forced(loadout, effects)
          (effects.raw.mana/(1.0 + effects.raw.mana_mod_forced))
         );
 
+    effects.raw.hp = 
+        (1.0 + effects.raw.hp_mod + effects.raw.hp_mod_forced)
+        *
+        (
+         (effects.by_attr.stat_flat[attr.stamina] * hp_per_stam)
+         +
+         (effects.raw.hp /(1.0 + effects.raw.hp_mod_forced))
+        );
+
     local agi_ap_class = class;
     if class == classes.druid and loadout.shapeshift == 3 then
         -- cat form
@@ -748,16 +719,9 @@ local function dynamic_loadout(loadout)
     end
 
     if sc.expansion ~= sc.expansions.vanilla then
-        loadout.spell_haste_rating = GetCombatRating(CR_HASTE_SPELL);
-        loadout.melee_haste_rating = GetCombatRating(CR_HASTE_MELEE);
-        loadout.ranged_haste_ratin = GetCombatRating(CR_HASTE_RANGED);
-        loadout.spell_hit_rating   = GetCombatRating(CR_HIT_SPELL);
-        loadout.melee_hit_rating   = GetCombatRating(CR_HIT_MELEE);
-        loadout.ranged_hit_rating  = GetCombatRating(CR_HIT_RANGED);
-        loadout.spell_crit_rating  = GetCombatRating(CR_CRIT_SPELL);
-        loadout.melee_crit_rating  = GetCombatRating(CR_CRIT_MELEE);
-        loadout.ranged_crit_rating = GetCombatRating(CR_CRIT_RANGED);
-        loadout.expertise_rating   = GetCombatRating(CR_EXPERTISE);
+        for _, v in ipairs(ratings) do
+            loadout[v[2]] = v[1];
+        end
 
         if loadout.lvl <= 60 then
             loadout.cr_scaling = (math.max(loadout.lvl, 10) - 8) / 52
@@ -767,17 +731,9 @@ local function dynamic_loadout(loadout)
             loadout.cr_scaling = (41/26) * ((131/63)^((loadout.lvl - 70) / 10))
         end
     else
-        loadout.spell_haste_rating = 0;
-        loadout.melee_haste_rating = 0;
-        loadout.ranged_haste_ratin = 0;
-        loadout.spell_hit_rating   = 0;
-        loadout.melee_hit_rating   = 0;
-        loadout.ranged_hit_rating  = 0;
-        loadout.spell_crit_rating  = 0;
-        loadout.melee_crit_rating  = 0;
-        loadout.ranged_crit_rating = 0;
-        loadout.expertise_rating   = 0;
-
+        for _, v in ipairs(ratings) do
+            loadout[v[2]] = 0;
+        end
         -- dummy combat rating 1 always yield 1% in vanilla
         loadout.cr_scaling = 1;
     end
@@ -862,7 +818,9 @@ local function dynamic_loadout(loadout)
                                          bit.bnot(loadout_flags.target_friendly),
                                          bit.bnot(loadout_flags.target_pvp)));
 
-    loadout.player_hp_perc = UnitHealth("player")/math.max(UnitHealthMax("player"), 1);
+    loadout.player_hp_max = math.max(UnitHealthMax("player"), 1)
+
+    loadout.player_hp_perc = UnitHealth("player")/loadout.player_hp_max;
 
     loadout.enemy_hp_perc = config.loadout.default_target_hp_perc*0.01;
 
@@ -1016,7 +974,6 @@ local function apply_effect(effects, spid, auras, forced, stacks, undo, player_o
     end
 end
 
-
 -- double buffered loadout
 local loadout_base1 = loadout_zero();
 local loadout_base2 = loadout_zero();
@@ -1029,6 +986,7 @@ local loadout_shared = {
     "enchants",
     "talents",
     "items",
+    "item_links",
 };
 for _, v in ipairs(loadout_shared) do
     loadout_base1[v] = {};
@@ -1152,6 +1110,7 @@ local function effects_diff_str_debug(lhs, rhs)
     if not cat_subtable_lnames then
         cat_subtable_lnames = category_subtable_lnames();
     end
+    local num_stats_in, num_stats_out = 0, 0;
 
     for _, cat in ipairs(effect_categories) do
         local rhs_cat = rhs[cat];
@@ -1199,8 +1158,10 @@ local function effects_diff_str_debug(lhs, rhs)
                     if school_skip ~= school_group_skip_types.magical or j == 3 then
                         if d > 0 then
                             diffs_str = diffs_str.."  |cFF21B915+ "..string.format("%.5g", d).." "..cat..":"..i..":"..(pretty_str or j).."|r\n";
+                            num_stats_in = num_stats_in + 1;
                         elseif d < 0 then
                             diffs_str = diffs_str.."  |cFFC32C0B- "..string.format("%.5g", -d).." "..cat..":"..i..":"..(pretty_str or j).."|r\n";
+                            num_stats_out = num_stats_out + 1;
                         end
                     end
                     if school_skip == school_group_skip_types.all then
@@ -1210,9 +1171,11 @@ local function effects_diff_str_debug(lhs, rhs)
             else
                 local d = rhs_cat[i] - lhs_cat[i];
                 if d > 0 then
+                    num_stats_in = num_stats_in + 1;
                     diffs_str = diffs_str.."  |cFF21B915+ "..string.format("%.5g", d).." "..cat..":"..i.."|r\n";
                 elseif d < 0 then
                     diffs_str = diffs_str.."  |cFFC32C0B- "..string.format("%.5g", -d).." "..cat..":"..i.."|r\n";
+                    num_stats_out = num_stats_out + 1;
                 end
             end
         end
@@ -1239,9 +1202,11 @@ local function effects_diff_str_debug(lhs, rhs)
                         pretty_str = cat_subtable_lnames[cat][j];
                     end
                     if d > 0 then
+                        num_stats_in = num_stats_in + 1;
                         diffs_str = diffs_str.."  |cFF21B915+ "..string.format("%.5g", d).." "..cat..":"..i..":"..(pretty_str or j).."|r\n";
                     elseif d < 0 then
                         diffs_str = diffs_str.."  |cFFC32C0B- "..string.format("%.5g", -d).." "..cat..":"..i..":"..(pretty_str or j).."|r\n";
+                        num_stats_out = num_stats_out + 1;
                     end
                 end
             else
@@ -1249,24 +1214,72 @@ local function effects_diff_str_debug(lhs, rhs)
                 d = d - 1;
                 if d > 0 then
                     diffs_str = diffs_str.."  |cFF21B915+ "..string.format("%.5g", d).." "..cat..":"..i.."|r\n";
+                    num_stats_out = num_stats_out + 1;
                 elseif d < 0 then
                     diffs_str = diffs_str.."  |cFFC32C0B- "..string.format("%.5g", -d).." "..cat..":"..i.."|r\n";
+                    num_stats_out = num_stats_out + 1;
                 end
             end
         end
     end
 
-    return diffs_str;
+    return diffs_str, num_stats_in + num_stats_out, num_stats_in, num_stats_out;
 end
+
+local function item_plan_slot_ui_diffs(loadout, old_items, new_items)
+
+    local planned_items = __sc_frame.calculator_frame.items.item_plan;
+
+    for slot in pairs(__sc_frame.calculator_frame.items.slots) do
+        if planned_items[slot] then
+            if not new_items[slot] then
+                new_items[slot] = {};
+            end
+            write_item_info_from_link(new_items[slot], planned_items[slot].link);
+
+            -- old item might not exist
+            if loadout.item_links[slot] then
+                if not old_items[slot] then
+                    old_items[slot] = {};
+                end
+                write_item_info_from_link(old_items[slot], loadout.item_links[slot]);
+            else
+                old_items[slot] = nil;
+            end
+
+        else
+            old_items[slot] = nil;
+            new_items[slot] = nil;
+        end
+    end
+end
+
+local stats_diff_last;
+local old_items_buffer = {};
+local new_items_buffer = {};
+
 
 local function update_loadout_and_effects_diffed_from_ui(dont_finalize)
 
     local loadout, effects, effects_finalized = update_loadout_and_effects();
 
-    local diff = effects_from_ui_diff(__sc_frame.calculator_frame);
+
+    if __sc_frame.calculator_frame.calculator_plan_changed then
+
+        stats_diff_last = sc.ui.effects_from_ui_stats_diff();
+        item_plan_slot_ui_diffs(loadout, old_items_buffer, new_items_buffer);
+
+        __sc_frame.calculator_frame.calculator_plan_changed = false;
+    end
+
 
     cpy_effects(diffed, effects);
-    effects_add_diff(diffed, diff);
+
+    -- Item plan add
+    sc.equipment.apply_items_cmp(loadout, diffed, new_items_buffer, old_items_buffer, true, true, true);
+
+    -- Manual stat changes add
+    effects_add_manual_diff(diffed, stats_diff_last);
 
     if not dont_finalize then
         effects_finalize_forced(loadout, diffed);
@@ -1281,12 +1294,11 @@ end
 loadouts.equipped                                     = equipped;
 loadouts.talented                                     = talented;
 loadouts.empty_effects                                = empty_effects;
-loadouts.diffed                                       = diffed;
 loadouts.effects_add                                  = effects_add;
-loadouts.effects_add_diff                             = effects_add_diff;
+loadouts.effects_add_manual_diff                      = effects_add_manual_diff;
 loadouts.effects_finalize_forced                      = effects_finalize_forced;
 loadouts.cpy_effects                                  = cpy_effects;
-loadouts.effects_zero_diff                            = effects_zero_diff;
+loadouts.manual_effects_zero_diff                     = manual_effects_zero_diff;
 loadouts.active_loadout                               = active_loadout;
 loadouts.update_loadout_and_effects                   = update_loadout_and_effects;
 loadouts.update_loadout_and_effects_diffed_from_ui    = update_loadout_and_effects_diffed_from_ui;

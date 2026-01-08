@@ -396,6 +396,17 @@ local function default_p_char()
         loadouts = {
             sc.utils.deep_table_copy(default_loadout_config),
         },
+        calculator_saves = {
+            -- save_name1 = {
+            --     items = {
+            --         ... 
+            --     },
+            --     stats = {
+            --         ...
+            --     },
+            -- },
+            -- ...
+        },
     };
     return data;
 end

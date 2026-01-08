@@ -8,12 +8,17 @@ local spell_flags                               = sc.spell_flags;
 
 local format_locale_dump                        = sc.loc.format_locale_dump;
 
+local clear_table                               = sc.utils.clear_table;
 local assign_color_tag                          = sc.utils.assign_color_tag;
 local highest_learned_rank                      = sc.utils.highest_learned_rank;
 local effect_color                              = sc.utils.effect_color;
+local write_item_info_from_link                 = sc.utils.write_item_info_from_link;
 
 local wowhead_talent_link                       = sc.talents.wowhead_talent_link;
 local wowhead_talent_code_from_url              = sc.talents.wowhead_talent_code_from_url;
+
+local inv_type_to_slot_ids                      = sc.equipment.inv_type_to_slot_ids;
+local apply_items_cmp                           = sc.equipment.apply_items_cmp;
 
 local fight_types                               = sc.calc.fight_types;
 local evaluation_flags                          = sc.calc.evaluation_flags;
@@ -25,6 +30,9 @@ local update_loadout_and_effects_diffed_from_ui = sc.loadouts.update_loadout_and
 local update_loadout_and_effects                = sc.loadouts.update_loadout_and_effects;
 local active_loadout                            = sc.loadouts.active_loadout
 local effects_diff_str_debug                    = sc.loadouts.effects_diff_str_debug;
+local cpy_effects                               = sc.loadouts.cpy_effects;
+local effects_finalize_forced                   = sc.loadouts.effects_finalize_forced;
+local empty_effects                             = sc.loadouts.empty_effects;
 
 local spell_diff                                = sc.calc.spell_diff;
 local calc_spell_eval                           = sc.calc.calc_spell_eval;
@@ -32,6 +40,8 @@ local calc_spell_eval                           = sc.calc.calc_spell_eval;
 local buff_category                             = sc.buffs.buff_category;
 local buffs                                     = sc.buffs.buffs;
 local target_buffs                              = sc.buffs.target_buffs;
+
+local stat_diffs_included_effects_str           = sc.tooltip.stat_diffs_included_effects_str;
 
 local config                                    = sc.config;
 
@@ -54,18 +64,18 @@ end
 
 
 -- Dump frame for things like getting missing strings for localization
-local dump_frame = CreateFrame("Frame", "__sc_dump_frame", UIParent, "BackdropTemplate");
+local dump_frame = CreateFrame("Frame", "__sc_dump_frame", UIParent, "BasicFrameTemplate, BasicFrameTemplateWithInset");
 dump_frame:SetSize(600, 400);
+dump_frame:SetFrameStrata("DIALOG");
 dump_frame:SetPoint("CENTER");
-dump_frame:SetBackdrop({
-    bgFile = "Interface/Tooltips/UI-Tooltip-Background",
-    edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-    tile = true,
-    tileSize = 16,
-    edgeSize = 16,
-    insets = { left = 4, right = 4, top = 4, bottom = 4 }
-});
-dump_frame:SetBackdropColor(0, 0, 0, 0.8);
+--dump_frame:SetBackdrop({
+--    bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+--    edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+--    tile = true,
+--    tileSize = 16,
+--    edgeSize = 16,
+--    insets = { left = 4, right = 4, top = 4, bottom = 4 }
+--});
 dump_frame:EnableMouse(true);
 dump_frame:SetMovable(true);
 dump_frame:RegisterForDrag("LeftButton");
@@ -74,11 +84,8 @@ dump_frame:SetScript("OnDragStop", dump_frame.StopMovingOrSizing);
 dump_frame:Hide();
 
 local title_text = dump_frame:CreateFontString(nil, "OVERLAY", "GameFontNormal");
-title_text:SetPoint("TOP", 0, -10);
+title_text:SetPoint("TOP", 0, -5);
 title_text:SetText("");
-
-local close_button = CreateFrame("Button", nil, dump_frame, "UIPanelCloseButton");
-close_button:SetPoint("TOPRIGHT", dump_frame, "TOPRIGHT", -5, -5);
 
 local scroll_frame = CreateFrame("ScrollFrame", nil, dump_frame, "UIPanelScrollFrameTemplate");
 scroll_frame:SetPoint("TOPLEFT", 10, -30);
@@ -92,7 +99,11 @@ edit_box:SetAutoFocus(false);
 edit_box:SetScript("OnEscapePressed", function(self) self:ClearFocus(); end);
 scroll_frame:SetScrollChild(edit_box);
 
-local function dump_text(title, text)
+local function dump_text(title, text, width, height)
+    local w = width or 600;
+    local h = height or 400;
+
+    dump_frame:SetSize(w, h);
     title_text:SetText(title);
     edit_box:SetText(text);
     dump_frame:Show();
@@ -137,14 +148,19 @@ local function display_spell_diff(i, calc_list, diff, frame)
         calc_list[i].spell_icon:SetPoint("TOPLEFT", 0, frame.y_offset+2);
         calc_list[i].spell_icon.tex = calc_list[i].spell_icon:CreateTexture(nil, "ARTWORK");
         calc_list[i].spell_icon.tex:SetAllPoints(calc_list[i].spell_icon);
-        calc_list[i].spell_icon.spell_id = 0;
-        calc_list[i].spell_icon:SetScript("OnEnter", function(self)
+
+        calc_list[i].tooltip_area = CreateFrame("Frame", nil, frame);
+        calc_list[i].tooltip_area:SetSize(100, 16);
+        calc_list[i].tooltip_area:SetPoint("TOPLEFT", 0, frame.y_offset+2);
+        calc_list[i].tooltip_area.spell_id = 0;
+        calc_list[i].tooltip_area:EnableMouse(true);
+        calc_list[i].tooltip_area:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT");
             GameTooltip:SetSpellByID(self.spell_id);
             GameTooltip:Show();
 
         end);
-        calc_list[i].spell_icon:SetScript("OnLeave", function(self)
+        calc_list[i].tooltip_area:SetScript("OnLeave", function(self)
             GameTooltip:Hide();
         end);
 
@@ -193,9 +209,8 @@ local function display_spell_diff(i, calc_list, diff, frame)
     local v = calc_list[i];
 
     v.cancel_button.__id_src = diff.original_id;
-    
 
-    v.spell_icon.spell_id = diff.id;
+    v.tooltip_area.spell_id = diff.id;
     v.spell_icon.tex:SetTexture(diff.tex);
 
     v.name_str:SetText(diff.disp);
@@ -265,12 +280,16 @@ local function display_spell_diff(i, calc_list, diff, frame)
     end
 end
 
-
 local cached_spells_cmp_diffs = {};
+
 
 local function update_calc_list(loadout, effects, effects_diffed, eval_flags)
 
     local frame = __sc_frame.calculator_frame;
+
+    frame.loadout_name_label:SetText(
+        L["Active loadout: "]..config.loadout.name
+    );
     for _, v in pairs(frame.calc_list) do
         for _, f in pairs(v) do
             f:Hide();
@@ -282,6 +301,15 @@ local function update_calc_list(loadout, effects, effects_diffed, eval_flags)
     end
 
     eval_flags = bit.bor(eval_flags, evaluation_flags.expectation_of_self);
+
+    local diffs, _, diffs_in, diffs_out = effects_diff_str_debug(effects, effects_diffed);
+    frame.diffs_txt = diffs;
+
+    frame.diffs_fontstr:SetText(L["Effects"].."\n|cFF00FF00 +"..diffs_in.." |r|cFFFF0000 -"..diffs_out.."|r");
+
+    if frame.diffs_txt ~= "" then
+        frame.diffs_txt = stat_diffs_included_effects_str(true, true, true)..frame.diffs_txt;
+    end
 
     local i = 0;
     for k, _ in pairs(config.settings.spell_calc_list) do
@@ -306,10 +334,6 @@ local function update_calc_list(loadout, effects, effects_diffed, eval_flags)
 
             cached_spells_cmp_diffs[i].is_dual_spell = spells[k].healing_version ~= nil;
             cached_spells_cmp_diffs[i].original_id = original_k;
-
-            if config.settings.tooltip_item_stat_diff then
-                frame.diffs_txt = effects_diff_str_debug(effects, effects_diffed);
-            end
 
             -- for spells with both heal and dmg
             if spells[k].healing_version then
@@ -1000,10 +1024,12 @@ local function create_sw_item_id_viewer()
 
         if id == 0 then
             __sc_frame.item_icon_tex:SetTexture(invalid_item_tex);
+            __sc_frame.item_icon.id = invalid_item_id;
             GameTooltip:Hide();
         else
             __sc_frame.item_icon_tex:SetTexture(GetItemIcon(id));
 
+            __sc_frame.item_icon.id = id;
             GameTooltip:SetOwner(__sc_frame.item_icon, "ANCHOR_BOTTOMRIGHT");
             GameTooltip:SetItemByID(id);
             GameTooltip:Show();
@@ -1018,6 +1044,16 @@ local function create_sw_item_id_viewer()
     __sc_frame.item_icon = CreateFrame("Frame", "__sc_custom_item_id", __sc_frame);
     __sc_frame.item_icon:SetSize(17, 17);
     __sc_frame.item_icon:SetPoint("RIGHT", __sc_frame.item_id_viewer_editbox, 17, 0);
+    __sc_frame.item_icon:SetScript("OnMouseDown", function(self, btn)
+        if not self.id or not IsModifiedClick("CHATLINK") or btn ~= "LeftButton" then
+            return;
+        end
+        local _, link = GetItemInfo(self.id);
+        if not link then
+            return;
+        end
+        ChatEdit_InsertLink(link);
+    end);
 
     local tex = __sc_frame.item_icon:CreateTexture(nil);
     tex:SetAllPoints(__sc_frame.item_icon);
@@ -3036,7 +3072,280 @@ local function create_sw_ui_overlay_frame(pframe)
     make_frame_scrollable(pframe);
 end
 
+local working_item_plan = {};
+local working_stats = {};
+
+local function item_planner_add_slot(item_link)
+
+    local inv_loc = select(9, GetItemInfo(item_link))
+    if not inv_loc then
+        return false;
+    end
+    local item_slots = inv_type_to_slot_ids[inv_loc];
+    if not item_slots then
+        return false;
+    end
+    local viable_slots = __sc_frame.calculator_frame.items.slots;
+
+    local dst_slot;
+    if viable_slots[item_slots[1]] then -- index 1 should always exist
+        dst_slot = item_slots[1];
+    end
+    if item_slots[2] and viable_slots[item_slots[2]] and working_item_plan[item_slots[1]] then
+        dst_slot = item_slots[2];
+    end
+
+    if dst_slot then
+
+        working_item_plan[dst_slot] = working_item_plan[dst_slot] or {};
+        if not write_item_info_from_link(working_item_plan[dst_slot], item_link) then
+            working_item_plan[dst_slot] = nil;
+            return false;
+        end
+
+        return true;
+    end
+    return false
+end
+
+local function update_calculator_item_frame(frame)
+
+    local link = frame.link;
+    local quality, tex;
+    if link then
+        _, _, quality, _, _, _, _, _, _, tex = GetItemInfo(link);
+    end
+
+    if tex and quality then
+        frame.icon:SetTexture(tex);
+        frame.icon:Show();
+
+        if quality and ITEM_QUALITY_COLORS[quality] then
+            local c = ITEM_QUALITY_COLORS[quality];
+            --frame.bg:SetVertexColor(c.r, c.g, c.b, 1);
+            frame.border:SetVertexColor(c.r, c.g, c.b, 1);
+        else
+            --frame.bg:SetVertexColor(1, 1, 1, 1);
+            frame.border:Hide();
+        end
+    else
+        frame.bg:SetVertexColor(1, 1, 1, 1);
+        frame.icon:Hide();
+        frame.border:Hide();
+    end
+end
+
+local function update_calculator_character_items(slot)
+
+    __sc_frame.calculator_frame.calculator_plan_changed = true
+    if not slot then
+        for s, v in pairs(__sc_frame.calculator_frame.items.slots) do
+
+            v.old.link = GetInventoryItemLink("player", s);
+            update_calculator_item_frame(v.old);
+        end
+    else
+        local v = __sc_frame.calculator_frame.items.slots[slot];
+        v.old.link = GetInventoryItemLink("player", slot);
+        update_calculator_item_frame(v.old);
+    end
+end
+
+-- gems
+local function update_item_plan_slot_gems(frames, slot_info)
+
+    for _, v in pairs(frames.gems) do
+        v.gem_item_id = 0;
+        v:Hide();
+    end
+    frames.gems_match.id = 0;
+    frames.gems_match:Hide();
+
+    -- Update gem frames
+    local item_sockets = sc.item_sockets[slot_info.id];
+    if not item_sockets then
+        return;
+    end
+
+    local socket_bonus_matched = true;
+
+    for i = 1, 3 do
+        local socket_color = item_sockets[i+1]; -- first index reserved for bonus id
+        if not socket_color then
+            break;
+        end
+
+        if socket_color == sc.gem_type_flags.red then
+            frames.gems[i].bg:SetVertexColor(1.0, 0.0, 0.0);
+        elseif socket_color == sc.gem_type_flags.yellow then
+            frames.gems[i].bg:SetVertexColor(1.0, 1.0, 0.0);
+        elseif socket_color == sc.gem_type_flags.blue then
+            frames.gems[i].bg:SetVertexColor(0.0, 0.5, 1.0);
+        else
+            -- meta
+            frames.gems[i].bg:SetVertexColor(0.6, 0.6, 0.6);
+        end
+
+        frames.gems[i]:Show();
+
+        local gem_item_id = slot_info["gem"..i];
+        if not gem_item_id then
+            socket_bonus_matched = false;
+            frames.gems[i].icon:Hide();
+        else
+            frames.gems[i].gem_item_id = gem_item_id;
+            local tex = select(10, GetItemInfo(gem_item_id));
+            frames.gems[i].icon:SetTexture(tex);
+            frames.gems[i].icon:Show();
+        end
+
+        local gem_id = gem_item_id and sc.gem_items[gem_item_id];
+        local gem = gem_id and sc.gems[gem_id];
+
+        local gem_type = (gem and gem[2]) or 0;
+        if bit.band(socket_color, gem_type) == 0 then
+            -- gem and socket color mismatch
+            socket_bonus_matched = false;
+        end
+    end
+
+    if socket_bonus_matched and item_sockets[1] then
+        frames.gems_match.id = item_sockets[1];
+        frames.gems_match:Show();
+    else
+        frames.gems_match:Hide();
+    end
+end
+
+-- bridge between active item plan and corresponding UI elements
+local function update_calculator_item_planner()
+
+    local pframe = __sc_frame.calculator_frame;
+    pframe.calculator_plan_changed = true;
+
+    local frame_slots = pframe.items.slots;
+
+    local anything = false;
+    for slot, v in pairs(frame_slots)  do
+        if working_item_plan[slot] then
+            local slot_info = working_item_plan[slot];
+            anything = true;
+            --local tex = select(10, GetItemInfo(slot_info.link));
+            --update_item_frame_tex(v.new, slot_info.link, tex);
+            v.new.link = slot_info.link;
+            update_calculator_item_frame(v.new);
+
+            v.arrow:Show();
+            v.new:Show();
+            v.cancel:Show();
+            v.enchant:Show();
+
+            update_item_plan_slot_gems(v, slot_info);
+
+            if slot_info.enchant_id then
+                v.enchant.enchant_id = slot_info.enchant_id;
+                v.enchant.icon:Show();
+            else
+                v.enchant.enchant_id = 0;
+                v.enchant.icon:Hide();
+            end
+            v.old.icon:SetAlpha(0.3);
+            if v.old.link then
+                v.old.bg:Hide();
+            else
+                v.old.bg:Show();
+            end
+        else
+            v.new.link = nil;
+            v.arrow:Hide();
+            v.new:Hide();
+            v.cancel:Hide();
+            for k, v in pairs(v.gems) do
+                v:Hide();
+            end
+            v.enchant:Hide();
+
+            v.old.icon:SetAlpha(1);
+            v.old.bg:Show();
+        end
+    end
+    if anything then
+        pframe.item_changed_indicator:Show();
+        pframe.items.item_add_tip:Hide();
+    else
+        pframe.item_changed_indicator:Hide();
+        pframe.items.item_add_tip:Show();
+    end
+end
+
+local function effects_from_ui_stats_diff()
+
+    local pframe = __sc_frame.calculator_frame;
+    local frame = pframe.manual;
+    local stats = frame.stats;
+
+    for k, v in pairs(frame.stats) do
+        working_stats[k] = 0;
+    end
+
+    -- Manual stats diff
+
+    -- verify validity and run input expr 
+    for _, v in pairs(stats) do
+
+        local expr_str = v.editbox:GetText();
+
+        local is_whitespace_expr = expr_str and string.match(expr_str, "%S") == nil;
+        local is_valid_expr = string.match(expr_str, "[^-+0123456789. ()]") == nil
+
+        local expr = nil;
+        if is_valid_expr then
+            expr = loadstring("return "..expr_str..";");
+            if expr then
+                v.editbox_val = expr();
+                frame.is_valid = true;
+            end
+        end
+        if is_whitespace_expr or not is_valid_expr or not expr then
+
+            v.editbox_val = 0;
+            if not is_whitespace_expr then
+                frame.is_valid = false;
+                return working_stats;
+            end
+        end
+    end
+
+    local anything = false;
+    for k, v in pairs(stats) do
+        local val = v.editbox_val;
+        if val ~= 0 then
+            anything = true;
+        end
+        working_stats[k] = val;
+    end
+    if anything then
+        pframe.stats_changed_indicator:Show();
+    else
+        pframe.stats_changed_indicator:Hide();
+    end
+
+    frame.is_valid = true;
+
+    return working_stats;
+end
+
+
+local effects_diff_on_arrow_tooltip = {};
+empty_effects(effects_diff_on_arrow_tooltip);
+local new_item_buffer = {};
+local old_item_buffer = {};
+
+
+
 local function create_sw_ui_calculator_frame(pframe)
+
+    pframe.calculator_plan_changed = true;
 
     pframe:HookScript("OnHide", function()
         sc.loadouts.force_update = true;
@@ -3054,32 +3363,880 @@ local function create_sw_ui_calculator_frame(pframe)
 
     pframe.y_offset = pframe.y_offset - 25;
 
+
+    local item_tab = CreateFrame("Button", nil, pframe, "PanelTopTabButtonTemplate");
+    local manual_tab = CreateFrame("Button", nil, pframe, "PanelTopTabButtonTemplate");
+
+    item_tab:SetPoint("RIGHT", pframe, "TOP", 0, pframe.y_offset);
+    item_tab:SetText(L["Upgrade planner"].." (EXPERIMENTAL!)")
+    item_tab:SetScript("OnClick", function(self)
+        self:SetButtonState("PUSHED");
+        self:LockHighlight();
+        pframe.items:Show();
+
+        manual_tab:UnlockHighlight();
+        manual_tab:SetButtonState("NORMAL");
+        pframe.manual:Hide();
+
+        pframe.after_area:ClearAllPoints();
+        pframe.before_area:ClearAllPoints();
+        pframe.before_area:SetPoint("TOP", pframe.diffs_area, "BOTTOM", 0, -5);
+        pframe.after_area:SetPoint("TOP", pframe.before_area, "BOTTOM", 0, -5);
+    end);
+
+    local tab_width = 0.5*pframe:GetWidth()-25;
+    PanelTemplates_TabResize(item_tab, 0, nil, tab_width, tab_width);
+
+    local f = CreateFrame("Frame", nil, item_tab);
+    f:SetSize(6, 6);
+    f:SetPoint("RIGHT", -6, -2);
+    f:Hide();
+
+    f.dot = f:CreateTexture(nil, "OVERLAY");
+    f.dot:SetColorTexture(0.2, 1, 0.2, 1);
+    f.dot:SetSize(6, 6);
+    f.dot:SetPoint("CENTER", 0, 0);
+    pframe.item_changed_indicator = f;
+
+    manual_tab:SetPoint("LEFT", pframe, "TOP", 0, pframe.y_offset);
+    manual_tab:SetText("Additional stat changes")
+    manual_tab:SetScript("OnClick", function(self)
+        self:SetButtonState("PUSHED");
+        self:LockHighlight();
+        pframe.manual:Show();
+
+        item_tab:UnlockHighlight();
+        item_tab:SetButtonState("NORMAL");
+        pframe.items:Hide();
+
+        pframe.after_area:ClearAllPoints();
+        pframe.before_area:ClearAllPoints();
+        pframe.after_area:SetPoint("LEFT", pframe.diffs_area, "RIGHT", 5, 0);
+        pframe.before_area:SetPoint("RIGHT", pframe.diffs_area, "LEFT", -5, 0);
+    end);
+    PanelTemplates_TabResize(manual_tab, 0, nil, tab_width, tab_width);
+
+    local f = CreateFrame("Frame", nil, manual_tab);
+    f:SetSize(6, 6);
+    f:SetPoint("RIGHT", -6, -2);
+    f:Hide();
+
+    f.dot = f:CreateTexture(nil, "OVERLAY");
+    f.dot:SetColorTexture(0.2, 1, 0.2, 1);
+    f.dot:SetSize(6, 6);
+    f.dot:SetPoint("CENTER", 0, 0);
+    pframe.stats_changed_indicator = f;
+
+    pframe.y_offset = pframe.y_offset - 25;
+
+    pframe.items = CreateFrame("ScrollFrame", nil, pframe);
+    pframe.items:SetPoint("TOPLEFT", 0, pframe.y_offset);
+    pframe.items:SetWidth(pframe:GetWidth());
+
+    pframe.items.y_offset = 0;
+
+    pframe.manual = CreateFrame("ScrollFrame", nil, pframe);
+    pframe.manual:SetPoint("TOPLEFT", 0, pframe.y_offset);
+    pframe.manual:SetWidth(pframe:GetWidth());
+    pframe.manual.y_offset = 0;
+
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(font);
     f_txt:SetPoint("TOPLEFT", x_pad, pframe.y_offset);
     f_txt:SetText(L["Active Loadout: "]);
     pframe.loadout_name_label = f_txt;
 
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(font);
-    f_txt:SetPoint("TOPLEFT", 355, pframe.y_offset);
-    f_txt:SetText(L["Delta"]);
+    pframe.diffs_txt = "";
 
-    f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
-    f:SetScript("OnClick", function()
-
-        for _, v in pairs(pframe.stats) do
-            v.editbox:SetText("");
-        end
-        update_calc_list();
+    local diffs_area = CreateFrame("Frame", nil, pframe, "BackdropTemplate");
+    diffs_area:SetSize(110, 40);
+    diffs_area:SetPoint("TOPLEFT", 119, pframe.y_offset-17);
+    diffs_area:EnableMouse(true);
+    diffs_area:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+        GameTooltip:SetText("Changes", 1, 0.82, 0);
+        GameTooltip:AddLine(pframe.diffs_txt);
+        GameTooltip:Show();
+    end);
+    diffs_area:SetScript("OnLeave", function()
+        GameTooltip:Hide();
+    end);
+    diffs_area:SetScript("OnMouseDown", function(self)
+        dump_text(
+            L["Effect changes"],
+            pframe.diffs_txt,
+            300,
+            400
+        );
     end);
 
-    f:SetPoint("TOPLEFT", 385, pframe.y_offset+5);
-    f:SetHeight(20);
-    f:SetWidth(70);
-    f:SetText(L["Clear"]);
+    diffs_area:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeSize = 2; -- thickness of the border
+    });
+    diffs_area:SetBackdropColor(0.2, 0.2, 0.2, 0.8); 
+    diffs_area:SetBackdropBorderColor(1, 0.8, 0, 1);
 
-    pframe.stats = {
+    pframe.diffs_area = diffs_area;
+
+    f = diffs_area:CreateFontString(nil, "OVERLAY");
+    f:SetFontObject(GameFontNormal);
+    local fp, _, flags = f:GetFont();
+    f:SetFont(fp, 17, flags);
+    f:SetPoint("CENTER");
+    pframe.diffs_fontstr = f;
+
+    local arrow_tex_path = "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up";
+
+    local f = diffs_area:CreateTexture(nil, "ARTWORK");
+    f:SetTexture(arrow_tex_path);
+    f:SetPoint("BOTTOMRIGHT", -2, 2);
+    f:SetTexCoord(0.3, 0.7, 0.3, 0.7);
+    f:SetSize(8, 8);
+    f:SetRotation(-3.14592/4);
+
+
+    local before_area = CreateFrame("Frame", nil, pframe, "BackdropTemplate");
+    before_area:SetSize(110, 30);
+    before_area:EnableMouse(true);
+    before_area:SetScript("OnEnter", function(self)
+        --GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+        --GameTooltip:SetText("Changes", 1, 0.82, 0);
+        --GameTooltip:AddLine();
+        --GameTooltip:Show();
+    end);
+    before_area:SetScript("OnLeave", function()
+        --GameTooltip:Hide();
+    end);
+    before_area:SetScript("OnMouseDown", function(self)
+        --dump_text(
+        --    L["Before"],
+        --    pframe.diffs_txt,
+        --    300,
+        --    400
+        --);
+    end);
+
+    before_area:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeSize = 2; -- thickness of the border
+    });
+    before_area:SetBackdropColor(0.2, 0.2, 0.2, 0.8);
+    before_area:SetBackdropBorderColor(1, 0.8, 0, 1);
+
+    f = before_area:CreateFontString(nil, "OVERLAY");
+    f:SetFontObject(GameFontNormal);
+    local fp, _, flags = f:GetFont();
+    f:SetFont(fp, 17, flags);
+    f:SetPoint("CENTER");
+    f:SetText(L["Before"]);
+
+    local f = before_area:CreateTexture(nil, "ARTWORK");
+    f:SetTexture(arrow_tex_path);
+    f:SetPoint("BOTTOMRIGHT", -2, 2);
+    f:SetTexCoord(0.3, 0.7, 0.3, 0.7);
+    f:SetSize(8, 8);
+    f:SetRotation(-3.14592/4);
+    pframe.before_area = before_area;
+
+
+    local after_area = CreateFrame("Frame", nil, pframe, "BackdropTemplate");
+    after_area:SetSize(110, 30);
+    after_area:EnableMouse(true);
+    after_area:SetScript("OnEnter", function(self)
+        --GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+        --GameTooltip:SetText("Changes", 1, 0.82, 0);
+        --GameTooltip:AddLine();
+        --GameTooltip:Show();
+    end);
+    after_area:SetScript("OnLeave", function()
+        --GameTooltip:Hide();
+    end);
+    after_area:SetScript("OnMouseDown", function(self)
+        --dump_text(
+        --    L["Before"],
+        --    pframe.diffs_txt,
+        --    300,
+        --    400
+        --);
+    end);
+
+    after_area:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeSize = 2; -- thickness of the border
+    });
+    after_area:SetBackdropColor(0.2, 0.2, 0.2, 0.8); 
+    after_area:SetBackdropBorderColor(1, 0.8, 0, 1);
+    pframe.after_area = after_area;
+
+    f = after_area:CreateFontString(nil, "OVERLAY");
+    f:SetFontObject(GameFontNormal);
+    local fp, _, flags = f:GetFont();
+    f:SetFont(fp, 17, flags);
+    f:SetPoint("CENTER");
+    f:SetText(L["After"]);
+
+    local f = after_area:CreateTexture(nil, "ARTWORK");
+    f:SetTexture(arrow_tex_path);
+    f:SetPoint("BOTTOMRIGHT", -2, 2);
+    f:SetTexCoord(0.3, 0.7, 0.3, 0.7);
+    f:SetSize(8, 8);
+    f:SetRotation(-3.14592/4);
+
+
+    -- Item upgrade planner tabbed subframe
+    local slots_order = {
+        "HeadSlot",
+        "NeckSlot",
+        "ShoulderSlot",
+        "BackSlot",
+        "ChestSlot",
+        "ShirtSlot",
+        "TabardSlot",
+        "WristSlot",
+        "HandsSlot",
+        "WaistSlot",
+        "LegsSlot",
+        "FeetSlot",
+        "Finger0Slot",
+        "Finger1Slot",
+        "Trinket0Slot",
+        "Trinket1Slot",
+        "MainHandSlot",
+        "SecondaryHandSlot",
+        "RangedSlot",
+        "AmmoSlot",
+    };
+
+    local slot_padding = 2;
+    local slot_size = 28;
+    local slots_realign_to = {
+        HeadSlot = {
+            align_from = "LEFT", panchor = "TOPLEFT",
+            px_offset = 10, py_offset = -30,
+            x_between = 0, y_between = -(slot_size + slot_padding)
+        },
+        HandsSlot = {
+            align_from = "RIGHT", panchor = "TOPRIGHT",
+            px_offset = -130, py_offset = -30,
+            x_between = 0, y_between = -(slot_size + slot_padding)
+        },
+        MainHandSlot = {
+            align_from = "BOTTOM", panchor = "BOTTOMLEFT",
+            px_offset = 130, py_offset = 30,
+            x_between = slot_size + slot_padding, y_between = 0
+        },
+    };
+
+    local items_max_y_offset = 0;
+
+    pframe.items.slots = {};
+    pframe.items.item_plan = working_item_plan;
+    pframe.items:HookScript("OnShow", function()
+        update_calculator_character_items();
+    end);
+
+    local x_offset, y_offset, pos;
+    for _, slot in ipairs(slots_order) do
+
+        if slots_realign_to[slot] then
+            pos = slots_realign_to[slot];
+            x_offset = 0;
+            y_offset = 0;
+        end
+
+        -- SOURCE ITEM SLOT FRAME
+        local slotf = CreateFrame("Frame", nil, pframe.items);
+
+        slotf:SetSize(slot_size, slot_size);
+        slotf:SetPoint(
+            pos.align_from,
+            pframe.items,
+            pos.panchor,
+            pos.px_offset + x_offset,
+            pos.py_offset + y_offset
+        );
+
+        x_offset = x_offset + pos.x_between;
+        y_offset = y_offset + pos.y_between;
+        items_max_y_offset = math.min(items_max_y_offset, y_offset+pos.py_offset);
+
+        local slot_id, empty_tex = GetInventorySlotInfo(slot);
+
+        slotf.slot = slot_id;
+
+        slotf.bg = slotf:CreateTexture(nil, "BACKGROUND");
+        slotf.bg:SetAllPoints(slotf);
+        slotf.bg:SetTexture(empty_tex);
+        slotf.bg:SetVertexColor(0.6, 0.6, 0.6, 1);
+
+        slotf.icon = slotf:CreateTexture(nil, "ARTWORK");
+        slotf.icon:SetAllPoints(slotf);
+        slotf.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92);
+        --slotf.icon:SetAlpha(0.4);
+
+        slotf.border = slotf:CreateTexture(nil, "OVERLAY");
+        slotf.border:SetTexture("Interface\\Common\\WhiteIconFrame");
+        slotf.border:SetBlendMode("BLEND");
+        slotf.border:SetSize(slot_size+2, slot_size+2);
+        slotf.border:SetPoint("TOPLEFT", -1, 1);
+
+        slotf:SetScript("OnEnter", function(self)
+            if self.link then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+                GameTooltip:SetHyperlink(self.link);
+                GameTooltip:Show();
+            end
+        end);
+        slotf:SetScript("OnLeave", function(self)
+            GameTooltip:Hide();
+        end);
+
+        slotf:SetScript("OnMouseDown", function(self, btn)
+            if not self.link or not IsModifiedClick("CHATLINK") or btn ~= "LeftButton" then
+                return;
+            end
+            ChatEdit_InsertLink(self.link);
+        end);
+
+        --arrow_texture:SetPoint("LEFT", pframe.diffs_fontstr, "RIGHT" , 5, -2);
+
+
+        f = slotf:CreateTexture(nil, "OVERLAY");
+        f:SetTexture(arrow_tex_path);
+        f:SetTexCoord(0.3, 0.7, 0.3, 0.7);
+        f:SetSize(8, 8);
+        f.slot = slot_id;
+        if pos.align_from == "LEFT" then
+            slotf.expand_point = "RIGHT";
+            slotf.expand_y_dir = 0;
+            slotf.expand_x_dir = 1;
+            --f:SetText("->");
+        elseif pos.align_from == "RIGHT" then
+            slotf.expand_point = "LEFT";
+            slotf.expand_y_dir = 0;
+            slotf.expand_x_dir = -1;
+            --f:SetText("<-");
+            f:SetRotation(3.14592);
+        else
+            slotf.expand_point = "TOP";
+            slotf.expand_y_dir = 1;
+            slotf.expand_x_dir = 0;
+            --f:SetText("^");
+            f:SetRotation(3.14592/2);
+        end
+        local arrowf = f;
+
+        f:SetPoint(slotf.expand_point, 13*slotf.expand_x_dir, 12*slotf.expand_y_dir);
+        f:SetScript("OnEnter", function(self)
+
+            if not self.slot or not working_item_plan[self.slot] then
+                return;
+            end
+
+            local loadout, effects, effects_finalized, update_id = update_loadout_and_effects();
+
+            cpy_effects(effects_diff_on_arrow_tooltip, effects);
+
+            new_item_buffer[self.slot] = {};
+            write_item_info_from_link(new_item_buffer[self.slot], working_item_plan[self.slot].link);
+
+            if loadout.item_links[self.slot] then
+                old_item_buffer[self.slot] = {};
+                write_item_info_from_link(old_item_buffer[self.slot], loadout.item_links[self.slot]);
+            end
+            apply_items_cmp(
+                loadout, effects_diff_on_arrow_tooltip, new_item_buffer, old_item_buffer,
+                true, true, true
+            );
+            new_item_buffer[self.slot] = nil;
+            old_item_buffer[self.slot] = nil;
+
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+            GameTooltip:SetText(L["Changes"]);
+
+            effects_finalize_forced(loadout, effects_diff_on_arrow_tooltip);
+            local stat_diffs = effects_diff_str_debug(effects_finalized, effects_diff_on_arrow_tooltip);
+            if stat_diffs ~= "" then
+                stat_diffs = stat_diffs_included_effects_str(true, true, true)..stat_diffs;
+            end
+
+            GameTooltip:AddLine(stat_diffs);
+            GameTooltip:Show();
+        end);
+        f:SetScript("OnLeave", function(self)
+            GameTooltip:Hide();
+        end);
+
+
+        -- DESTINATION ITEM SLOT FRAME
+        local new_itemf = CreateFrame("Frame", nil, slotf);
+
+        new_itemf:SetSize(slot_size, slot_size);
+        new_itemf:SetPoint(
+            slotf.expand_point,
+            slotf,
+            45*slotf.expand_x_dir,
+            45*slotf.expand_y_dir
+        );
+
+        new_itemf.bg = new_itemf:CreateTexture(nil, "BACKGROUND");
+        new_itemf.bg:SetAllPoints(new_itemf);
+        new_itemf.bg:SetTexture(empty_tex);
+        new_itemf.bg:SetVertexColor(0.6, 0.6, 0.6, 1);
+
+        new_itemf.icon = new_itemf:CreateTexture(nil, "ARTWORK");
+        new_itemf.icon:SetAllPoints(new_itemf);
+        new_itemf.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92);
+
+        new_itemf.border = new_itemf:CreateTexture(nil, "OVERLAY");
+        new_itemf.border:SetAllPoints(new_itemf);
+        new_itemf.border:SetTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Border");
+
+        new_itemf.border = new_itemf:CreateTexture(nil, "OVERLAY");
+        new_itemf.border:SetTexture("Interface\\Common\\WhiteIconFrame");
+        new_itemf.border:SetBlendMode("BLEND");
+        new_itemf.border:SetSize(
+            slot_size+4 + slot_size*math.abs(slotf.expand_x_dir),
+            slot_size+4 + slot_size*math.abs(slotf.expand_y_dir)
+        );
+        new_itemf.border:SetPoint(
+            pos.align_from,
+            -3*slotf.expand_x_dir,
+            -3*slotf.expand_y_dir
+        );
+
+        new_itemf:SetScript("OnEnter", function(self)
+            if self.link then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+                GameTooltip:SetHyperlink(self.link);
+                GameTooltip:Show();
+            end
+        end);
+        new_itemf:SetScript("OnLeave", function(self)
+            GameTooltip:Hide();
+        end);
+
+        local plus_tex = "Interface\\Buttons\\UI-PlusButton-Up";
+        local gem_icon_size = 10;
+        -- Gem slot frames
+        local gemsf = {};
+        for i = 1, 3 do
+
+            local gemf = CreateFrame("Frame", nil, new_itemf);
+
+            gemf:SetSize(gem_icon_size, gem_icon_size);
+            gemf:SetPoint(
+                slotf.expand_point,
+                12*slotf.expand_x_dir - 18*slotf.expand_y_dir + i*9*slotf.expand_y_dir,
+                12*slotf.expand_y_dir + 18*math.abs(slotf.expand_x_dir) - i*9*math.abs(slotf.expand_x_dir)
+            );
+
+            gemf.bg = gemf:CreateTexture(nil, "BACKGROUND");
+            gemf.bg:SetAllPoints(gemf);
+            gemf.bg:SetTexture(plus_tex);
+            --gemf.bg:SetAlpha(0.45);
+            gemf.bg:SetDesaturated(true);
+
+            gemf.icon = gemf:CreateTexture(nil, "ARTWORK");
+            gemf.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92);
+            gemf.icon:SetSize(gem_icon_size-2, gem_icon_size-2);
+            --gemf.icon:SetAllPoints(gemf);
+            gemf.icon:SetPoint("TOPLEFT", 1, -1);
+
+            gemf.border = gemf:CreateTexture(nil, "OVERLAY");
+            gemf.border:SetAllPoints(gemf);
+            gemf.border:SetTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Border");
+
+            gemf.gem_item_id = 0;
+            gemf:SetScript("OnEnter", function(self)
+                if self.gem_item_id ~= 0 then
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+                    GameTooltip:SetItemByID(self.gem_item_id);
+                    GameTooltip:Show();
+                else
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+                    GameTooltip:SetText(L["Changing gems in here not implemented yet"]);
+                    GameTooltip:Show();
+                end
+            end);
+            gemf:SetScript("OnLeave", function(self)
+                GameTooltip:Hide();
+            end);
+
+            gemsf[i] = gemf;
+        end
+
+        local f = new_itemf:CreateTexture(nil, "OVERLAY");
+        f:SetTexture("Interface\\Buttons\\UI-CheckBox-Check");
+        f:SetVertexColor(0, 1, 0, 1);
+        f:SetSize(10, 10);
+        f:SetPoint(
+            slotf.expand_point,
+            new_itemf,
+            25*slotf.expand_x_dir + 10*slotf.expand_y_dir,
+            -10*math.abs(slotf.expand_x_dir) + 25*slotf.expand_y_dir
+        );
+        f.id = 0;
+
+        f:SetScript("OnEnter", function(self)
+            if self.id ~= 0 then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+                GameTooltip:SetText(L["Socket match bonus"].." ("..self.id..")");
+                GameTooltip:Show();
+            end
+        end);
+        f:SetScript("OnLeave", function(self)
+            GameTooltip:Hide();
+        end);
+
+        local gem_match_indicator = f;
+
+        local enchantf = CreateFrame("Frame", nil, new_itemf);
+        enchantf:SetSize(gem_icon_size, gem_icon_size);
+
+        enchantf:SetPoint(
+            slotf.expand_point,
+            25*slotf.expand_x_dir - 9*slotf.expand_y_dir,
+            9*math.abs(slotf.expand_x_dir) + 25*slotf.expand_y_dir
+        );
+
+        enchantf.bg = enchantf:CreateTexture(nil, "BACKGROUND");
+        enchantf.bg:SetAllPoints(enchantf);
+        enchantf.bg:SetTexture(plus_tex);
+        enchantf.bg:SetDesaturated(true);
+
+        enchantf.icon = enchantf:CreateTexture(nil, "ARTWORK");
+        enchantf.icon:SetTexture("Interface\\Icons\\Trade_Engraving");
+        enchantf.icon:SetSize(gem_icon_size -2, gem_icon_size - 2);
+        enchantf.icon:SetPoint("TOPLEFT", 1, -1);
+        enchantf.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92);
+
+        enchantf.border = enchantf:CreateTexture(nil, "OVERLAY");
+        enchantf.border:SetAllPoints(enchantf);
+        enchantf.border:SetTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Border");
+
+        enchantf.enchant_id = 0;
+        enchantf:SetScript("OnEnter", function(self)
+            if self.enchant_id ~= 0  then
+
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+                local title = sc.enchant_id_to_lname[self.enchant_id];
+                if title then
+                    title = title.." ("..self.enchant_id..")";
+                else
+                    title = tostring(self.enchant_id);
+                end
+
+                GameTooltip:SetText(title);
+
+
+                local spell_ids = sc.enchants[self.enchant_id];
+                if spell_ids then
+                    for _, spell_id in ipairs(spell_ids) do
+                        if spell_id > 0 then
+                            GameTooltip:AddLine(select(1, GetSpellInfo(spell_id)).." ("..spell_id..")");
+                        end
+                    end
+                end
+                GameTooltip:Show();
+
+            else
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+                GameTooltip:SetText(L["Changing enchant in here not implemented yet"]);
+                GameTooltip:Show();
+            end
+        end);
+        enchantf:SetScript("OnLeave", function(self)
+            GameTooltip:Hide();
+        end);
+
+        local cancelf = CreateFrame("Button", nil, slotf, "UIPanelButtonTemplate");
+        cancelf:SetScript("OnClick", function(self)
+            working_item_plan[self.slot_id] = nil;
+            update_calculator_item_planner();
+        end);
+
+        local cancel_offset = -17;
+        cancelf:SetPoint(pos.align_from, cancel_offset * slotf.expand_x_dir, cancel_offset * slotf.expand_y_dir);
+        cancelf:SetSize(17, 17);
+        cancelf:SetText("x");
+        local fontstr = cancelf:GetFontString();
+        if fontstr then
+            fontstr:ClearAllPoints();
+            fontstr:SetPoint("CENTER", cancelf, "CENTER");
+            fontstr:SetIgnoreParentAlpha(true);
+            fontstr:SetMouseClickEnabled(false);
+        end
+        cancelf:SetFrameLevel(cancelf:GetFrameLevel() + 1);
+
+        cancelf.slot_id = slot_id;
+
+        pframe.items.slots[slot_id] = {
+            old = slotf,
+            arrow = arrowf,
+            new = new_itemf,
+            gems = gemsf,
+            gems_match = gem_match_indicator,
+            enchant = enchantf,
+            cancel = cancelf,
+
+        };
+    end
+
+    local handle_player_links = function(link)
+        if __sc_frame:IsShown() and __sc_frame.calculator_frame:IsShown() then
+            item_planner_add_slot(link);
+            update_calculator_item_planner();
+        end;
+    end
+
+    hooksecurefunc("ChatEdit_InsertLink", function(link)
+        handle_player_links(link);
+    end);
+    hooksecurefunc("HandleModifiedItemClick", function(link)
+        handle_player_links(link);
+    end);
+
+
+    f_txt = pframe.items:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(GameFontNormal);
+    f_txt:SetPoint("TOPLEFT", 100, -150);
+    f_txt:SetText(L["SHIFT click on any item\n to add to plan!"]);
+    f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
+    pframe.items.item_add_tip = f_txt;
+
+
+    local use_target_equipment = function(self)
+        local found_anything = false;
+        local num = 0;
+
+        self.confirmed_incomplete = false;
+        for slot in pairs(pframe.items.slots) do
+            local link = GetInventoryItemLink("target", slot);
+            local id = GetInventoryItemID("target", slot);
+            if not link and id then
+                self.confirmed_incomplete = true;
+            end
+            if link then
+                if not found_anything then
+                    -- we find that this target has at least 1 viable link so reset plan
+                    clear_table(working_item_plan);
+                    found_anything = true;
+                end
+                num = num + 1;
+
+                working_item_plan[slot] = working_item_plan[slot] or {};
+                if not write_item_info_from_link(working_item_plan[slot], link) then
+                    working_item_plan[slot] = nil;
+                end
+            end
+        end
+        self.num_items_found_last = num;
+
+        if found_anything then
+            update_calculator_item_planner();
+        end
+        return found_anything;
+    end
+
+    pframe.items.y_offset = pframe.items.y_offset - 18;
+
+    local shared_tabs_y_offset = pframe.y_offset;
+
+    pframe.plan_dd = libDD:Create_UIDropDownMenu(nil, pframe);
+    pframe.plan_dd:SetPoint("TOPRIGHT", 20, shared_tabs_y_offset);
+    pframe.plan_dd.init_func = function()
+        libDD:UIDropDownMenu_Initialize(pframe.plan_dd, function()
+
+            libDD:UIDropDownMenu_SetWidth(pframe.plan_dd, 102);
+            libDD:UIDropDownMenu_SetText(pframe.plan_dd, L["Saved plans"]);
+
+            for plan_name, plan in pairs(__sc_p_char.calculator_saves) do
+
+                if plan.items and plan.stats then
+                    libDD:UIDropDownMenu_AddButton({
+                        text = plan_name,
+                        func = function()
+
+                            clear_table(working_item_plan);
+                            for slot, v in pairs(plan.items) do
+                                -- do deep copy
+                                working_item_plan[slot] = {};
+                                for kk, vv in pairs(v) do
+                                    working_item_plan[slot][kk] = vv;
+                                end
+                            end
+
+                            for stats_key, v in pairs(pframe.manual.stats) do
+                                if plan.stats[stats_key] then
+                                    v.editbox:SetText(plan.stats[stats_key]);
+                                else
+                                    v.editbox:SetText("");
+                                end
+                            end
+                            pframe.plan_name_editbox:SetText(plan_name);
+                            update_calculator_item_planner();
+                        end
+                    });
+                end
+            end
+        end);
+    end;
+    pframe.plan_dd.init_func();
+
+    shared_tabs_y_offset = shared_tabs_y_offset - 35;
+
+    f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
+    f:SetPoint("TOPRIGHT", 5, shared_tabs_y_offset+5);
+    f:SetHeight(20);
+    f:SetWidth(120);
+    f:SetText(L["Save plan as"]);
+    f:SetScript("OnClick", function(self)
+
+        local plan_name = pframe.plan_name_editbox:GetText();
+        if plan_name ~= "" then
+            local plan = {items = {}, stats = {}};
+            for k, v in pairs(working_item_plan) do
+                plan.items[k] = {};
+                for kk, vv in pairs(v) do
+                    plan.items[k][kk] = vv;
+                end
+            end
+            for k, v in pairs(pframe.manual.stats) do
+                local txt = v.editbox:GetText();
+                if txt ~= "" then
+                    plan.stats[k] = txt;
+                end
+            end
+
+            __sc_p_char.calculator_saves[plan_name] = plan;
+
+            pframe.plan_dd.init_func();
+            pframe.plan_name_editbox:SetText(""); -- force OnTextChanged event
+            pframe.plan_name_editbox:SetText(plan_name);
+        end
+    end);
+    pframe.save_plan_as_btn = f;
+
+    shared_tabs_y_offset = shared_tabs_y_offset - 20;
+    f = CreateFrame("EditBox", nil, pframe, "InputBoxTemplate");
+    f:SetPoint("TOPRIGHT", 5, shared_tabs_y_offset);
+    f:SetSize(111, 15);
+    f:SetAutoFocus(false);
+    f:SetScript("OnTextChanged", function(self)
+        local txt = self:GetText();
+        if txt == "" then
+            pframe.plan_name_empty:Show();
+            pframe.save_plan_as_btn:Disable();
+            pframe.delete_plan_btn:Disable();
+
+        else
+            pframe.plan_name_empty:Hide();
+            pframe.save_plan_as_btn:Enable();
+            if __sc_p_char.calculator_saves[txt] then
+                pframe.delete_plan_btn:Enable();
+            else
+                pframe.delete_plan_btn:Disable();
+            end
+        end
+    end);
+    pframe.plan_name_editbox = f;
+
+    f = pframe:CreateFontString(nil, "OVERLAY");
+    f:SetFontObject(font);
+    f:SetText(L["Plan name"]);
+    f:SetPoint("LEFT", pframe.plan_name_editbox, 5, 0);
+    pframe.plan_name_empty = f;
+
+
+    shared_tabs_y_offset = shared_tabs_y_offset - 30;
+
+    f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
+    f:SetPoint("TOPRIGHT", 5, shared_tabs_y_offset+5);
+    f:SetHeight(20);
+    f:SetWidth(120);
+    f:SetText(L["Delete plan"]);
+    f:SetScript("OnClick", function(self)
+        local plan_name = pframe.plan_name_editbox:GetText();
+        if plan_name ~= "" then
+
+            __sc_p_char.calculator_saves[plan_name] = nil;
+            pframe.plan_name_editbox:SetText("");
+        end
+    end);
+    pframe.delete_plan_btn = f;
+
+    pframe.items.y_offset = pframe.items.y_offset - 120;
+    f = CreateFrame("Button", nil, pframe.items, "UIPanelButtonTemplate");
+    f:SetPoint("TOPRIGHT", 5, pframe.items.y_offset+5);
+    f:SetHeight(40);
+    f:SetWidth(120);
+    f:SetText(L["Use target's\nequipment"]);
+    f:SetScript("OnClick", function(self)
+
+        if not CheckInteractDistance("target", 1) or not CanInspect("target") then
+            return;
+        end
+        self.num_fetch_attempts = 0;
+        self.num_items_found_last = 0;
+        self.target_name = UnitName("target");
+        self.confirmed_incomplete = false;
+
+        local found_anything = use_target_equipment(self);
+        if not found_anything then
+            -- target is a valid but items not loaded in client
+            -- proceed to subsequent, delayed item fetch attempts
+            self:RegisterEvent("INSPECT_READY");
+            NotifyInspect("target");
+        end
+    end);
+    pframe.items.targets_item_btn = f;
+
+    local target_item_fetch;
+    target_item_fetch = function()
+        local self = pframe.items.targets_item_btn;
+
+        if not self.confirmed_incomplete and
+            (self.num_fetch_attempts > 5 or
+            UnitName("target") ~= self.target_name) then
+
+            return;
+        end
+        self.num_fetch_attempts = self.num_fetch_attempts + 1;
+
+        use_target_equipment(self);
+
+        C_Timer.After(0.5, target_item_fetch);
+    end;
+    f:SetScript("OnEvent", function(self, e, a)
+        if e == "INSPECT_READY" then
+            self:UnregisterEvent("INSPECT_READY");
+            target_item_fetch();
+        end
+    end);
+
+    pframe.items.y_offset = pframe.items.y_offset - 50;
+    f = CreateFrame("Button", nil, pframe.items, "UIPanelButtonTemplate");
+    f:SetPoint("TOPRIGHT", 5, pframe.items.y_offset+5);
+    f:SetHeight(20);
+    f:SetWidth(120);
+    f:SetText(L["Clear items"]);
+    f:SetScript("OnClick", function()
+        clear_table(working_item_plan);
+        update_calculator_item_planner();
+    end);
+
+    -- Manual stats tabbed subframe
+    pframe.manual.y_offset = pframe.manual.y_offset - 50;
+
+    pframe.manual.working_stats = working_stats;
+
+    -- NOTE: the keys here are important and serves as template for other manual style stat-changes
+    pframe.manual.stats = {
         int = {
             label_str = L["Intellect"]
         },
@@ -3091,6 +4248,9 @@ local function create_sw_ui_calculator_frame(pframe)
         },
         agi = {
             label_str = L["Agility"]
+        },
+        stam = {
+            label_str = L["Stamina"]
         },
         sp = {
             label_str = L["Spell Power"]
@@ -3107,7 +4267,7 @@ local function create_sw_ui_calculator_frame(pframe)
         rap = {
             label_str = L["Ranged Attack Power"]
         },
-        wep = {
+        weapon_skill = {
             label_str = L["All Weapon Skill"]
         },
         crit_rating = {
@@ -3129,49 +4289,47 @@ local function create_sw_ui_calculator_frame(pframe)
             label_str = L["Expertise"],
         },
     };
+
     local comparison_stats_listing_order = {
-        "str", "agi", "int", "spirit", "crit_rating", "hit_rating", "haste_rating", "expertise_rating",
-        "", -- split column delimiter
-        "ap", "rap", "wep", "sp", "sd", "hp", "mp5", "pen",
+        "str", "agi", "stam", "int", "spirit", "mp5", "crit_rating", "hit_rating", "haste_rating", "expertise_rating",
+        "ap", "rap", "weapon_skill", "sp", "sd", "hp", "pen",
     };
 
-    local num_stats = 0;
-    for _ in pairs(pframe.stats) do
-        num_stats = num_stats + 1;
-    end
+    local new_column_breakpoint = "ap";
 
-    local y_offset_stats = pframe.y_offset;
+    local num_stats = #comparison_stats_listing_order;
+
+    local y_offset_stats = pframe.manual.y_offset;
     local max_y_offset_stats = 0;
     local i = 1;
     local x_offset = 0;
     local editbox_x_pad = 0;
-    while i <= #comparison_stats_listing_order do
+    while i <= num_stats do
 
         local k = comparison_stats_listing_order[i];
-        if k == "" then
-            i = i + 1;
+        if k == new_column_breakpoint then
             -- split column special, skip
-            k = comparison_stats_listing_order[i];
-            y_offset_stats = pframe.y_offset;
+            y_offset_stats = pframe.manual.y_offset - 40;
             x_offset = x_offset + 210;
             editbox_x_pad = 50;
         end
 
-        local v = pframe.stats[k];
+        local v = pframe.manual.stats[k];
         y_offset_stats = y_offset_stats - 17;
 
-        v.label = pframe:CreateFontString(nil, "OVERLAY");
+        v.label = pframe.manual:CreateFontString(nil, "OVERLAY");
 
         v.label:SetFontObject(font);
         v.label:SetPoint("TOPLEFT", x_pad + x_offset, y_offset_stats);
         v.label:SetText(v.label_str);
         v.label:SetTextColor(222/255, 192/255, 40/255);
 
-        v.editbox = CreateFrame("EditBox", v.label_str.."editbox"..k, pframe, "InputBoxTemplate");
+        v.editbox = CreateFrame("EditBox", v.label_str.."editbox"..k, pframe.manual, "InputBoxTemplate");
         v.editbox:SetPoint("TOPLEFT", 100 + editbox_x_pad + x_offset, y_offset_stats-2);
         v.editbox:SetText("");
         v.editbox:SetAutoFocus(false);
         v.editbox:SetSize(100, 10);
+        v.editbox.index = i;
         v.editbox:SetScript("OnTextChanged", function(self)
 
             if string.match(self:GetText(), "[^-+0123456789. ()]") ~= nil then
@@ -3181,6 +4339,8 @@ local function create_sw_ui_calculator_frame(pframe)
             else 
                 update_calc_list();
             end
+
+            pframe.calculator_plan_changed = true;
         end);
 
         v.editbox:SetScript("OnEnterPressed", function(self)
@@ -3196,34 +4356,51 @@ local function create_sw_ui_calculator_frame(pframe)
 
             local next_index = 0;
             if IsShiftKeyDown() then
-                next_index = 1 + ((i-2) %num_stats);
+                next_index = 1 + ((self.index-2) %num_stats);
             else
-                next_index = 1 + (i %num_stats);
-
+                next_index = 1 + (self.index %num_stats);
             end
         	self:ClearFocus()
-            pframe.stats[comparison_stats_listing_order[next_index]].editbox:SetFocus();
+            pframe.manual.stats[comparison_stats_listing_order[next_index]].editbox:SetFocus();
         end);
 
         max_y_offset_stats = math.min(max_y_offset_stats, y_offset_stats);
         i = i + 1;
     end
 
+    max_y_offset_stats = max_y_offset_stats - 20;
+    f = CreateFrame("Button", nil, pframe.manual, "UIPanelButtonTemplate");
+    f:SetScript("OnClick", function()
+
+        for _, v in pairs(pframe.manual.stats) do
+            v.editbox:SetText("");
+        end
+        update_calc_list();
+    end);
+
+    f:SetPoint("TOPRIGHT", 5, max_y_offset_stats);
+    f:SetHeight(20);
+    f:SetWidth(120);
+    f:SetText(L["Clear stats"]);
+
     if sc.expansion == sc.expansions.vanilla then
-        pframe.stats.expertise_rating.editbox:Hide();
-        pframe.stats.expertise_rating.label:Hide();
+        pframe.manual.stats.expertise_rating.editbox:Hide();
+        pframe.manual.stats.expertise_rating.label:Hide();
     end
+    pframe.manual.y_offset =  max_y_offset_stats;
+    pframe.items.y_offset = items_max_y_offset;
 
-    pframe.y_offset = pframe.y_offset + max_y_offset_stats;
+    pframe.manual:SetHeight(math.abs(pframe.manual.y_offset));
+    pframe.items:SetHeight(math.abs(pframe.items.y_offset));
 
-    pframe.stats.sp.editbox:SetText("1");
-    pframe.stats.ap.editbox:SetText("1");
-    pframe.stats.rap.editbox:SetText("1");
     if sc.core.__sw__test_all_codepaths then
-        for _, v in pairs(pframe.stats) do
+        for _, v in pairs(pframe.manual.stats) do
             v.editbox:SetText("1");
         end
     end
+
+    local tab_offset = math.min(pframe.items.y_offset, pframe.manual.y_offset);
+    pframe.y_offset = pframe.y_offset + tab_offset;
 
     local div = pframe:CreateTexture(nil, "ARTWORK")
     div:SetColorTexture(0.5, 0.5, 0.5, 0.6);
@@ -3293,9 +4470,9 @@ local function create_sw_ui_calculator_frame(pframe)
     end;
 
     f = pframe:CreateFontString(nil, "OVERLAY");
-    f:SetFontObject(font);
+    f:SetFontObject(GameFontNormal);
     f:SetText(L["Abilities can be added from Spells tab"]);
-    f:SetTextColor(1.0,  1.0,  1.0);
+    f:SetTextColor(232.0/255, 225.0/255, 32.0/255);
     pframe.spells_add_tip = f;
 
     pframe.y_offset = pframe.y_offset - 17;
@@ -3322,31 +4499,8 @@ local function create_sw_ui_calculator_frame(pframe)
     pframe.spell_diff_header_right:SetText("");
 
 
-
-    pframe.show_diffs_hover_frame = diffs_show;
-    pframe.diffs_txt = "";
-    local diffs_show = CreateFrame("Button", nil, pframe);
-    diffs_show:SetSize(20, 20);
-    diffs_show:SetPoint("BOTTOMRIGHT", -4, -4);
-    diffs_show:EnableMouse(true);
-    
-    local info_icon = diffs_show:CreateTexture(nil, "ARTWORK");
-    info_icon:SetAllPoints(true);
-    info_icon:SetTexture("Interface\\Buttons\\UI-HelpIcon");
-    
-    -- Tooltip hookup only — you populate diffs_show.stat_changes elsewhere
-    diffs_show:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-        GameTooltip:SetText("Stat Changes", 1, 0.82, 0);
-        GameTooltip:AddLine(pframe.diffs_txt);
-        GameTooltip:Show();
-    end);
-    
-    diffs_show:SetScript("OnLeave", function()
-        GameTooltip:Hide();
-    end);
-
-
+    update_calculator_item_planner();
+    item_tab:Click();
     pframe.calc_list = {};
 end
 
@@ -3428,9 +4582,6 @@ local function create_sw_ui_loadout_frame(pframe)
         config.loadout.name = txt;
         pframe.loadout_dropdown.init_func();
         --update_loadout_frame();
-        __sc_frame.calculator_frame.loadout_name_label:SetText(
-            L["Active loadout: "]..config.loadout.name
-        );
     end;
     f:SetScript("OnEnterPressed", function(self)
         editbox_save(self);
@@ -5285,6 +6436,8 @@ ui.post_login_load                      = post_login_load;
 ui.forced_buffs_lname_to_id             = forced_buffs_lname_to_id;
 ui.get_font                             = get_font;
 ui.locale_warning_popup                 = locale_warning_popup;
+ui.update_calculator_character_items    = update_calculator_character_items;
+ui.effects_from_ui_stats_diff           = effects_from_ui_stats_diff;
 
 sc.ui = ui;
 

@@ -39,7 +39,8 @@ for k, _ in pairs(sc.player_buffs) do
 end
 -- allows weapon enchant buffs to be registered as buffs
 for k, _ in pairs(sc.enchant_effects) do
-    if not unique_buffs[k] then
+
+    if k > 0 and not unique_buffs[k] then
         unique_buffs[k] = {
             id = k,
             --lname = GetSpellInfo(sc.enchant_effects[k]),

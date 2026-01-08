@@ -28,6 +28,7 @@ local effects_diff_str_debug                    = sc.loadouts.effects_diff_str_d
 local apply_items_cmp                           = sc.equipment.apply_items_cmp;
 local slots                                     = sc.equipment.slots;
 local wpn_skill_for_slot                        = sc.equipment.wpn_skill_for_slot;
+local inv_type_to_slot_ids                      = sc.equipment.inv_type_to_slot_ids;
 
 
 local fight_types                               = sc.calc.fight_types;
@@ -45,8 +46,11 @@ local config                                    = sc.config;
 local tooltip_export                            = {};
 
 local eps                                       = 0.000000001;
+
+local tooltip_effects_diffed                    = {};
 local tooltip_effects_diffed_finalized          = {};
 local tooltip_effects_finalized                 = {};
+empty_effects(tooltip_effects_diffed);
 empty_effects(tooltip_effects_diffed_finalized);
 empty_effects(tooltip_effects_finalized);
 
@@ -1782,6 +1786,26 @@ local function write_tooltip_spell_info(tooltip, spell, spell_id, loadout, effec
     tooltip:Show();
 end
 
+local function stat_diffs_included_effects_str(gems, enchants, set_bonuses)
+    if gems or enchants or set_bonuses then
+        local separator = " ";
+        local diffs = "|cFF8a867d"..L["Includes"];
+        if gems then
+            diffs = diffs..separator..L["gems"];
+            separator = ", ";
+        end
+        if enchants then
+            diffs = diffs..separator..L["enchants"];
+            separator = ", ";
+        end
+        if set_bonuses then
+            diffs = diffs..separator..L["set bonuses"];
+        end
+        return diffs.."|r\n";
+    end
+    return "";
+end
+
 local function write_spell_tooltip()
     local _, spell_id = GameTooltip:GetSpell();
 
@@ -1839,34 +1863,6 @@ local function write_spell_tooltip()
         write_tooltip_spell_info(sc_stat_calc_tooltip, spell, spell_id, loadout, effects, tooltip_effects_finalized);
     end
 end
-
-local inv_type_to_slot_ids = {
-    INVTYPE_AMMO = { slots.AmmoSlot },
-    INVTYPE_HEAD = { slots.HeadSlot },
-    INVTYPE_NECK = { slots.NeckSlot },
-    INVTYPE_SHOULDER = { slots.ShoulderSlot },
-    INVTYPE_BODY = { slots.ShirtSlot },
-    INVTYPE_CHEST = { slots.ChestSlot },
-    INVTYPE_ROBE = { slots.ChestSlot },
-    INVTYPE_WAIST = { slots.WaistSlot },
-    INVTYPE_LEGS = { slots.LegsSlot },
-    INVTYPE_FEET = { slots.FeetSlot },
-    INVTYPE_WRIST = { slots.WristSlot },
-    INVTYPE_HAND = { slots.HandsSlot },
-    INVTYPE_FINGER = { slots.Finger0Slot, slots.Finger1Slot },
-    INVTYPE_TRINKET = { slots.Trinket0Slot, slots.Trinket1Slot },
-    INVTYPE_CLOAK = { slots.BackSlot },
-    INVTYPE_WEAPON = { slots.MainHandSlot, slots.SecondaryHandSlot },
-    INVTYPE_2HWEAPON = { slots.MainHandSlot },
-    INVTYPE_WEAPONMAINHAND = { slots.MainHandSlot },
-    INVTYPE_WEAPONOFFHAND = { slots.SecondaryHandSlot },
-    INVTYPE_SHIELD = { slots.SecondaryHandSlot },
-    INVTYPE_HOLDABLE = { slots.SecondaryHandSlot },
-    INVTYPE_TABARD = { slots.TabardSlot },
-    INVTYPE_RANGED = { slots.RangedSlot },
-    INVTYPE_RANGEDRIGHT = { slots.RangedSlot },
-    INVTYPE_RELIC = { slots.RangedSlot },
-};
 
 local not_melee_class =
     sc.class == sc.classes.priest or sc.class == sc.classes.mage or sc.class == sc.classes.warlock;
@@ -1965,11 +1961,10 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             return;
         end
         local item_id, enchant_id, gem1, gem2, gem3, gem4, suffix_id =
-        --strsplit(":", tt.new_item.link:match("|Hitem:(.+)|h"));
             strsplit(":", link_fields); -- works for link from SetHyperLink link too
         tt.new_item.id = tonumber(item_id);
         tt.new_item.suffix_id = tonumber(suffix_id);
-        tt.new_item.ench_id = tonumber(enchant_id);
+        tt.new_item.enchant_id = tonumber(enchant_id);
         tt.new_item.gem1 = tonumber(gem1);
         tt.new_item.gem2 = tonumber(gem2);
         tt.new_item.gem3 = tonumber(gem3);
@@ -2045,7 +2040,8 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         eval_flags = bit.bor(eval_flags, evaluation_flags.fix_weapon_skill_to_level);
     end
 
-    local effects_diffed = sc.loadouts.diffed;
+    --local effects_diffed = sc.loadouts.diffed;
+    local effects_diffed = tooltip_effects_diffed;
     -- TODO: might want to compare item link string
     if tt.tooltip_item_id_last ~= tt.new_item.id or updated or mod_change then
         -- actual evaluation update step and overwrites cache
@@ -2060,14 +2056,16 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 slot_cmp = tt.cached_spells_cmp_item_slots[1];
                 old_item = tt.old_item1;
             end
-            old_item.link = GetInventoryItemLink("player", slot);
-            old_item.id = GetInventoryItemID("player", slot);
+            --old_item.link = GetInventoryItemLink("player", slot);
+            --old_item.id = GetInventoryItemID("player", slot);
+            old_item.link = loadout.item_links[slot];
+            old_item.id = loadout.items[slot];
             if old_item.link then
                 local _, enchant_id, gem1, gem2, gem3, gem4, suffix_id =
                     strsplit(":", old_item.link:match("|Hitem:(.+)|h"));
 
                 old_item.suffix_id = tonumber(suffix_id);
-                old_item.ench_id = tonumber(enchant_id);
+                old_item.enchant_id = tonumber(enchant_id);
                 old_item.gem1 = tonumber(gem1);
                 old_item.gem2 = tonumber(gem2);
                 old_item.gem3 = tonumber(gem3);
@@ -2079,14 +2077,16 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 old_item.tex = empty_tex;
                 old_item.subclass_id = nil;
                 old_item.gems1 = nil;
-                old_item.ench_id = nil;
+                old_item.enchant_id = nil;
                 old_item.suffix_id = nil;
             end
 
             old_items_buffer[slot] = old_item;
             new_items_buffer[slot] = tt.new_item;
+
+            cpy_effects(effects_diffed, effects);
             apply_items_cmp(
-                loadout, effects, effects_diffed, new_items_buffer, old_items_buffer,
+                loadout, effects_diffed, new_items_buffer, old_items_buffer,
                 config.settings.tooltip_item_apply_gems,
                 config.settings.tooltip_item_apply_enchant,
                 config.settings.tooltip_item_apply_set_bonuses
@@ -2102,6 +2102,13 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             if config.settings.tooltip_item_stat_diff then
                 effects_finalize_forced(loadout, effects_diffed);
                 slot_cmp.diff_str = effects_diff_str_debug(effects_finalized, effects_diffed);
+                if slot_cmp.diff_str ~= "" then
+                    slot_cmp.diff_str = stat_diffs_included_effects_str(
+                        config.settings.tooltip_item_apply_gems,
+                        config.settings.tooltip_item_apply_enchant,
+                        config.settings.tooltip_item_apply_set_bonuses
+                    )..slot_cmp.diff_str;
+                end
             end
 
             local i = 0;
@@ -2447,16 +2454,17 @@ local function on_show_tooltip(tooltip)
     spell_tooltip_cached.needs_update = true;
 end
 
-tooltip_export.tooltip_stat_display      = tooltip_stat_display;
-tooltip_export.sort_stat_weights         = sort_stat_weights;
-tooltip_export.format_bounce_spell       = format_bounce_spell;
-tooltip_export.write_spell_tooltip       = write_spell_tooltip;
-tooltip_export.write_item_tooltip        = write_item_tooltip;
-tooltip_export.update_tooltip            = update_tooltip;
-tooltip_export.append_tooltip_spell_rank = append_tooltip_spell_rank;
-tooltip_export.tooltip_eval_mode         = eval_mode;
-tooltip_export.eval_mode_scroll_fn       = eval_mode_scroll_fn;
-tooltip_export.on_clear_tooltip          = on_clear_tooltip;
-tooltip_export.on_show_tooltip           = on_show_tooltip;
+tooltip_export.tooltip_stat_display             = tooltip_stat_display;
+tooltip_export.sort_stat_weights                = sort_stat_weights;
+tooltip_export.format_bounce_spell              = format_bounce_spell;
+tooltip_export.write_spell_tooltip              = write_spell_tooltip;
+tooltip_export.write_item_tooltip               = write_item_tooltip;
+tooltip_export.update_tooltip                   = update_tooltip;
+tooltip_export.append_tooltip_spell_rank        = append_tooltip_spell_rank;
+tooltip_export.tooltip_eval_mode                = eval_mode;
+tooltip_export.eval_mode_scroll_fn              = eval_mode_scroll_fn;
+tooltip_export.on_clear_tooltip                 = on_clear_tooltip;
+tooltip_export.on_show_tooltip                  = on_show_tooltip;
+tooltip_export.stat_diffs_included_effects_str  = stat_diffs_included_effects_str;
 
 sc.tooltip                               = tooltip_export;

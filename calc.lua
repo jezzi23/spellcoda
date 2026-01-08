@@ -19,11 +19,12 @@ local spell_cast_time                               = sc.utils.spell_cast_time;
 local best_rank_by_lvl                              = sc.utils.best_rank_by_lvl;
 local spell_lname                                   = sc.utils.spell_lname;
 local dummy_value                                   = sc.utils.dummy_value;
+local combat_ratings                                = sc.utils.combat_ratings;
 
 local config                                        = sc.config;
 
-local effects_zero_diff                             = sc.loadouts.effects_zero_diff;
-local effects_add_diff                              = sc.loadouts.effects_add_diff;
+local manual_effects_zero_diff                      = sc.loadouts.manual_effects_zero_diff;
+local effects_add_manual_diff                       = sc.loadouts.effects_add_manual_diff;
 local effects_finalize_forced                       = sc.loadouts.effects_finalize_forced;
 local empty_effects                                 = sc.loadouts.empty_effects;
 local cpy_effects                                   = sc.loadouts.cpy_effects;
@@ -39,6 +40,7 @@ local get_buff_by_lname                             = sc.buffs.get_buff_by_lname
 
 local dps_per_ap                                    = sc.scaling.dps_per_ap;
 local spirit_mana_regen                             = sc.scaling.spirit_mana_regen;
+local cr_weights                                    = sc.scaling.cr_weights;
 
 local effect_flags                                  = sc.calc.effect_flags;
 local add_extra_effect                              = sc.calc.add_extra_effect;
@@ -64,43 +66,22 @@ local fight_types   = {
     cast_until_oom = 2
 };
 
--- combat rating defs not in vanilla client but needed here for generality
-local CR_HIT_MELEE                      = CR_HIT_MELEE                   or 6;
-local CR_HIT_RANGED                     = CR_HIT_RANGED                  or 7;
-local CR_CRIT_MELEE                     = CR_CRIT_MELEE                  or 9;
-local CR_CRIT_RANGED                    = CR_CRIT_RANGED                 or 10;
-local CR_HASTE_MELEE                    = CR_HASTE_MELEE                 or 18;
-local CR_HASTE_RANGED                   = CR_HASTE_RANGED                or 19;
-local CR_EXPERTISE                      = CR_EXPERTISE                   or 24;
-local CR_HIT_SPELL                      = CR_HIT_SPELL                   or 8;
-local CR_CRIT_SPELL                     = CR_CRIT_SPELL                  or 11;
-local CR_HASTE_SPELL                    = CR_HASTE_SPELL                 or 20;
-local CR_RESILIENCE_CRIT_TAKEN          = CR_RESILIENCE_CRIT_TAKEN       or 15;
-local CR_RESILIENCE_SPELL_CRIT_TAKEN    = CR_RESILIENCE_SPELL_CRIT_TAKEN or 17;
-
--- combat rating weights are multiplied by the general combat rating level scaling formula
-local cr_weights = {
-    [CR_HIT_MELEE]       = 10,
-    [CR_HIT_RANGED]      = 10,
-    [CR_CRIT_MELEE]      = 14,
-    [CR_CRIT_RANGED]     = 14,
-    [CR_HASTE_MELEE]     = 10,
-    [CR_HASTE_RANGED]    = 10,
-    [CR_EXPERTISE]       = 2.5,
-
-    [CR_HIT_SPELL]       = 8,
-    [CR_CRIT_SPELL]      = 14,
-    [CR_HASTE_SPELL]     = 10,
-
-    [CR_RESILIENCE_CRIT_TAKEN]     = 25,
-    [CR_RESILIENCE_SPELL_CRIT_TAKEN] = 25,
-};
-
-if sc.expansion == sc.expansions.vanilla then
-    for k in pairs(cr_weights) do
-        cr_weights[k] = 1;
-    end
-end
+local CR_DEFENSE_SKILL                  = combat_ratings.CR_DEFENSE_SKILL;
+local CR_DODGE                          = combat_ratings.CR_DODGE;
+local CR_PARRY                          = combat_ratings.CR_PARRY;
+local CR_BLOCK                          = combat_ratings.CR_BLOCK;
+local CR_HIT_MELEE                      = combat_ratings.CR_HIT_MELEE;
+local CR_HIT_RANGED                     = combat_ratings.CR_HIT_RANGED;
+local CR_CRIT_MELEE                     = combat_ratings.CR_CRIT_MELEE;
+local CR_CRIT_RANGED                    = combat_ratings.CR_CRIT_RANGED;
+local CR_HASTE_MELEE                    = combat_ratings.CR_HASTE_MELEE;
+local CR_HASTE_RANGED                   = combat_ratings.CR_HASTE_RANGED;
+local CR_EXPERTISE                      = combat_ratings.CR_EXPERTISE;
+local CR_HIT_SPELL                      = combat_ratings.CR_HIT_SPELL;
+local CR_CRIT_SPELL                     = combat_ratings.CR_CRIT_SPELL;
+local CR_HASTE_SPELL                    = combat_ratings.CR_HASTE_SPELL;
+local CR_RESILIENCE_CRIT_TAKEN          = combat_ratings.CR_RESILIENCE_CRIT_TAKEN;
+local CR_RESILIENCE_SPELL_CRIT_TAKEN    = combat_ratings.CR_RESILIENCE_SPELL_CRIT_TAKEN;
 
 local evaluation_flags = {
     assume_single_effect                    = bit.lshift(1, 1),
@@ -2435,8 +2416,8 @@ end
 -- vanilla baseline
 local dmg_magic_stat_weights = {
     { display = "SP", key = "sp", normalize_to = true},
-    { display = "Int", key = "stats", key2 = attr.intellect},
-    { display = "Spirit", key = "stats", key2 = attr.spirit},
+    { display = "Int", key = "int"},
+    { display = "Spirit", key = "spirit"},
     { display = "Crit", key = "crit_rating"},
     { display = "Hit", key = "hit_rating"},
     { display = "Pen", key = "pen"},
@@ -2445,22 +2426,22 @@ local dmg_magic_stat_weights = {
 
 local heal_stat_weights = {
     { display = "HP", key = "sp", normalize_to = true},
-    { display = "Int", key = "stats", key2 = attr.intellect},
-    { display = "Spirit", key= "stats", key2 = attr.spirit},
+    { display = "Int", key = "int"},
+    { display = "Spirit", key = "spirit"},
     { display = "MP5", key = "mp5"},
     { display = "Crit", key = "crit_rating"},
 };
 
 local melee_stat_weights = {
     { display = "AP", key = "ap", normalize_to = true},
-    { display = "Str", key = "stats", key2 = attr.strength},
-    { display = "Agi", key= "stats", key2 = attr.agility},
+    { display = "Str", key = "str"},
+    { display = "Agi", key= "agi"},
     { display = "Crit", key = "crit_rating"},
     { display = "Hit", key = "hit_rating"},
 };
 local ranged_stat_weights = {
     { display = "RAP", key = "rap", normalize_to = true},
-    { display = "Agi", key= "stats", key2 = attr.agility},
+    { display = "Agi", key= "agi"},
     { display = "Crit", key = "crit_rating"},
     { display = "Hit", key = "hit_rating"},
 };
@@ -2485,7 +2466,7 @@ end
 
 local info_diff = {};
 local spell_stats_diffed = {};
-local diff = effects_zero_diff();
+local diff = manual_effects_zero_diff();
 local effects_diffed = {};
 empty_effects(effects_diffed);
 
@@ -2509,23 +2490,16 @@ local function stat_weights(normal_info, spell, loadout, effects, eval_flags, sp
         if v.normalize_to then
             normalize_table = v;
         end
-        if v.key2 then
-            diff[v.key][v.key2] = 1;
-        else
-            diff[v.key] = 1;
-        end
+        diff[v.key] = 1;
 
         cpy_effects(effects_diffed, effects);
-        effects_add_diff(effects_diffed, diff);
+        effects_add_manual_diff(effects_diffed, diff);
         effects_finalize_forced(loadout, effects_diffed)
 
         spell_stats_info(info_diff, spell_stats_diffed, spell, loadout, effects_diffed, eval_flags, spell_id);
         cast_until_oom(info_diff, spell, spell_stats_diffed, loadout, effects_diffed, true, 0);
-        if v.key2 then
-            diff[v.key][v.key2] = 0;
-        else
-            diff[v.key] = 0;
-        end
+
+        diff[v.key] = 0;
 
         if info_diff.effect_per_sec == math.huge then
             -- because (math.huge - math.huge) != 0

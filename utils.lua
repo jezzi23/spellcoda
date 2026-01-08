@@ -23,6 +23,13 @@ local function deep_table_copy(obj, seen)
   return res;
 end
 
+local function clear_table(t)
+    -- in cases when table address must not change
+    for k in pairs(t) do
+        t[k] = nil;
+    end
+end
+
 local function spell_cost(spell_id)
 
     local costs = GetSpellPowerCost(spell_id);
@@ -262,8 +269,58 @@ local function dummy_value(dummy_id, iid)
     return 0;
 end
 
+local function write_item_info_from_link(info, link)
+
+    local link_fields = link and link:match("item:(.+)");
+    if not link or not link_fields then
+        info.subclass_id = nil;
+        info.gem1 = nil;
+        info.enchant_id = nil;
+        info.suffix_id = nil;
+
+        return false;
+    end
+
+    local item_id, enchant_id, gem1, gem2, gem3, gem4, suffix_id =
+        strsplit(":", link_fields); -- works for link from SetHyperLink link too
+
+    -- this format is expected by item comparison method
+    info.link = link;
+    info.id = tonumber(item_id);
+    info.suffix_id = tonumber(suffix_id);
+    info.enchant_id = tonumber(enchant_id);
+    info.gem1 = tonumber(gem1);
+    info.gem2 = tonumber(gem2);
+    info.gem3 = tonumber(gem3);
+    info.gem4 = tonumber(gem4);
+
+    info.subclass_id = select(13, GetItemInfo(link));
+
+    return true;
+end
+
+-- combat rating defs not in vanilla client but needed for generality
+local combat_ratings = {
+    CR_DEFENSE_SKILL                  = CR_DEFENSE_SKILL               or 2;
+    CR_DODGE                          = CR_DODGE                       or 3;
+    CR_PARRY                          = CR_PARRY                       or 4;
+    CR_BLOCK                          = CR_BLOCK                       or 5;
+    CR_HIT_MELEE                      = CR_HIT_MELEE                   or 6;
+    CR_HIT_RANGED                     = CR_HIT_RANGED                  or 7;
+    CR_HIT_SPELL                      = CR_HIT_SPELL                   or 8;
+    CR_CRIT_MELEE                     = CR_CRIT_MELEE                  or 9;
+    CR_CRIT_RANGED                    = CR_CRIT_RANGED                 or 10;
+    CR_CRIT_SPELL                     = CR_CRIT_SPELL                  or 11;
+    CR_RESILIENCE_CRIT_TAKEN          = CR_RESILIENCE_CRIT_TAKEN       or 15;
+    CR_HASTE_MELEE                    = CR_HASTE_MELEE                 or 18;
+    CR_HASTE_RANGED                   = CR_HASTE_RANGED                or 19;
+    CR_HASTE_SPELL                    = CR_HASTE_SPELL                 or 20;
+    CR_EXPERTISE                      = CR_EXPERTISE                   or 24;
+};
+
 --------------------------------------------------------------------------------
 utils.deep_table_copy               = deep_table_copy;
+utils.clear_table                   = clear_table;
 utils.spell_cost                    = spell_cost;
 utils.spell_cast_time               = spell_cast_time;
 utils.format_number                 = format_number;
@@ -280,8 +337,9 @@ utils.add_threat_flat_by_rank       = add_threat_flat_by_rank;
 utils.add_threat_mod_all_ranks      = add_threat_mod_all_ranks;
 utils.spell_lname                   = spell_lname;
 utils.dummy_value                   = dummy_value;
-utils.register_text_frame_color     = register_text_frame_color;
 utils.assign_color_tag              = assign_color_tag;
+utils.write_item_info_from_link     = write_item_info_from_link;
+utils.combat_ratings                = combat_ratings;
 
 sc.utils = utils;
 sc.ext = {};

@@ -95,10 +95,7 @@ elseif sc.class == sc.classes.druid then
     end
 
 elseif sc.class == sc.classes.priest then
-    -- ?
-    --for _, v in pairs(rank_seqs[spids.power_word_shield]) do
-    --    spells[v].direct.coef = spell_coef_lvl_adjusted(0.2, spells[v].lvl_req);
-    --end
+
 
     -- THREAT
     add_threat_mod_all_ranks({
@@ -109,15 +106,24 @@ elseif sc.class == sc.classes.priest then
         spells[v].healing_version.flags = bit.bor(spells[v].healing_version.flags, spell_flags.no_threat);
     end
 
+    for _, v in pairs(rank_seqs[spids.power_word_shield]) do
+        spells[v].direct.coef = spell_coef_lvl_adjusted(0.1, spells[v].lvl_req);
+    end
 
-    -- ?
-    --for _, talent_id in pairs(talent_ranks[214]) do
-    --    for _, auras in pairs(sc.talent_effects[talent_id]) do
-    --        if auras[sc.aura_idx_category] == "by_attr" then
-    --            auras[sc.aura_idx_subject] = {attr.spirit};
-    --        end
-    --    end
-    --end
+    for _, v in pairs(rank_seqs[spids.lightwell]) do
+        spells[v].periodic.coef = spell_coef_lvl_adjusted(1/3, spells[v].lvl_req);
+    end
+
+    -- Spiritual Healing not affecting selected spells
+    for _, talent_id in pairs(talent_ranks[216]) do
+        for _, auras in pairs(sc.talent_effects[talent_id]) do
+            if auras[sc.aura_idx_category] == "ability" then
+                table.insert(auras[sc.aura_idx_subject], spids.circle_of_healing);
+                table.insert(auras[sc.aura_idx_subject], spids.holy_nova);
+            end
+        end
+    end
+
 
 elseif sc.class == sc.classes.shaman then
 

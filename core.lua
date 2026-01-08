@@ -1,34 +1,35 @@
-local _, sc                    = ...;
+local _, sc = ...;
 
-local L                         = sc.L;
+local L                                     = sc.L;
 
-local spells                    = sc.spells;
-local spell_flags               = sc.spell_flags;
+local spells                                = sc.spells;
+local spell_flags                           = sc.spell_flags;
 
-local load_localization         = sc.loc.load_localization;
+local load_localization                     = sc.loc.load_localization;
 
-local load_sw_ui                = sc.ui.load_sw_ui;
-local create_sw_base_ui         = sc.ui.create_sw_base_ui;
-local sw_activate_frame         = sc.ui.sw_activate_frame;
-local update_profile_frame      = sc.ui.update_profile_frame;
-local update_loadout_frame      = sc.ui.update_loadout_frame;
-local locale_warning_popup      = sc.ui.locale_warning_popup;
+local load_sw_ui                            = sc.ui.load_sw_ui;
+local create_sw_base_ui                     = sc.ui.create_sw_base_ui;
+local sw_activate_frame                     = sc.ui.sw_activate_frame;
+local update_profile_frame                  = sc.ui.update_profile_frame;
+local update_loadout_frame                  = sc.ui.update_loadout_frame;
+local locale_warning_popup                  = sc.ui.locale_warning_popup;
+local update_calculator_character_items     = sc.ui.update_calculator_character_items;
 
-local config                    = sc.config;
-local load_config               = sc.config.load_config;
-local save_config               = sc.config.save_config;
-local set_active_settings       = sc.config.set_active_settings;
-local set_active_loadout        = sc.config.set_active_loadout;
-local activate_settings         = sc.config.activate_settings;
+local config                                = sc.config;
+local load_config                           = sc.config.load_config;
+local save_config                           = sc.config.save_config;
+local set_active_settings                   = sc.config.set_active_settings;
+local set_active_loadout                    = sc.config.set_active_loadout;
+local activate_settings                     = sc.config.activate_settings;
 
-local reassign_overlay_icon     = sc.overlay.reassign_overlay_icon;
-local update_overlay            = sc.overlay.update_overlay;
+local reassign_overlay_icon                 = sc.overlay.reassign_overlay_icon;
+local update_overlay                        = sc.overlay.update_overlay;
 
-local update_tooltip            = sc.tooltip.update_tooltip;
-local write_spell_tooltip       = sc.tooltip.write_spell_tooltip;
-local write_item_tooltip        = sc.tooltip.write_item_tooltip;
-local on_clear_tooltip          = sc.tooltip.on_clear_tooltip;
-local on_show_tooltip           = sc.tooltip.on_show_tooltip;
+local update_tooltip                        = sc.tooltip.update_tooltip;
+local write_spell_tooltip                   = sc.tooltip.write_spell_tooltip;
+local write_item_tooltip                    = sc.tooltip.write_item_tooltip;
+local on_clear_tooltip                      = sc.tooltip.on_clear_tooltip;
+local on_show_tooltip                       = sc.tooltip.on_show_tooltip;
 
 -------------------------------------------------------------------------
 local core                      = {};
@@ -367,8 +368,9 @@ local event_dispatch = {
             update_loadout_frame();
         end
     end,
-    ["PLAYER_EQUIPMENT_CHANGED"] = function()
+    ["PLAYER_EQUIPMENT_CHANGED"] = function(_, slot)
         core.equipment_update_needed = true;
+        update_calculator_character_items(slot);
     end,
     ["PLAYER_LEVEL_UP"] = function()
         core.old_ranks_checks_needed = true;
@@ -614,6 +616,6 @@ sc.ext.version_id = core.version_id;
 
 __SC = sc.ext;
 
---core.__sw__debug__ = 1;
+core.__sw__debug__ = 1;
 --core.__sw__test_all_codepaths = 1;
 --core.__sw__test_all_spells = 1;
