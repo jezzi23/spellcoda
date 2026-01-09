@@ -23,7 +23,7 @@ local update_loadout_and_effects_diffed_from_ui = sc.loadouts.update_loadout_and
 local effects_finalize_forced                   = sc.loadouts.effects_finalize_forced;
 local cpy_effects                               = sc.loadouts.cpy_effects;
 local empty_effects                             = sc.loadouts.empty_effects;
-local effects_diff_str_debug                    = sc.loadouts.effects_diff_str_debug;
+local stats_diff_format                         = sc.loadouts.stats_diff_format;
 
 local apply_items_cmp                           = sc.equipment.apply_items_cmp;
 local slots                                     = sc.equipment.slots;
@@ -2101,7 +2101,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
 
             if config.settings.tooltip_item_stat_diff then
                 effects_finalize_forced(loadout, effects_diffed);
-                slot_cmp.diff_str = effects_diff_str_debug(effects_finalized, effects_diffed);
+                slot_cmp.diff_str = stats_diff_format(loadout, effects_finalized, effects_diffed);
                 if slot_cmp.diff_str ~= "" then
                     slot_cmp.diff_str = stat_diffs_included_effects_str(
                         config.settings.tooltip_item_apply_gems,

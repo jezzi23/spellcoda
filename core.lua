@@ -247,6 +247,8 @@ local event_dispatch = {
         if arg == "SpellCoda" then
             load_config();
             load_localization();
+            -- initialize tables with localized strings
+            sc.loadouts.init_lnames();
             sc.overlay.init_label_handler();
             sc.overlay.init_ccfs();
             core.active_spec = GetActiveTalentGroup();

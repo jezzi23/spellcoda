@@ -255,6 +255,7 @@ local default_settings     = {
     general_libstub_minimap_icon                                = true,
     general_spellbook_button                                    = true,
     general_version_mismatch_notify                             = true,
+    general_stats_pretty_format                                 = true,
 
     -- general spell settings
     general_prio_heal                                           = true,

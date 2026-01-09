@@ -29,7 +29,8 @@ local color_by_lvl_diff                         = sc.utils.color_by_lvl_diff;
 local update_loadout_and_effects_diffed_from_ui = sc.loadouts.update_loadout_and_effects_diffed_from_ui;
 local update_loadout_and_effects                = sc.loadouts.update_loadout_and_effects;
 local active_loadout                            = sc.loadouts.active_loadout
-local effects_diff_str_debug                    = sc.loadouts.effects_diff_str_debug;
+local stats_diff_format                         = sc.loadouts.stats_diff_format;
+local stats_format                              = sc.loadouts.stats_format;
 local cpy_effects                               = sc.loadouts.cpy_effects;
 local effects_finalize_forced                   = sc.loadouts.effects_finalize_forced;
 local empty_effects                             = sc.loadouts.empty_effects;
@@ -302,8 +303,10 @@ local function update_calc_list(loadout, effects, effects_diffed, eval_flags)
 
     eval_flags = bit.bor(eval_flags, evaluation_flags.expectation_of_self);
 
-    local diffs, _, diffs_in, diffs_out = effects_diff_str_debug(effects, effects_diffed);
+    local diffs, _, diffs_in, diffs_out = stats_diff_format(loadout, effects, effects_diffed);
     frame.diffs_txt = diffs;
+    frame.before_txt = stats_format(loadout, effects);
+    frame.after_txt = stats_format(loadout, effects_diffed);
 
     frame.diffs_fontstr:SetText(L["Effects"].."\n|cFF00FF00 +"..diffs_in.." |r|cFFFF0000 -"..diffs_out.."|r");
 
@@ -3501,21 +3504,21 @@ local function create_sw_ui_calculator_frame(pframe)
     before_area:SetSize(110, 30);
     before_area:EnableMouse(true);
     before_area:SetScript("OnEnter", function(self)
-        --GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-        --GameTooltip:SetText("Changes", 1, 0.82, 0);
-        --GameTooltip:AddLine();
-        --GameTooltip:Show();
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+        GameTooltip:SetText(L["Before"]);
+        GameTooltip:AddLine(pframe.before_txt);
+        GameTooltip:Show();
     end);
     before_area:SetScript("OnLeave", function()
-        --GameTooltip:Hide();
+        GameTooltip:Hide();
     end);
     before_area:SetScript("OnMouseDown", function(self)
-        --dump_text(
-        --    L["Before"],
-        --    pframe.diffs_txt,
-        --    300,
-        --    400
-        --);
+        dump_text(
+            L["Before"],
+            pframe.before_txt,
+            300,
+            400
+        );
     end);
 
     before_area:SetBackdrop({
@@ -3546,21 +3549,21 @@ local function create_sw_ui_calculator_frame(pframe)
     after_area:SetSize(110, 30);
     after_area:EnableMouse(true);
     after_area:SetScript("OnEnter", function(self)
-        --GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-        --GameTooltip:SetText("Changes", 1, 0.82, 0);
-        --GameTooltip:AddLine();
-        --GameTooltip:Show();
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+        GameTooltip:SetText(L["After"]);
+        GameTooltip:AddLine(pframe.after_txt);
+        GameTooltip:Show();
     end);
     after_area:SetScript("OnLeave", function()
-        --GameTooltip:Hide();
+        GameTooltip:Hide();
     end);
     after_area:SetScript("OnMouseDown", function(self)
-        --dump_text(
-        --    L["Before"],
-        --    pframe.diffs_txt,
-        --    300,
-        --    400
-        --);
+        dump_text(
+            L["After"],
+            pframe.after_txt,
+            300,
+            400
+        );
     end);
 
     after_area:SetBackdrop({
@@ -3759,7 +3762,7 @@ local function create_sw_ui_calculator_frame(pframe)
             GameTooltip:SetText(L["Changes"]);
 
             effects_finalize_forced(loadout, effects_diff_on_arrow_tooltip);
-            local stat_diffs = effects_diff_str_debug(effects_finalized, effects_diff_on_arrow_tooltip);
+            local stat_diffs = stats_diff_format(loadout, effects_finalized, effects_diff_on_arrow_tooltip);
             if stat_diffs ~= "" then
                 stat_diffs = stat_diffs_included_effects_str(true, true, true)..stat_diffs;
             end
@@ -5896,6 +5899,11 @@ local function create_sw_ui_settings_frame(pframe)
         {
             id = "general_version_mismatch_notify",
             txt = L["Notify about addon and client version mismatch"],
+        },
+        {
+            id = "general_stats_pretty_format",
+            txt = L["Simplified, curated, human readable stat visualization"],
+            tooltip = L["Otherwise a raw dump of internal format is used for debugging"]
         },
     };
 
