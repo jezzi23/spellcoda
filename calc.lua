@@ -2714,19 +2714,25 @@ local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_fin
     if fight_types.repeated_casts == fight_type then
 
         local info = calc_spell_eval(spell, loadout, effects_finalized, eval_flags, spell_id);
-        local normal_eps = info.effect_per_sec;
         local normal_exp = info.expected;
+        local normal_eps = info.effect_per_sec;
 
         effects_finalize_forced(loadout, effects_d);
         info = calc_spell_eval(spell, loadout, effects_d, eval_flags, spell_id);
 
-        if normal_eps == 0 then
-            out.diff_ratio = math.huge;
+        if normal_exp == 0 then
+            out.effect_changed_perc = nil;
         else
-            out.diff_ratio = 100 * (info.effect_per_sec / normal_eps - 1);
+            out.effect_changed_perc = 100 * (info.expected / normal_exp - 1);
         end
-        out.first = info.effect_per_sec - normal_eps;
-        out.second = info.expected - normal_exp;
+        if normal_eps == 0 then
+            out.effect_timed_changed_perc = nil;
+        else
+            out.effect_timed_changed_perc = 100 * (info.effect_per_sec / normal_eps - 1);
+        end
+
+        out.effect = info.expected - normal_exp;
+        out.effect_timed = info.effect_per_sec - normal_eps;
     else
         eval_flags = bit.bor(eval_flags, evaluation_flags.at_max_mana);
         local info, stats = calc_spell_eval(spell, loadout, effects_finalized, eval_flags, spell_id);
@@ -2739,14 +2745,20 @@ local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_fin
         info = calc_spell_eval(spell, loadout, effects_d, eval_flags, spell_id);
         cast_until_oom(info, spell, stats, loadout, effects_d, true, eval_flags);
 
-        if not info.effect_until_oom or normal_exp_until_oom == 0 then
-            out.diff_ratio = nil;
-            out.first = nil;
-            out.second = nil;
+        if not info.effect_until_oom or normal_exp_until_oom == 0 or normal_exp_until_oom == math.huge then
+            out.effect = nil;
+            out.effect_changed_perc = nil;
         else
-            out.diff_ratio = 100 * (info.effect_until_oom / normal_exp_until_oom - 1);
-            out.first = info.effect_until_oom - normal_exp_until_oom;
-            out.second = info.time_until_oom - normal_time_until_oom;
+            out.effect_changed_perc = 100 * (info.effect_until_oom / normal_exp_until_oom - 1);
+            out.effect = info.effect_until_oom - normal_exp_until_oom;
+        end
+
+        if not info.time_until_oom or normal_time_until_oom == 0 or normal_time_until_oom == math.huge then
+            out.effect_timed = nil;
+            out.effect_timed_changed_perc = nil;
+        else
+            out.effect_timed_changed_perc = 100 * (info.time_until_oom / normal_time_until_oom - 1);
+            out.effect_timed = info.time_until_oom - normal_time_until_oom;
         end
     end
 end

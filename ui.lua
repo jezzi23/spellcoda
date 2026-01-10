@@ -43,6 +43,7 @@ local buffs                                     = sc.buffs.buffs;
 local target_buffs                              = sc.buffs.target_buffs;
 
 local stat_diffs_included_effects_str           = sc.tooltip.stat_diffs_included_effects_str;
+local colored_diff_str                          = sc.tooltip.colored_diff_str;
 
 local config                                    = sc.config;
 
@@ -176,15 +177,12 @@ local function display_spell_diff(i, calc_list, diff, frame)
         calc_list[i].role_icon.tex = calc_list[i].role_icon:CreateTexture(nil, "ARTWORK");
         calc_list[i].role_icon.tex:SetTexture(role_icons);
 
-        calc_list[i].change = frame:CreateFontString(nil, "OVERLAY");
-        calc_list[i].change:SetFontObject(font);
-        calc_list[i].change:SetPoint("TOPLEFT", 255, frame.y_offset);
         calc_list[i].first = frame:CreateFontString(nil, "OVERLAY");
         calc_list[i].first:SetFontObject(font);
-        calc_list[i].first:SetPoint("TOPLEFT", 325, frame.y_offset);
+        calc_list[i].first:SetPoint("LEFT", frame, "TOPLEFT", 260, frame.y_offset-4);
         calc_list[i].second = frame:CreateFontString(nil, "OVERLAY");
         calc_list[i].second:SetFontObject(font);
-        calc_list[i].second:SetPoint("TOPLEFT", 390, frame.y_offset);
+        calc_list[i].second:SetPoint("LEFT", frame, "TOPLEFT", 360, frame.y_offset-4);
 
 
         calc_list[i].cancel_button = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate");
@@ -226,52 +224,9 @@ local function display_spell_diff(i, calc_list, diff, frame)
     end
     v.role_icon.tex:SetAllPoints(v.role_icon);
 
-    local change_fmt = format_number(diff.diff_ratio, 2);
-    local change = change_fmt.."%";
-    if not diff.diff_ratio  then
-        change = "";
-    elseif change_fmt == "∞" then
-        v.change:SetTextColor(1, 1, 1);
-    elseif diff.diff_ratio < 0 then
-        v.change:SetTextColor(195/255, 44/255, 11/255);
-        change = change;
-    elseif diff.diff_ratio > 0 then
-        v.change:SetTextColor(33/255, 185/255, 21/255);
-        change = "+"..change;
-    else
-        v.change:SetTextColor(1, 1, 1);
-    end
-    v.change:SetText(change);
+    v.first:SetText(colored_diff_str(diff.effect, diff.effect_changed_perc, 2));
 
-    local first = format_number(diff.first, 2);
-    if not diff.first then
-        first = "";
-    elseif first == "∞" then
-        v.first:SetTextColor(1, 1, 1);
-    elseif diff.first < 0 then
-        v.first:SetTextColor(195/255, 44/255, 11/255);
-    elseif diff.first > 0 then
-        v.first:SetTextColor(33/255, 185/255, 21/255);
-        first = "+"..first;
-    else
-        v.first:SetTextColor(1, 1, 1);
-    end
-    v.first:SetText(first);
-
-    local second = format_number(diff.second, 2);
-    if not diff.second then
-        second = "";
-    elseif second == "∞" then
-        v.second:SetTextColor(1, 1, 1);
-    elseif diff.second < 0 then
-        v.second:SetTextColor(195/255, 44/255, 11/255);
-    elseif diff.second > 0 then
-        v.second:SetTextColor(33/255, 185/255, 21/255);
-        second = "+"..second;
-    else
-        v.second:SetTextColor(1, 1, 1);
-    end
-    v.second:SetText(second);
+    v.second:SetText(colored_diff_str(diff.effect_timed, diff.effect_timed_changed_perc, 2));
     ------------------
 
     for _, f in pairs(v) do
@@ -4433,8 +4388,8 @@ local function create_sw_ui_calculator_frame(pframe)
             
             if config.settings.calc_fight_type == fight_types.repeated_casts then
                 libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Repeated casts"]);
-                pframe.spell_diff_header_center:SetText(L["Per sec"]);
-                pframe.spell_diff_header_right:SetText(L["Effect"]);
+                pframe.spell_diff_header_center:SetText(L["Effect"]);
+                pframe.spell_diff_header_right:SetText(L["Per sec"]);
             elseif config.settings.calc_fight_type == fight_types.cast_until_oom then
                 libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Cast until OOM"]);
                 pframe.spell_diff_header_center:SetText(L["Effect"]);
@@ -4450,8 +4405,8 @@ local function create_sw_ui_calculator_frame(pframe)
 
                         config.settings.calc_fight_type = fight_types.repeated_casts;
                         libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Repeated casts"]);
-                        pframe.spell_diff_header_center:SetText(L["Per sec"]);
-                        pframe.spell_diff_header_right:SetText(L["Effect"]);
+                        pframe.spell_diff_header_center:SetText(L["Effect"]);
+                        pframe.spell_diff_header_right:SetText(L["Per sec"]);
                         update_calc_list();
                     end
                 }
@@ -4487,19 +4442,14 @@ local function create_sw_ui_calculator_frame(pframe)
     pframe.spell_diff_header_spell:SetPoint("TOPLEFT", x_pad, pframe.y_offset);
     pframe.spell_diff_header_spell:SetText(L["Spell"]);
 
-    pframe.spell_diff_header_left = pframe:CreateFontString(nil, "OVERLAY");
-    pframe.spell_diff_header_left:SetFontObject(font);
-    pframe.spell_diff_header_left:SetPoint("TOPLEFT", x_pad + 245, pframe.y_offset);
-    pframe.spell_diff_header_left:SetText(L["Change"]);
-
     pframe.spell_diff_header_center = pframe:CreateFontString(nil, "OVERLAY");
     pframe.spell_diff_header_center:SetFontObject(font);
-    pframe.spell_diff_header_center:SetPoint("TOPLEFT", x_pad + 320, pframe.y_offset);
+    pframe.spell_diff_header_center:SetPoint("LEFT", pframe, "TOPLEFT", x_pad + 255, pframe.y_offset-4);
     pframe.spell_diff_header_center:SetText("");
 
     pframe.spell_diff_header_right = pframe:CreateFontString(nil, "OVERLAY");
     pframe.spell_diff_header_right:SetFontObject(font);
-    pframe.spell_diff_header_right:SetPoint("TOPLEFT", x_pad + 380, pframe.y_offset);
+    pframe.spell_diff_header_right:SetPoint("LEFT", pframe, "TOPLEFT", x_pad + 356, pframe.y_offset-4);
     pframe.spell_diff_header_right:SetText("");
 
 

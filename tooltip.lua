@@ -1895,7 +1895,6 @@ local function make_item_tooltip_line_frames(tooltip)
 
     return {
         role_tex = role_tex,
-        change_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
         first_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
         second_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
     };
@@ -1917,12 +1916,38 @@ local function make_item_tooltip_data(tooltip)
         old_item1 = {},
         old_item2 = {},
         headers = {
-            change_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
             first_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
             second_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
         }
     };
     return data;
+end
+
+local function colored_diff_str(val, perc, num_digits)
+    local val_str = format_number(val, num_digits-1);
+    local perc_str = format_number(perc, num_digits).."%";
+
+    local color;
+    if not val then
+        color = "|cFF21B915";
+        val_str = "∞";
+    elseif val > 0 then
+        color = "|cFF21B915";
+    elseif val < 0 then
+        color = "|cFFC32C0B";
+    else
+        color = "|cFFFFFFFF";
+    end
+    if not perc then
+        perc_str = "∞";
+    end
+
+    if val_str == "∞" or val == 0 then
+        return string.format("%s%s|r", color, val_str);
+
+    else
+        return string.format("%s%s|r (%s%s|r)", color, val_str, color, perc_str);
+    end
 end
 
 local new_items_buffer, old_items_buffer = {}, {};
@@ -2190,6 +2215,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
 
     -- abort if no spells or all diffs are 0
     local neutral_abort = true;
+
     for item_fits_in_slot, _ in pairs(cmp_slots) do
         local slot_cmp;
         if item_fits_in_slot > 1 then
@@ -2200,7 +2226,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
 
         for i = 1, slot_cmp.len do
             local diff = slot_cmp.diff_list[i];
-            if diff.first ~= 0 or diff.second ~= 0 then
+            if diff.effect ~= 0 or diff.effect_timed ~= 0 then
                 neutral_abort = false;
                 break;
             end
@@ -2218,8 +2244,8 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     local color_tag;
     local mode_switch_tip;
     if fight_type == fight_types.repeated_casts then
-        header2 = L["Per sec"];
-        header3 = L["Effect"];
+        header2 = L["Effect"];
+        header3 = L["Per sec"];
         fight_type_str = L["Repeated casts"];
         color_tag = "effect_per_sec";
         mode_switch_tip = L["Hold ALT key for Casting until OOM change"];
@@ -2231,7 +2257,6 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         mode_switch_tip = L["Hold ALT key for Repeated casts change"];
     end
 
-    tt.headers.change_fstr:SetText(header1);
     tt.headers.first_fstr:SetText(header2);
     tt.headers.second_fstr:SetText(header3);
 
@@ -2274,17 +2299,15 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         effect_color(color_tag));
 
     local num_lines = tooltip:NumLines();
-    local min_width = 50;
+    local min_width = 90;
 
     local offset_to_first = math.max(min_width, tt.headers.second_fstr:GetWidth());
-    local offset_to_change = offset_to_first + math.max(min_width, tt.headers.first_fstr:GetWidth());
-    local offset_to_role_icon = offset_to_change + math.max(min_width, tt.headers.change_fstr:GetWidth());
+    local offset_to_role_icon = offset_to_first + math.max(min_width, tt.headers.first_fstr:GetWidth());
 
     local tooltip_name = tooltip:GetName();
     local rhs_txt = _G[tooltip_name .. "TextRight" .. num_lines];
     tt.headers.second_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", 0, 0);
     tt.headers.first_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", -offset_to_first, 0);
-    tt.headers.change_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", -offset_to_change, 0);
 
 
     for item_fits_in_slot, _ in pairs(cmp_slots) do
@@ -2317,52 +2340,9 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             local diff = slot_cmp.diff_list[i];
             local spell_texture_str = "|T" .. diff.tex .. ":16:16:0:0|t "
 
-            local change_fmt = format_number(diff.diff_ratio, 2);
-            local change = change_fmt .. "%";
-            if not diff.diff_ratio then
-                change = "";
-            elseif change_fmt == "∞" then
-                diff.frames.change_fstr:SetTextColor(1, 1, 1);
-            elseif diff.diff_ratio < 0 then
-                diff.frames.change_fstr:SetTextColor(195 / 255, 44 / 255, 11 / 255);
-                change = change;
-            elseif diff.diff_ratio > 0 then
-                diff.frames.change_fstr:SetTextColor(33 / 255, 185 / 255, 21 / 255);
-                change = "+" .. change;
-            else
-                diff.frames.change_fstr:SetTextColor(1, 1, 1);
-            end
-            diff.frames.change_fstr:SetText(change);
+            diff.frames.first_fstr:SetText(colored_diff_str(diff.effect, diff.effect_changed_perc, 2));
 
-            local first = format_number(diff.first, 2);
-            if not diff.first then
-                first = "";
-            elseif first == "∞" then
-                diff.frames.first_fstr:SetTextColor(1, 1, 1);
-            elseif diff.first < 0 then
-                diff.frames.first_fstr:SetTextColor(195 / 255, 44 / 255, 11 / 255);
-            elseif diff.first > 0 then
-                diff.frames.first_fstr:SetTextColor(33 / 255, 185 / 255, 21 / 255);
-                first = "+" .. first;
-            else
-                diff.frames.first_fstr:SetTextColor(1, 1, 1);
-            end
-            diff.frames.first_fstr:SetText(first);
-
-            local second = format_number(diff.second, 2);
-            if not diff.second then
-                second = "";
-            elseif second == "∞" then
-                diff.frames.second_fstr:SetTextColor(1, 1, 1);
-            elseif diff.second < 0 then
-                diff.frames.second_fstr:SetTextColor(195 / 255, 44 / 255, 11 / 255);
-            elseif diff.second > 0 then
-                diff.frames.second_fstr:SetTextColor(33 / 255, 185 / 255, 21 / 255);
-                second = "+" .. second;
-            else
-                diff.frames.second_fstr:SetTextColor(1, 1, 1);
-            end
-            diff.frames.second_fstr:SetText(second);
+            diff.frames.second_fstr:SetText(colored_diff_str(diff.effect_timed, diff.effect_timed_changed_perc, 2));
 
             if diff.id == sc.auto_attack_spell_id then
                 if cmp_slots[item_fits_in_slot] == slots.MainHandSlot then
@@ -2385,7 +2365,6 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             rhs_txt = _G[tooltip_name .. "TextRight" .. num_lines];
             diff.frames.second_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", 0, 0);
             diff.frames.first_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", -offset_to_first, 0);
-            diff.frames.change_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", -offset_to_change, 0);
 
 
             if diff.heal_like then
@@ -2466,5 +2445,7 @@ tooltip_export.eval_mode_scroll_fn              = eval_mode_scroll_fn;
 tooltip_export.on_clear_tooltip                 = on_clear_tooltip;
 tooltip_export.on_show_tooltip                  = on_show_tooltip;
 tooltip_export.stat_diffs_included_effects_str  = stat_diffs_included_effects_str;
+tooltip_export.colored_diff_str                 = colored_diff_str;
+
 
 sc.tooltip                               = tooltip_export;
