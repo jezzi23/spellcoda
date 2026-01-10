@@ -2113,15 +2113,16 @@ local function cast_until_oom(spell_effect, spell, stats, loadout, effects, calc
     end
 
     local spirit = loadout.stats[attr.spirit] + effects.by_attr.stat_flat[attr.spirit];
+    local intellect = loadout.stats[attr.intellect] + effects.by_attr.stat_flat[attr.intellect];
 
-    local mp2_not_casting = spirit_mana_regen(spirit);
+    local mp2_not_casting = spirit_mana_regen(spirit, intellect);
 
     if not calculating_weights then
         mp2_not_casting = math.ceil(mp2_not_casting);
     end
     local mp5 = effects.raw.mp5_flat
         +
-        loadout.resources_max[powers.mana] * effects.raw.perc_max_mana_as_mp5
+        (effects.raw.mana + loadout.resources_max[powers.mana]) * effects.raw.perc_max_mana_as_mp5
         +
         effects.raw.mp5_from_int_mod * (loadout.stats[attr.intellect] +
             effects.by_attr.stat_flat[attr.intellect]);

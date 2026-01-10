@@ -164,6 +164,7 @@ local function display_spell_diff(i, calc_list, diff, frame)
         calc_list[i].tooltip_area:SetScript("OnLeave", function(self)
             GameTooltip:Hide();
         end);
+        calc_list[i].tooltip_area:HookScript("OnMouseWheel", sc.tooltip.eval_mode_scroll_fn);
 
         calc_list[i].name_str = frame:CreateFontString(nil, "OVERLAY");
         calc_list[i].name_str:SetFontObject(font);
@@ -4735,7 +4736,7 @@ local function create_sw_ui_loadout_frame(pframe)
     f.number_editbox = true;
     local clvl_editbox_update = function(self)
         local lvl = tonumber(self:GetText());
-        local valid = lvl and lvl >= 1 and lvl <= 100;
+        local valid = lvl and lvl >= 1 and lvl <= sc.max_lvl;
         sc.core.old_ranks_checks_needed = true;
         if valid then
             config.loadout.lvl = lvl;
