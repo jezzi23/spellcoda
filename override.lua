@@ -25,6 +25,7 @@ elseif class == classes.druid then
     lookups.wild_growth_lname = GetSpellInfo(spids.wild_growth);
 elseif class == classes.priest then
     lookups.priest_t3 = 525;
+elseif class == classes.rogue then
 end
 
 

@@ -598,7 +598,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 add_line(
                     tooltip,
                     "",
-                    string.format("| %s +%d%%->%.1f%% %s | %s %.1f%% |",
+                    string.format("| %s +%.1f%%->%.1f%% %s | %s %.1f%% |",
                         L["Hit"],
                         100 * stats.extra_hit,
                         100 * stats.miss,
@@ -612,7 +612,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 add_line(
                     tooltip,
                     "",
-                    string.format("| %s %s | %s +%d%%->%.1f%% %s | %s %.1f%% |",
+                    string.format("| %s %s | %s +%.1f%%->%.1f%% %s | %s %.1f%% |",
                         L["Skill"],
                         stats.attack_skill,
                         L["Hit"],
@@ -644,7 +644,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             add_line(
                 tooltip,
                 "",
-                string.format("| %s +%d%%->%.1f%% %s | %s %.1f%% |",
+                string.format("| %s +%.1f%%->%.1f%% %s | %s %.1f%% |",
                     L["Hit"],
                     100 * stats.extra_hit,
                     100 * stats.miss,
@@ -894,7 +894,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 add_line(
                     tooltip,
                     "",
-                    string.format("| %s %s | %s +%d%%->%.1f%% %s | %s %.1f%% |",
+                    string.format("| %s %s | %s +%.1f%%->%.1f%% %s | %s %.1f%% |",
                         L["Skill"],
                         stats.attack_skill_ot,
                         L["Hit"],
@@ -921,7 +921,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 add_line(
                     tooltip,
                     "",
-                    string.format("| %s %s | %s +%d%%->%.1f%% %s | %s %.1f%% |",
+                    string.format("| %s %s | %s +%.1f%%->%.1f%% %s | %s %.1f%% |",
                         L["Skill"],
                         stats.attack_skill_ot,
                         L["Hit"],
@@ -953,7 +953,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             add_line(
                 tooltip,
                 "",
-                string.format("| %s +%d%%->%.1f%% %s | %s %.1f%% |",
+                string.format("| %s +%.1f%%->%.1f%% %s | %s %.1f%% |",
                     L["Hit"],
                     100 * stats.extra_hit_ot,
                     100 * stats.miss_ot,
@@ -1674,7 +1674,7 @@ local function write_tooltip_spell_info(tooltip, spell, spell_id, loadout, effec
                     add_line(
                         tooltip,
                         "",
-                        string.format("| %s %s | %s +%d%%->%.1f%% %s |",
+                        string.format("| %s %s | %s +%.1f%%->%.1f%% %s |",
                             L["Skill"],
                             stats.attack_skill,
                             L["Hit"],
@@ -1703,7 +1703,7 @@ local function write_tooltip_spell_info(tooltip, spell, spell_id, loadout, effec
                     add_line(
                         tooltip,
                         "",
-                        string.format("| %s +%d%%->%.1f%% %s |",
+                        string.format("| %s +%.1f%%->%.1f%% %s |",
                             L["Hit"],
                             100 * stats.extra_hit,
                             100 * stats.miss,

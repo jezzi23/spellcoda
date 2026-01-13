@@ -11,6 +11,8 @@ local spell_flags                                   = sc.spell_flags;
 local comp_flags                                    = sc.comp_flags;
 local lookups                                       = sc.lookups;
 
+local config                                        = sc.config;
+
 local l_talents                                     = sc.loadouts.active_loadout().talents;
 
 local auto_attack_spell_id                          = sc.auto_attack_spell_id;
@@ -44,6 +46,11 @@ local class_stats_spell = (function()
                 if pts ~= 0 then
                     stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + 0.6 * pts * 0.2 * stats.original_base_cost;
                 end
+                if bid == spids.holy_light and config.settings.general_average_proc_effects then
+                    local pts = l_talents.pts[116];
+                    stats.extra_cast_time_flat = stats.extra_cast_time_flat - pts * 0.5/3;
+
+                end
             end
         end
     elseif class == classes.hunter then
@@ -51,6 +58,10 @@ local class_stats_spell = (function()
         end
     elseif class == classes.rogue then
         return function(anycomp, bid, stats, spell, loadout, effects)
+            if bid == spids.mutilate and effects.raw.class_misc ~= 0 then
+                -- class_misc has non zero if poison is active
+                stats.target_vuln_mod_mul = stats.target_vuln_mod_mul * 1.5;
+            end
         end
     elseif class == classes.priest then
         return function(anycomp, bid, stats, spell, loadout, effects)

@@ -31,6 +31,7 @@ local mechanics = {};
 mechanics.gcd = 1.5;
 mechanics.gcd_min = 1.5;
 
+
 local class_stats_spell = (function()
     if class == classes.warrior then
         return function(anycomp, bid, stats, spell, loadout, effects)
@@ -171,6 +172,11 @@ local class_stats_spell = (function()
     elseif class == classes.druid then
         return function(anycomp, bid, stats, spell, loadout, effects)
             if bit.band(spell.flags, spell_flags.heal) ~= 0 then
+
+                if bid == spids.lifebloom then
+                    stats.resource_refund_mul_hit = stats.resource_refund + 0.5 * stats.cost_actual;
+                end
+
                 if loadout.enchants[lookups.rune_living_seed] then
                     if spell.direct or bid == spids.swiftmend then
                         add_extra_effect(stats,

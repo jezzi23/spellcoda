@@ -46,6 +46,19 @@ lookups.divine_aegis                = 431622;
 lookups.overload                    = 408438;
 lookups.ancestral_awakening         = 425858;
 
+sc.npc_armor_by_lvl = {
+    -- "Intended as typical 100% of Heavy armor values"
+    20,     21,     46,     82,     126,    180,    245,    322,    412,    518,    -- npc level 1-10
+    545,    580,    615,    650,    685,    721,    756,    791,    826,    861,    -- npc level 11-20
+    897,    932,    967,    1002,   1037,   1072,   1108,   1142,   1172,   1212,   -- npc level 21-30
+    1247,   1283,   1317,   1353,   1387,   1494,   1607,   1724,   1849,   1980,   -- npc level 31-40
+    2117,   2262,   2414,   2574,   2742,   2798,   2853,   2907,   2963,   3018,   -- npc level 41-50
+    3072,   3128,   3183,   3237,   3292,   3348,   3402,   3457,   3512,   3566,   -- npc level 51-60
+    3622,   3677,   3731, --4870,   5050,   5230,   5410,   5590,   5770,   5950,   -- npc level 61-60
+--  6533,   7116,   7700,   8000,   8300,   8600,   8900,   9200,   9500,   9729,   -- npc level 71-80
+--  10033, 10338, 10643,                                                            -- npc level 81-90
+};
+
 -- NOTE:
 --  THREAT: Client data does not contain special threat information
 --          added to many spells like Sunder armor, Heroic Strike, Mind Blast etc
@@ -55,6 +68,7 @@ lookups.ancestral_awakening         = 425858;
 --          threat % modifiers and damage done by ability
 --          (may be a faulty assumption since presumably threat data from
 --          spell like Revenge was gathered in defensive stance with threat modifier)
+--
 
 -- Class data modification
 if sc.class == sc.classes.mage then
@@ -314,7 +328,8 @@ elseif sc.class == sc.classes.warrior then
     end
     -- THREAT
     add_threat_mod_all_ranks({
-        {spids.execute, 0.25}
+        {spids.execute, 0.25},
+        {spids.thunderclap, 1.5},
     });
 
     add_threat_flat_by_rank({
@@ -322,7 +337,6 @@ elseif sc.class == sc.classes.warrior then
         { spids.shield_slam, {160, 190, 220, 250} },
         { spids.sunder_armor, {100, 140, 180, 220, 260} },
         { spids.shield_bash, {180, 180, 180} },
-        { spids.thunder_clap, {17, 40, 64, 96, 143, 180} },
         { spids.battle_shout, {5, 11, 17, 26, 39, 55, 70} },
         { spids.cleave, {10, 40, 60, 70, 100} },
         { spids.demoralizing_shout, {11, 17, 21, 32, 43} },

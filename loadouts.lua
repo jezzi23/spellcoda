@@ -47,7 +47,7 @@ local loadout_numbers = {
     "flags",
     "lvl",
     "target_lvl",
-    "phys_hit",
+    --"phys_hit",
     "spell_dmg",
     "healing_power",
     "spell_power",
@@ -278,6 +278,7 @@ local effects_additive = {
     wpn_subclass = {
         "phys_crit",
         "phys_crit_forced",
+        "phys_crit_mod",
         "phys_hit",
         "phys_dmg",
         "phys_dmg_flat",
@@ -300,7 +301,11 @@ local effects_additive = {
         "healing_power_flat",
         "phys_dmg_flat",
         "ap_flat",
+        "ap_mod",
+        "ap_mod_forced",
         "rap_flat",
+        "rap_mod",
+        "rap_mod_forced",
         "cost_mod",
         "phys_hit",
         "phys_crit",
@@ -360,6 +365,7 @@ local effects_multiplicative = {
         "ranged_haste",
         "ranged_haste_forced",
         "cast_haste",
+        "vuln_bleed",
     },
 };
 
@@ -840,8 +846,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     --- Melee hit
     ---------------------------------
     do
-        local val = ((loadout and loadout.phys_hit) or 0)
-            +
+        local val = 
             effects.raw.phys_hit
             +
             0.01*(((loadout and loadout.melee_hit_rating) or 0) + effects.raw.melee_hit_rating_flat)/
@@ -852,8 +857,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     --- Ranged hit
     ---------------------------------
     do
-        local val = ((loadout and loadout.phys_hit) or 0)
-            +
+        local val =
             effects.raw.phys_hit
             +
             0.01*(((loadout and loadout.ranged_hit_rating) or 0) + effects.raw.ranged_hit_rating_flat)/
@@ -1479,10 +1483,27 @@ local function effects_finalize_forced(loadout, effects)
     local added_ap =
         effects.by_attr.stat_flat[attr.strength] * ap_per_str[class] +
         effects.by_attr.stat_flat[attr.agility] * ap_per_agi[agi_ap_class];
-    effects.raw.ap_flat = effects.raw.ap_flat + added_ap;
+
+    effects.raw.ap_flat = 
+        (1.0 + effects.raw.ap_mod + effects.raw.ap_mod_forced)
+        *
+        (
+         (added_ap)
+         +
+         (effects.raw.ap_flat /(1.0 + effects.raw.ap_mod_forced))
+        );
+
 
     local added_rap = effects.by_attr.stat_flat[attr.agility] * rap_per_agi[class];
-    effects.raw.rap_flat = effects.raw.rap_flat + added_rap;
+    effects.raw.rap_flat = 
+        (1.0 + effects.raw.rap_mod + effects.raw.rap_mod_forced)
+        *
+        (
+         (added_rap)
+         +
+         (effects.raw.rap_flat /(1.0 + effects.raw.rap_mod_forced))
+        );
+
 
     local crit_from_agi = 0.01*(sc.physical_crit_to_agi[loadout.lvl] or 0)*effects.by_attr.stat_flat[attr.agility];
 
@@ -1545,11 +1566,11 @@ local function dynamic_loadout(loadout)
     end
 
 
-    loadout.phys_hit = 0;
-    local phys_hit = GetHitModifier();
-    if phys_hit then
-        loadout.phys_hit = 0.01*phys_hit;
-    end
+    --loadout.phys_hit = 0;
+    --local phys_hit = GetHitModifier();
+    --if phys_hit then
+    --    loadout.phys_hit = 0.01*phys_hit;
+    --end
 
     if sc.expansion ~= sc.expansions.wotlk then
         loadout.healing_power = GetSpellBonusHealing();
@@ -1758,12 +1779,12 @@ local function apply_effect(effects, spid, auras, forced, stacks, undo, player_o
                         end
                     end
                 else
-                    --if not effects[aura[category_idx]] then
-                    --    print("Missing effects."..aura[category_idx]);
-                    --end
-                    --if not effects[aura[category_idx]][aura_effect] then
-                    --    print("Missing effects."..aura[category_idx].."."..aura_effect);
-                    --end
+                    if not effects[aura[category_idx]] then
+                        print("Missing effects."..aura[category_idx]);
+                    end
+                    if not effects[aura[category_idx]][aura_effect] then
+                        print("Missing effects."..aura[category_idx].."."..aura_effect);
+                    end
                     if undo then
                         val = -val;
                     end
