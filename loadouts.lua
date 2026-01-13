@@ -531,7 +531,7 @@ local function effects_add(dst, src)
             end
         end
     end
-    if sc.core.__sw__debug__ and (dst.finalized or src.finalized) then
+    if __spellcoda_debug__ and (dst.finalized or src.finalized) then
         print("FAILURE: Adding effects with finalized");
         --print ("\nCall stack: \n" .. debugstack(2, 3, 2));
     end
@@ -1305,7 +1305,7 @@ empty_effects(effects_diff_buffer);
 
 local function stats_diff_format(loadout, effects_before, effects_after)
 
-    if sc.core.__sw__debug__ and (not effects_before.finalized or not effects_after.finalized) then
+    if __spellcoda_debug__ and (not effects_before.finalized or not effects_after.finalized) then
         print("FAILURE: Stat diff formatting without finalized effects");
         --print ("\nCall stack: \n" .. debugstack(2, 3, 2));
     end
@@ -1321,7 +1321,7 @@ local function stats_diff_format(loadout, effects_before, effects_after)
 end
 
 local function stats_format(loadout, effects)
-    if sc.core.__sw__debug__ and not effects.finalized then
+    if __spellcoda_debug__ and not effects.finalized then
         print("FAILURE: Stat formatting without finalized effects");
         --print ("\nCall stack: \n" .. debugstack(2, 3, 2));
     end
@@ -1402,7 +1402,7 @@ local function effects_add_manual_diff(effects, diff)
     else
         effects.wpn_subclass.skill_flat[all_weps_mask] = diff.weapon_skill;
     end
-    if sc.core.__sw__debug__ and effects.finalized then
+    if __spellcoda_debug__ and effects.finalized then
         print("FAILURE: Adding effects diff with finalized");
         --print ("\nCall stack: \n" .. debugstack(2, 3, 2));
     end

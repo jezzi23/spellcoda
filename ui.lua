@@ -881,7 +881,7 @@ local function create_sw_spell_id_viewer()
         end
     end);
 
-    if sc.core.__sw__test_all_spells then
+    if __spellcoda_test_all_spells__ then
         __sc_frame.spell_id_viewer_editbox:SetText(pairs(spells)(spells));
     end
 
@@ -1716,12 +1716,12 @@ local function create_sw_ui_tooltip_frame(pframe)
             color_tag = "normal",
             tooltip = L["Assumes you cast a particular ability until you are OOM with no cooldowns."]
         },
-        {
-            id = "tooltip_display_base_mod",
-            txt = L["Base effect mod"],
-            color_tag = "sp_effect",
-            tooltip = L["Intended for debugging."]
-        },
+        --{
+        --    id = "tooltip_display_base_mod",
+        --    txt = L["Base effect mod"],
+        --    color_tag = "sp_effect",
+        --    tooltip = L["Intended for debugging."]
+        --},
         {
             id = "tooltip_display_sp_effect_calc",
             txt = L["Coef & SP/AP effect"],
@@ -4352,7 +4352,7 @@ local function create_sw_ui_calculator_frame(pframe)
     pframe.manual:SetHeight(math.abs(pframe.manual.y_offset));
     pframe.items:SetHeight(math.abs(pframe.items.y_offset));
 
-    if sc.core.__sw__test_all_codepaths then
+    if __spellcoda_test_all_data__ then
         for _, v in pairs(pframe.manual.stats) do
             v.editbox:SetText("1");
         end
@@ -6141,7 +6141,7 @@ local function create_sw_base_ui()
             --__sc_frame:RegisterEvent(k);
             --BROKEN PTR TEMPORARY FIX: remember to grep for this phrase to remove later, event missing
             local ok, err = pcall(function() __sc_frame:RegisterEvent(k) end);
-            if sc.core.__sw__debug__ and not ok then
+            if __spellcoda_debug__ and not ok then
                 print("DEBUG: Event does not exist:", k);
             end
         end

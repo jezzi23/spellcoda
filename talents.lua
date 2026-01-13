@@ -148,7 +148,7 @@ local function apply_talents(loadout, effects)
     --    end
     --end
 
-    if sc.core.__sw__test_all_codepaths then
+    if __spellcoda_test_all_data__ then
         -- Testing all special passives
         local passives_applied = 0;
         for id, e in pairs(sc.passives) do

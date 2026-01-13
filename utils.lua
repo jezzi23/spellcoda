@@ -262,7 +262,7 @@ local function dummy_value(dummy_id, iid)
             end
         end
     end
-    if sc.__sw__debug__ then
+    if __spellcoda_debug__ then
         print("Missing dummy value for spell id:", dummy_id, " iid:", iid);
 
     end

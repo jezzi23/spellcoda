@@ -284,7 +284,7 @@ local event_dispatch = {
         end
         sc.ui.post_login_load();
         C_ChatInfo.RegisterAddonMessagePrefix(addon_msg_sc_id);
-        if core.__sw__debug__ or core.__sw__test_all_codepaths or core.__sw__test_all_spells then
+        if __spellcoda_debug__ or __spellcoda_test_all_data__ or __spellcoda_test_all_spells__ then
             print("WARNING: SC DEBUG TOOLS ARE ON!!!");
             for _ = 1, 10 do
                 print("WARNING: SC DEBUG TOOLS ARE ON!!!");
@@ -297,7 +297,7 @@ local event_dispatch = {
         end
         -- don't warn about updates when build is relatively fresh
         local version_warning_build_threshold_days = 14;
-        if core.__sw__debug__ then
+        if __spellcoda_debug__ then
             version_warning_build_threshold_days = 0;
         end
         if config.settings.general_version_mismatch_notify and
@@ -492,7 +492,7 @@ local function refresh_tooltip()
         return;
     end
     local mod = key_mod_flags();
-    if core.__sw__test_all_spells then
+    if __spellcoda_test_all_spells__ then
         dt = 0.01;
         sc.tooltip_mod = mod;
         update_tooltip(GameTooltip, true);
@@ -618,6 +618,6 @@ sc.ext.version_id = core.version_id;
 
 __SC = sc.ext;
 
-core.__sw__debug__ = 1;
---core.__sw__test_all_codepaths = 1;
---core.__sw__test_all_spells = 1;
+--__spellcoda_debug__ = 1;
+--__spellcoda_test_all_data__ = 1;
+--__spellcoda_test_all_spells__ = 1;

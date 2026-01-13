@@ -515,7 +515,7 @@ local function apply_equipment(loadout, effects)
         end
     end
 
-    if sc.core.__sw__test_all_codepaths then
+    if __spellcoda_test_all_data__ then
 
         -- Testing all items
         local items_applied = 0;

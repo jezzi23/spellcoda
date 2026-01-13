@@ -1390,7 +1390,7 @@ local function post_process_stats(comp, spell, stats, loadout)
 end
 
 local function stats_for_spell(stats, spell, loadout, effects, eval_flags)
-    if not effects.finalized and sc.core.__sw__debug__ then
+    if not effects.finalized and __spellcoda_debug__ then
         print("CALLING STATS FOR SPELL WITHOUT FINALIZED EFFECTS");
     end
 
@@ -2055,7 +2055,7 @@ local expectation_variations = {
 
 local function spell_info(info, spell, stats, loadout, effects, eval_flags, spell_id)
 
-    if not effects.finalized and sc.core.__sw__debug__ then
+    if not effects.finalized and __spellcoda_debug__ then
         print("CALLING SPELL INFO FOR SPELL WITHOUT FINALIZED EFFECTS");
     end
     local anycomp = spell.direct or spell.periodic;
@@ -2351,7 +2351,7 @@ end
 
 local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
 
-    if not effects.finalized and sc.core.__sw__debug__ then
+    if not effects.finalized and __spellcoda_debug__ then
         print("CALLING SPELL INFO FOR SPELL WITHOUT FINALIZED EFFECTS");
     end
 
@@ -2463,7 +2463,7 @@ end
 
 local function only_threat_info(info, stats, spell, loadout, effects, eval_flags)
 
-    if not effects.finalized and sc.core.__sw__debug__ then
+    if not effects.finalized and __spellcoda_debug__ then
         print("CALLING SPELL INFO FOR SPELL WITHOUT FINALIZED EFFECTS");
     end
     local bid = spell.base_id;

@@ -212,7 +212,7 @@ local tooltip_spell_update_id = 0;
 -- which in return is handled by "OnTooltipSetSpell" event
 -- which finally calls write_spell_tooltip() to append to tooltip
 local function update_tooltip(tooltip, mod_change)
-    if sc.core.__sw__test_all_spells and __sc_frame.spells_frame:IsShown() then
+    if __spellcoda_test_all_spells__ and __sc_frame.spells_frame:IsShown() then
         spell_jump_key = spell_jump_itr(spells, spell_jump_key);
         if not spell_jump_key then
             spell_jump_key = spell_jump_itr(spells);
@@ -1397,7 +1397,9 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         end
     end
 
-    if config.settings.tooltip_display_base_mod then
+    --if config.settings.tooltip_display_base_mod then
+    -- use as debug tooltip, this info is not intuitive for viewing
+    if __spellcoda_debug__ then
         if spell.direct and info.min_noncrit_if_hit_base1 and
             spell.direct.min ~= info.min_noncrit_if_hit_base1 then
 
