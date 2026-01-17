@@ -25,6 +25,7 @@ local spirit_mana_regen                 = sc.scaling.spirit_mana_regen;
 
 local write_item_info_from_link         = sc.utils.write_item_info_from_link;
 local combat_ratings                    = sc.utils.combat_ratings;
+local spell_lname                       = sc.utils.spell_lname;
 
 local config                            = sc.config;
 
@@ -51,7 +52,6 @@ local loadout_numbers = {
     "spell_dmg",
     "healing_power",
     "spell_power",
-    "extra_mana",
     "base_mana",
     "ap",
     "rap",
@@ -211,6 +211,10 @@ local effect_categories = {
     "aura_pts_flat",
     "wpn_subclass",
     "creature",
+
+    "num_set_pieces",
+    "enchants",
+    "talent_pts",
 };
 
 local effects_additive = {
@@ -402,6 +406,10 @@ local function empty_effects(effects)
         effects.raw[v] = 0;
     end
 
+    effects.enchants = {};
+    effects.num_set_pieces = {};
+    effects.talent_pts = {};
+
     for _, v in pairs(effects_multiplicative.by_school) do
         effects.mul.by_school[v] = {1, 1, 1, 1, 1, 1, 1};
     end
@@ -419,55 +427,6 @@ local function empty_effects(effects)
     end
 
     effects.finalized = false;
-end
-
-local function cpy_effects(dst, src)
-
-    for _, cat in ipairs(effect_categories) do
-        local dst_cat = dst[cat];
-        local src_cat = src[cat];
-        for i, src_e in pairs(src_cat) do
-            if type(src_e) == "table" then
-                local dst_e = dst_cat[i];
-                for j, _ in pairs(dst_e) do
-                    if not src_e[j] then
-                        -- prevent values in src that are not in dst
-                        dst_e[j] = 0.0;
-                    end
-                end
-
-                for j, _ in pairs(src_e) do
-                    dst_e[j] = src_e[j];
-                end
-            else
-                dst_cat[i] = src_cat[i];
-            end
-        end
-    end
-
-    for _, cat in ipairs(effect_categories) do
-        local dst_cat = dst.mul[cat];
-        local src_cat = src.mul[cat];
-        for i, src_e in pairs(src_cat) do
-            if type(src_e) == "table" then
-                local dst_e = dst_cat[i];
-                for j, _ in pairs(dst_e) do
-                    if not src_e[j] then
-                        -- prevent values in src that are not in dst
-                        dst_e[j] = 1.0;
-                    end
-                end
-
-                for j, _ in pairs(src_e) do
-                    dst_e[j] = src_e[j];
-                end
-            else
-                dst_cat[i] = src_cat[i];
-            end
-        end
-    end
-
-    dst.finalized = src.finalized;
 end
 
 local function zero_effects(effects)
@@ -500,6 +459,72 @@ local function zero_effects(effects)
     effects.finalized = false;
 end
 
+local function zero_effects_dynamic_fields(effects)
+    -- a few specific fields are dynamic
+    for k, v in pairs(effects.enchants) do
+        effects.enchants[k] = 0;
+    end
+    for k, v in pairs(effects.num_set_pieces) do
+        effects.num_set_pieces[k] = 0;
+    end
+    for k, v in pairs(effects.talent_pts) do
+        effects.talent_pts[k] = 0;
+    end
+end
+
+local function cpy_effects(dst, src)
+
+    zero_effects_dynamic_fields(dst);
+
+    for _, cat in ipairs(effect_categories) do
+        local dst_cat = dst[cat];
+        local src_cat = src[cat];
+        for i, src_e in pairs(src_cat) do
+            if type(src_e) == "table" then
+                local dst_e = dst_cat[i];
+                for j, _ in pairs(dst_e) do
+                    if not src_e[j] then
+                        -- zero values in dst that are not in src
+                        dst_e[j] = 0.0;
+                    end
+                end
+
+                for j, _ in pairs(src_e) do
+                    dst_e[j] = src_e[j];
+                end
+            else
+
+                dst_cat[i] = src_cat[i];
+            end
+        end
+
+    end
+
+    for _, cat in ipairs(effect_categories) do
+        local dst_cat = dst.mul[cat];
+        local src_cat = src.mul[cat];
+        for i, src_e in pairs(src_cat) do
+            if type(src_e) == "table" then
+                local dst_e = dst_cat[i];
+                for j, _ in pairs(dst_e) do
+                    if not src_e[j] then
+                        -- prevent values in src that are not in dst
+                        dst_e[j] = 1.0;
+                    end
+                end
+
+                for j, _ in pairs(src_e) do
+                    dst_e[j] = src_e[j];
+                end
+            else
+                dst_cat[i] = src_cat[i];
+            end
+        end
+    end
+
+    dst.finalized = src.finalized;
+end
+
 local function effects_add(dst, src)
 
 
@@ -513,7 +538,7 @@ local function effects_add(dst, src)
                     dst_e[j] = (dst_e[j] or 0.0) + v;
                 end
             else
-                dst_cat[i] = dst_cat[i] + src_cat[i];
+                dst_cat[i] = (dst_cat[i] or 0.0) + src_cat[i];
             end
         end
     end
@@ -1189,6 +1214,59 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     add_field_line(info, effects.mul.raw.vuln_phys, L["Target physical damage taken"], is_diff, true, true);
 
     ---------------------------------
+    --- Spell damage multiplier
+    ---------------------------------
+    do
+        local can_compact = true;
+        local school_prev;
+        for i = 2, 7 do
+
+            local val = effects.mul.by_school.dmg_mod[i];
+
+            school_prev = school_prev or val;
+
+            if val ~= school_prev then
+                can_compact = false;
+                break;
+            end
+        end
+        if not can_compact then
+            for i = 2, 7 do
+                local val = effects.mul.by_school.dmg_mod[i];
+                add_field_line(info, val, lnames.schools[i].." "..L["spell damage"], is_diff, true, true);
+            end
+        else
+            add_field_line(info, school_prev, L["Spell damage"], is_diff, true, true);
+        end
+    end
+    ---------------------------------
+    --- Spell damage taken (target)
+    ---------------------------------
+    do
+        local can_compact = true;
+        local school_prev;
+        for i = 2, 7 do
+
+            local val = effects.mul.by_school.vuln_mod[i];
+
+            school_prev = school_prev or val;
+
+            if val ~= school_prev then
+                can_compact = false;
+                break;
+            end
+        end
+        if not can_compact then
+            for i = 2, 7 do
+                local val = effects.mul.by_school.vuln_mod[i];
+                add_field_line(info, val, L["Target"].." "..lnames.schools[i].." "..L["spell damage taken"], is_diff, true, true);
+            end
+        else
+            add_field_line(info, school_prev, L["Target spell damage taken"], is_diff, true, true);
+        end
+    end
+
+    ---------------------------------
     --- Healing modifier
     ---------------------------------
     add_field_line(info, effects.mul.raw.heal_mod, L["Healing"], is_diff, true, true);
@@ -1208,10 +1286,9 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
             if val_last == val then
                 -- same value as previous thing, just add append this spell name
                 -- info.str now ends with "\n", need to move it to appended string
-                info.str = info.str:sub(1, -2)..", "..GetSpellInfo(spell_id).."\n";
-                --info.str = info.str..", "..GetSpellInfo(spell_id);
+                info.str = info.str:sub(1, -2)..", "..spell_lname(spell_id).."\n";
             else
-                if (add_field_line(info, val, v[2]..": "..GetSpellInfo(spell_id), is_diff, v[3])) then
+                if (add_field_line(info, val, v[2]..": "..spell_lname(spell_id), is_diff, v[3])) then
                     val_last = val;
                 end
             end
@@ -1227,10 +1304,9 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
             if val_last == val then
                 -- same value as previous thing, just add append this spell name
                 -- info.str now ends with "\n", need to move it to appended string
-                info.str = info.str:sub(1, -2)..", "..GetSpellInfo(spell_id).."\n";
-                --info.str = info.str..", "..GetSpellInfo(spell_id);
+                info.str = info.str:sub(1, -2)..", "..spell_lname(spell_id).."\n";
             else
-                if (add_field_line(info, val, v[2]..": "..GetSpellInfo(spell_id), is_diff, v[3], true)) then
+                if (add_field_line(info, val, v[2]..": "..spell_lname(spell_id), is_diff, v[3], true)) then
                     val_last = val;
                 end
             end
@@ -1313,10 +1389,10 @@ local function stats_diff_format(loadout, effects_before, effects_after)
     cpy_effects(effects_diff_buffer, effects_after);
     effects_negate_for_diff(effects_diff_buffer, effects_before);
 
-    if config.settings.general_stats_pretty_format then
-        return human_friendly_fields(nil, effects_diff_buffer, true, loadout, effects_before, effects_after);
-    else
+    if config.settings.general_calc_stats_raw_dump then
         return effects_raw_dump(effects_diff_buffer, true);
+    else
+        return human_friendly_fields(nil, effects_diff_buffer, true, loadout, effects_before, effects_after);
     end
 end
 
@@ -1326,9 +1402,7 @@ local function stats_format(loadout, effects)
         --print ("\nCall stack: \n" .. debugstack(2, 3, 2));
     end
 
-    if config.settings.general_stats_pretty_format then
-        return human_friendly_fields(loadout, effects, false, loadout, effects, effects);
-    else
+    if config.settings.general_calc_stats_raw_dump then
         local lstr, ltotal, lnum_in, lnum_out = loadout_raw_dump(loadout, true);
         local str, total, num_in, num_out = effects_raw_dump(effects, true);
         return
@@ -1336,6 +1410,8 @@ local function stats_format(loadout, effects)
             ltotal + total,
             lnum_in + num_in,
             lnum_out + num_out;
+    else
+        return human_friendly_fields(loadout, effects, false, loadout, effects, effects);
     end
 end
 
@@ -1358,6 +1434,7 @@ local function manual_effects_zero_diff()
         expertise_rating = 0,
         pen = 0,
         weapon_skill = 0,
+        extra_mana = 0,
     };
 end
 
@@ -1391,8 +1468,9 @@ local function effects_add_manual_diff(effects, diff)
         effects.by_school.target_res_flat[i] = effects.by_school.target_res_flat[i] - diff.pen;
     end
 
-    -- physical stuff
+    effects.raw.mana = effects.raw.mana + diff.extra_mana;
 
+    -- physical stuff
     effects.raw.ap_flat = effects.raw.ap_flat + diff.ap;
     effects.raw.rap_flat = effects.raw.rap_flat + diff.rap;
 
@@ -1513,10 +1591,10 @@ local function effects_finalize_forced(loadout, effects)
 end
 
 local function dynamic_loadout(loadout)
-    if not config.loadout.use_custom_lvl then
+    if not config.settings.loadout_use_custom_lvl then
         loadout.lvl = UnitLevel("player");
     else
-        loadout.lvl = config.loadout.lvl;
+        loadout.lvl = config.settings.loadout_lvl;
     end
 
     for i = 1, 5 do
@@ -1527,7 +1605,7 @@ local function dynamic_loadout(loadout)
     for pwr, _ in pairs(loadout.resources_max) do
         loadout.resources_max[pwr] = math.max(1, UnitPowerMax("player", pwr));
     end
-    if config.loadout.always_max_resource then
+    if config.settings.loadout_always_max_resource then
         for pwr, _ in pairs(loadout.resources) do
             loadout.resources[pwr] = loadout.resources_max[pwr];
         end
@@ -1536,7 +1614,6 @@ local function dynamic_loadout(loadout)
             loadout.resources[pwr] = UnitPower("player", pwr);
         end
     end
-    loadout.extra_mana = config.loadout.extra_mana;
     -- always put at least 1 combo point to at least resemble spell descriptions
     loadout.resources[powers.combopoints] = math.max(1, loadout.resources[powers.combopoints]);
 
@@ -1633,7 +1710,7 @@ local function dynamic_loadout(loadout)
     loadout.target_name = UnitName("target");
     loadout.mouseover_name = UnitName("mouseover");
 
-    loadout.target_res = config.loadout.target_res;
+    loadout.target_res = config.settings.loadout_target_res;
 
     loadout.hostile_towards = "";
     loadout.friendly_towards = "player";
@@ -1649,15 +1726,15 @@ local function dynamic_loadout(loadout)
 
     loadout.player_hp_perc = UnitHealth("player")/loadout.player_hp_max;
 
-    loadout.enemy_hp_perc = config.loadout.default_target_hp_perc*0.01;
+    loadout.enemy_hp_perc = config.settings.loadout_default_target_hp_perc*0.01;
 
-    if config.loadout.default_target_creature_type > 0 then
-        loadout.target_creature_mask = bit.lshift(1, config.loadout.default_target_creature_type-1);
+    if config.settings.loadout_default_target_creature_type > 0 then
+        loadout.target_creature_mask = bit.lshift(1, config.settings.loadout_default_target_creature_type-1);
     else
         loadout.target_creature_mask = 0;
     end
 
-    loadout.target_lvl = config.loadout.default_target_lvl_diff + loadout.lvl;
+    loadout.target_lvl = config.settings.loadout_default_target_lvl_diff + loadout.lvl;
 
     if UnitExists("target") then
 
@@ -1701,10 +1778,10 @@ local function dynamic_loadout(loadout)
 
     loadout.target_defense = 5*loadout.target_lvl;
 
-    loadout.armor = config.loadout.target_armor;
-    if config.loadout.target_automatic_armor then
+    loadout.armor = config.settings.loadout_target_armor;
+    if config.settings.loadout_target_automatic_armor then
         if sc.npc_armor_by_lvl[loadout.target_lvl] then
-            loadout.armor = sc.npc_armor_by_lvl[loadout.target_lvl] * config.loadout.target_automatic_armor_pct * 0.01;
+            loadout.armor = sc.npc_armor_by_lvl[loadout.target_lvl] * config.settings.loadout_target_automatic_armor_pct * 0.01;
         end
     end
 
@@ -1779,12 +1856,12 @@ local function apply_effect(effects, spid, auras, forced, stacks, undo, player_o
                         end
                     end
                 else
-                    if not effects[aura[category_idx]] then
-                        print("Missing effects."..aura[category_idx]);
-                    end
-                    if not effects[aura[category_idx]][aura_effect] then
-                        print("Missing effects."..aura[category_idx].."."..aura_effect);
-                    end
+                    --if not effects[aura[category_idx]] then
+                    --    print("Missing effects."..aura[category_idx]);
+                    --end
+                    --if not effects[aura[category_idx]][aura_effect] then
+                    --    print("Missing effects."..aura[category_idx].."."..aura_effect);
+                    --end
                     if undo then
                         val = -val;
                     end
@@ -1809,8 +1886,6 @@ local loadout_front = loadout_base1;
 -- singular tables shared in both loadout buffers, not to be compared 
 local loadout_shared = {
     "wpn_skills",
-    "num_set_pieces",
-    "enchants",
     "talents",
     "items",
     "item_links",
@@ -1820,7 +1895,6 @@ for _, v in ipairs(loadout_shared) do
     loadout_base2[v] = loadout_base1[v];
 end
 loadout_base1.talents.code = "";
-loadout_base1.talents.pts = {};
 
 local equipped = {};
 local talented = {};
@@ -1832,6 +1906,7 @@ empty_effects(talented);
 empty_effects(buffed);
 empty_effects(final);
 empty_effects(diffed);
+
 
 
 local function active_loadout()
@@ -1868,8 +1943,6 @@ local function update_loadout_and_effects()
 
     if sc.core.talents_update_needed then
 
-        loadout_front.talents.code = sc.talents.wowhead_talent_code();
-
         zero_effects(talented);
         -- NOTE: these special passives may change aura_pts of other effects, thus applied first
         for k, v in pairs(sc.passives) do
@@ -1878,7 +1951,8 @@ local function update_loadout_and_effects()
             end
         end
 
-        local success = sc.talents.apply_talents(loadout_front, talented);
+        local success = sc.talents.loadout_talents_info(loadout_front);
+        sc.talents.apply_talents(loadout_front, talented, loadout_front.talents.code, false, false);
 
         sc.core.talents_update_needed = not success;
         sc.core.equipment_update_needed = true;
@@ -1897,7 +1971,7 @@ local function update_loadout_and_effects()
     zero_effects(buffed);
     effects_add(buffed, equipped);
 
-    sc.buffs.apply_buffs(loadout_front, buffed);
+    sc.buffs.apply_buffs(loadout_front, buffed, false, false);
 
     cpy_effects(final, buffed);
     effects_finalize_forced(loadout_front, final);
@@ -1906,9 +1980,10 @@ local function update_loadout_and_effects()
 
     return loadout_front, buffed, final, effects_update_id;
 end
+
 local function item_plan_slot_ui_diffs(loadout, old_items, new_items)
 
-    local planned_items = __sc_frame.calculator_frame.items.item_plan;
+    local planned_items = __sc_frame.calculator_frame.items.working;
 
     for slot in pairs(__sc_frame.calculator_frame.items.slots) do
         if planned_items[slot] then
@@ -1918,13 +1993,11 @@ local function item_plan_slot_ui_diffs(loadout, old_items, new_items)
             write_item_info_from_link(new_items[slot], planned_items[slot].link);
 
             -- old item might not exist
+            if not old_items[slot] then
+                old_items[slot] = {};
+            end
             if loadout.item_links[slot] then
-                if not old_items[slot] then
-                    old_items[slot] = {};
-                end
                 write_item_info_from_link(old_items[slot], loadout.item_links[slot]);
-            else
-                old_items[slot] = nil;
             end
 
         else
@@ -1934,32 +2007,46 @@ local function item_plan_slot_ui_diffs(loadout, old_items, new_items)
     end
 end
 
-local stats_diff_last;
 local old_items_buffer = {};
 local new_items_buffer = {};
+local stats_diff_last;
+local buffs_cfg;
+local talents_cfg;
 
 
 local function update_loadout_and_effects_diffed_from_ui(dont_finalize)
 
     local loadout, effects, effects_finalized = update_loadout_and_effects();
 
-
-    if __sc_frame.calculator_frame.calculator_plan_changed then
+    local calc_frame = __sc_frame.calculator_frame;
+    if calc_frame.calculator_plan_changed then
 
         stats_diff_last = sc.ui.effects_from_ui_stats_diff();
         item_plan_slot_ui_diffs(loadout, old_items_buffer, new_items_buffer);
+        buffs_cfg = calc_frame.buffs.working;
+        talents_cfg = calc_frame.talents.working;
 
-        __sc_frame.calculator_frame.calculator_plan_changed = false;
+        calc_frame.calculator_plan_changed = false;
     end
-
 
     cpy_effects(diffed, effects);
 
-    -- Item plan add
+    -- Items
     sc.equipment.apply_items_cmp(loadout, diffed, new_items_buffer, old_items_buffer, true, true, true);
 
-    -- Manual stat changes add
+    -- Manual stat changes
     effects_add_manual_diff(diffed, stats_diff_last);
+
+    -- Talents
+    if talents_cfg.use_custom then
+        sc.talents.apply_talents(loadout, diffed, loadout.talents.code, true, true);
+        sc.talents.apply_talents(loadout, diffed, talents_cfg.custom_code, true, false);
+    end
+
+    -- Buffs
+    if buffs_cfg.use_custom then
+        sc.buffs.apply_fake_buffs(loadout, diffed, buffs_cfg);
+    end
 
     if not dont_finalize then
         effects_finalize_forced(loadout, diffed);
@@ -1968,9 +2055,9 @@ local function update_loadout_and_effects_diffed_from_ui(dont_finalize)
     else
         return loadout, effects, diffed;
     end
-
 end
 
+---------------------------------------------------------------------------------------------------
 loadouts.equipped                                     = equipped;
 loadouts.talented                                     = talented;
 loadouts.empty_effects                                = empty_effects;

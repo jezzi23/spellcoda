@@ -37,6 +37,13 @@ for _, v in ipairs({
     slots[v] = GetInventorySlotInfo(v);
 end
 
+local one_hand_slots;
+if sc.dual_wield_class then
+    one_hand_slots = { slots.MainHandSlot, slots.SecondaryHandSlot };
+else
+    one_hand_slots = { slots.MainHandSlot };
+end
+
 local inv_type_to_slot_ids = {
     INVTYPE_AMMO = { slots.AmmoSlot },
     INVTYPE_HEAD = { slots.HeadSlot },
@@ -53,7 +60,7 @@ local inv_type_to_slot_ids = {
     INVTYPE_FINGER = { slots.Finger0Slot, slots.Finger1Slot },
     INVTYPE_TRINKET = { slots.Trinket0Slot, slots.Trinket1Slot },
     INVTYPE_CLOAK = { slots.BackSlot },
-    INVTYPE_WEAPON = { slots.MainHandSlot, slots.SecondaryHandSlot },
+    INVTYPE_WEAPON = one_hand_slots,
     INVTYPE_2HWEAPON = { slots.MainHandSlot },
     INVTYPE_WEAPONMAINHAND = { slots.MainHandSlot },
     INVTYPE_WEAPONOFFHAND = { slots.SecondaryHandSlot },
@@ -72,33 +79,31 @@ local wpn_strs = {
     [slots.RangedSlot] = "ranged"
 };
 
-local function add_item_set_piece(num_set_pieces, item_id)
+local function add_item_set_piece(effects, item_id, undo)
+
+    local num_set_pieces = effects.num_set_pieces;
     local set_id = sc.set_items[item_id];
     if set_id then
-        if not num_set_pieces[set_id] then
-            num_set_pieces[set_id] = 0;
+        num_set_pieces[set_id] = num_set_pieces[set_id] or 0;
+        if undo then
+            num_set_pieces[set_id] = num_set_pieces[set_id] - 1;
+        else
+            num_set_pieces[set_id] = num_set_pieces[set_id] + 1;
         end
-        num_set_pieces[set_id] = num_set_pieces[set_id] + 1;
     end
 end
 
-local function detect_sets(loadout)
-
-    for k, _ in pairs(sc.set_bonuses) do
-        loadout.num_set_pieces[k] = 0;
-    end
-
-    for _, id in pairs(loadout.items) do
-        add_item_set_piece(loadout.num_set_pieces, id);
-    end
-end
-
-local function num_set_pieces(loadout, set_id)
-    if loadout.num_set_pieces[set_id] then
-        return loadout.num_set_pieces[set_id];
+local function num_set_pieces(effects, set_id)
+    if effects.num_set_pieces[set_id] then
+        return effects.num_set_pieces[set_id];
     else
         return 0;
     end
+end
+
+local function has_enchant(effects, enchant_id)
+    local ench = effects.enchants[enchant_id];
+    return ench and ench ~= 0;
 end
 
 local GetItemStats = GetItemStats or C_Item.GetItemStats;
@@ -142,9 +147,22 @@ local function apply_weapon(effects, id, slot, subclass_id, undo)
         mod = 1;
     end
 
-    -- Defaults to Fist weapon subclass which Unarmed skill line picks up on
+
+    --if not subclass_id then
+    --    if wpn_effect then
+    --        -- defaults to Fist weapon subclass which Unarmed skill line picks up on
+    --        subclass_id = 13;
+    --    else
+    --        -- empty slot
+    --        subclass_id = 0;
+    --    end
+    --end
     subclass_id = subclass_id or 13;
     effects.raw["wpn_subclass_"..wpn_strs[slot]] = effects.raw["wpn_subclass_"..wpn_strs[slot]] + mod*subclass_id;
+
+    if not id then
+        return;
+    end
 
     local wpn_effect = sc.weapons[id];
     if not wpn_effect then
@@ -202,6 +220,16 @@ end
 local gems_buffer = {};
 
 local function apply_enchant(effects, enchant_id, forced, undo, slot)
+    if not enchant_id then
+        return;
+    end
+
+    effects.enchants[enchant_id] = effects.enchants[enchant_id] or 0;
+    if undo then
+        effects.enchants[enchant_id] = effects.enchants[enchant_id] - 1;
+    else
+        effects.enchants[enchant_id] = effects.enchants[enchant_id] + 1;
+    end
 
     -- check for special +Damage enchant towards weapon slot which are not treated as aura effects
     if slot and wpn_strs[slot] and sc.damage_enchants[enchant_id] then
@@ -288,6 +316,16 @@ local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems,
 
     item_info.wpn_skill = 0;
 
+    if wpn_strs[slot] then
+        -- need to be able to reset unarmed subclass here even if no item id
+        apply_weapon(effects, item_info.id, slot, item_info.subclass_id, undo);
+    end
+
+    if not item_info.id then
+        return;
+    end
+
+
     if sc.items[item_info.id] then
         for _, id in pairs(sc.items[item_info.id]) do
             if sc.item_effects[id] then
@@ -316,18 +354,15 @@ local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems,
         end
     end
 
-    if wpn_strs[slot] then
-        apply_weapon(effects, item_info.id, slot, item_info.subclass_id, undo);
-
-    elseif slot == slots.AmmoSlot then
+    if slot == slots.AmmoSlot then
         -- ammo
         apply_ammo(effects, sc.weapons[item_info.id], undo);
     end
 end
 
-local function apply_set_bonuses(num_set_pieces, effects, force, undo)
+local function apply_set_bonuses(effects, force, undo)
 
-    for set_id, num in pairs(num_set_pieces) do
+    for set_id, num in pairs(effects.num_set_pieces) do
         if num > 1 then
             local bonuses = sc.set_bonuses[set_id];
             if bonuses then -- remove this check when old sets handling is gone
@@ -351,53 +386,40 @@ local function apply_items_cmp(loadout, effects, new_items, old_items,
 
         local old_info = old_items[slot];
 
-        if old_info and old_info.id then
+        --if old_info and old_info.id then
+        if old_info then
             -- Force undo on old item
             apply_item_cmp(effects, old_info, slot, true, should_apply_gems, should_apply_enchant)
         end
         -- Force apply new item
+        --if new_info.id then
+        --    apply_item_cmp(effects, new_info, slot, false, should_apply_gems, should_apply_enchant)
+        --end
         apply_item_cmp(effects, new_info, slot, false, should_apply_gems, should_apply_enchant)
     end
 
     if should_apply_set_bonuses then
 
-        local num_set_pieces_tmp = {};
-        for slot, new_info in pairs(new_items) do
+        -- force undo active
+        apply_set_bonuses(effects, true, true);
 
+        for slot, new_info in pairs(new_items) do
             local old_info = old_items[slot];
             if old_info and old_info.id then
-                add_item_set_piece(num_set_pieces_tmp, old_info.id);
+                add_item_set_piece(effects, old_info.id, true);
             end
         end
-        -- negate old
-        for set_id, num_pieces in pairs(num_set_pieces_tmp) do
-            num_set_pieces_tmp[set_id] = -num_pieces;
-        end
-        -- add new
+
         for _, new_info in pairs(new_items) do
-
-            add_item_set_piece(num_set_pieces_tmp, new_info.id);
-        end
-
-        -- combine with loadout set pieces
-        for set_id, num_pieces_diff in pairs(loadout.num_set_pieces) do
-            if not num_set_pieces_tmp[set_id] then
-                num_set_pieces_tmp[set_id] = 0;
+            if new_info.id then
+                add_item_set_piece(effects, new_info.id, false);
             end
-            num_set_pieces_tmp[set_id] = num_set_pieces_tmp[set_id] + num_pieces_diff;
         end
 
-        -- force undo active
-        apply_set_bonuses(loadout.num_set_pieces, effects, true, true);
         -- force apply with changes
-        apply_set_bonuses(num_set_pieces_tmp, effects, true, false);
+        apply_set_bonuses(effects, true, false);
     end
 end
-
--- set through /sc force set [Set ID] [Number of pieces]
-local force_item_sets = {};
--- set through /sc force item [Item ID]
-local force_items = {};
 
 local function apply_equipment(loadout, effects)
 
@@ -405,35 +427,17 @@ local function apply_equipment(loadout, effects)
         loadout.items[slot] = GetInventoryItemID("player", slot);
         loadout.item_links[slot] = GetInventoryItemLink("player", slot);
     end
-    detect_sets(loadout);
+
+    for _, id in pairs(loadout.items) do
+        add_item_set_piece(effects, id, false);
+    end
 
     local found_anything = false;
 
-    apply_set_bonuses(loadout.num_set_pieces, effects, false, false);
-
-    for force_set_id, force_threshold in pairs(force_item_sets) do
-        local bonuses = sc.set_bonuses[force_set_id];
-        local equipped_num_pieces = loadout.num_set_pieces[force_set_id];
-        if bonuses then -- remove this check when old sets handling is gone
-            for _, v in pairs(bonuses) do
-                local threshold = v[1];
-                local effect_id = v[2];
-                if force_threshold < threshold then
-                    break;
-                end
-                if not equipped_num_pieces or equipped_num_pieces < threshold then
-                    apply_effect(effects, effect_id, sc.set_effects[effect_id], true, 1.0);
-                end
-            end
-        end
-        loadout.num_set_pieces[force_set_id] = force_threshold;
-    end
+    apply_set_bonuses(effects, false, false);
 
     -- NOTE: Enchant changes might not force an equipment update
     -- enchants are tracked here because im some edge cases they may be hard referenced by id
-    for k, v in pairs(loadout.enchants) do
-        loadout.enchants[k] = nil;
-    end
 
     -- NOTE: shortly after logging in, the equipment querying API won't work
     --       (but does for /reload). Track if we get nothing so we can signal
@@ -454,10 +458,7 @@ local function apply_equipment(loadout, effects)
                 strsplit(":", item_link:match("|Hitem:(.+)|h"));
 
             enchant_id = tonumber(enchant_id);
-            if enchant_id then
-                loadout.enchants[enchant_id] = 1;
-                apply_enchant(effects, enchant_id, false, false, item);
-            end
+            apply_enchant(effects, enchant_id, false, false, item);
 
             apply_gems(effects, false, false, id,
                        tonumber(gem1), tonumber(gem2), tonumber(gem3), tonumber(gem4));
@@ -470,10 +471,15 @@ local function apply_equipment(loadout, effects)
             end
         end
         if wpn_strs[item] then
+            local wpn_subclass = item_link and select(7, GetItemInfoInstant(item_link));
+            if item_link and not wpn_subclass then
+                found_anything = false;
+            end
+
             apply_weapon(effects,
                          id,
                          item,
-                         item_link and select(13, GetItemInfo(item_link)),
+                         wpn_subclass,
                          false);
         end
     end
@@ -482,21 +488,9 @@ local function apply_equipment(loadout, effects)
         apply_ammo(effects, sc.weapons[loadout.items[slots.AmmoSlot]], false);
     end
 
-    for id, _ in pairs(force_items) do
-        if sc.items[id] then
-            for _, effect_id in pairs(sc.items[id]) do
-                apply_effect(effects, effect_id, sc.item_effects[effect_id], true, 1.0);
-                --local lname, link = GetItemInfo(id);
-                --apply_item_stats(effects, link, lname, false, false);
-            end
-        end
-    end
-
     -- just do weapon enchants for now, are others even needed?
     local _, _, _, enchant_id = GetWeaponEnchantInfo();
     if sc.enchants[enchant_id] then
-        loadout.enchants[enchant_id] = 1;
-
          -- may need to deal with weapon slots here instead of nil
         local slot = nil;
         apply_enchant(effects, enchant_id, false, false, slot);
@@ -508,7 +502,6 @@ local function apply_equipment(loadout, effects)
             if rune_slot then
                 local ench_id = rune_slot.itemEnchantmentID;
                 if ench_id then
-                    loadout.enchants[ench_id] = 1;
                     apply_enchant(effects, ench_id, false, false, nil);
                 end
             end
@@ -534,20 +527,19 @@ local function apply_equipment(loadout, effects)
                 apply_effect(effects, id, sc.set_effects[id], true, 1.0);
                 sets_applied = sets_applied + 1;
             end
-            loadout.num_set_pieces[k] = 100;
         end
         print(sets_applied, "gen sets applied");
 
         local enchants_applied = 0;
-        for _, v in pairs(sc.enchants) do
+        for k, v in pairs(sc.enchants) do
             for _, id in pairs(v) do
 
+                effects.enchants[k] = 1;
                 apply_effect(effects, id, sc.enchant_effects[id], true, 1.0);
                 enchants_applied = enchants_applied + 1;
             end
         end
         print(enchants_applied, "gen enchants applied");
-
     end
 
     return found_anything;
@@ -555,9 +547,8 @@ end
 
 ---------------------------------------------------------------------------------------------------
 equipment.num_set_pieces                = num_set_pieces;
+equipment.has_enchant                   = has_enchant;
 equipment.apply_equipment               = apply_equipment;
-equipment.force_item_sets               = force_item_sets;
-equipment.force_items                   = force_items;
 equipment.apply_items_cmp               = apply_items_cmp;
 equipment.wpn_skill_for_slot            = wpn_skill_for_slot;
 equipment.slots                         = slots;

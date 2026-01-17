@@ -280,6 +280,20 @@ local function scan_action_frames()
     end
 end
 
+local IsAddOnLoaded = IsAddOnLoaded or function(addon_name)
+
+    -- If for whatever reason IsAddOnLoaded is not defined, have some backup, and this can happen in clients builds...
+    if addon_name == "Bartender4" then
+        return BT4Button1 ~= nil;
+    elseif addon_name == "ElvUI" then
+        return ElvUI_Bar1Button1 ~= nil;
+    elseif addon_name == "Dominos" then
+        return DominosActionButton1 ~= nil;
+    else
+        return false;
+    end
+end;
+
 local function gather_spell_icons()
 
     active_overlays = {};
@@ -306,10 +320,7 @@ local function gather_spell_icons()
 
     -- gather action bar icons
     local index = 1;
-    if not IsAddOnLoaded then
-        -- BROKEN PTR TEMPORARY FIX: remember to grep for this phrase to remove later
-        IsAddOnLoaded = function() return false end;
-    end
+
     -- check for some common addons if they overrite spellbook frames
     if IsAddOnLoaded("Bartender4") then
 

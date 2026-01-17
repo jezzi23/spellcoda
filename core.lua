@@ -11,9 +11,9 @@ local load_sw_ui                            = sc.ui.load_sw_ui;
 local create_sw_base_ui                     = sc.ui.create_sw_base_ui;
 local sw_activate_frame                     = sc.ui.sw_activate_frame;
 local update_profile_frame                  = sc.ui.update_profile_frame;
-local update_loadout_frame                  = sc.ui.update_loadout_frame;
 local locale_warning_popup                  = sc.ui.locale_warning_popup;
 local update_calculator_character_items     = sc.ui.update_calculator_character_items;
+local update_talents_frame                  = sc.ui.update_talents_frame;
 
 local config                                = sc.config;
 local load_config                           = sc.config.load_config;
@@ -38,7 +38,7 @@ sc.core                         = core;
 core.addon_name                 = "SpellCoda";
 
 local version_major             = 0;
-local version_minor             = 6;
+local version_minor             = 7;
 local version_build             = sc.addon_build_id;
 
 core.version_id                 = version_build + version_minor*1000 + version_major*1000000;
@@ -189,249 +189,6 @@ local function doing_raid_update()
 end
 core.doing_raid_update = doing_raid_update;
 
-
-local event_dispatch = {
-    ["UNIT_SPELLCAST_SUCCEEDED"] = function(self, caster, _, spell_id)
-        if caster == "player" then
-            if spell_id == 53563 or spell_id == 407613 then -- beacon
-                core.beacon_snapshot_time = core.addon_running_time;
-            end
-            set_cc_spell(spell_id);
-            if not cc_channel then
-                cc_noexpire = false;
-            end
-        end
-    end,
-    ["UNIT_SPELLCAST_CHANNEL_START"] = function(_, caster, _, spell_id)
-        if caster == "player" then
-            set_cc_spell(spell_id);
-            cc_noexpire = true;
-            cc_channel = true;
-        end
-    end,
-    ["UNIT_SPELLCAST_CHANNEL_STOP"] = function(_, caster, _, spell_id)
-        if caster == "player" then
-            cc_noexpire = false;
-            cc_channel = false;
-            cc_expire_timer = config.settings.overlay_cc_hanging_time;
-        end
-    end,
-    ["UNIT_SPELLCAST_START"] = function(self, caster, _, spell_id)
-        if caster == "player" then
-            set_cc_spell(spell_id);
-            cc_noexpire = true;
-        end
-    end,
-    ["UNIT_SPELLCAST_STOP"] = function(self, caster, _, spell_id)
-        if caster == "player" then
-            cc_noexpire = false;
-            cc_expire_timer = config.settings.overlay_cc_hanging_time;
-        end
-    end,
-    ["UNIT_SPELLCAST_FAILED"] = function(self, caster, _, spell_id)
-        if caster == "player" then
-            cc_noexpire = false;
-            cc_expire_timer = config.settings.overlay_cc_hanging_time;
-        end
-    end,
-    ["START_AUTOREPEAT_SPELL"] = function(self, arg1, arg2, arg4)
-        cc_noexpire = false;
-        for _, id in pairs(auto_repeat_spells_tracking) do
-            if IsCurrentSpell(id) then
-                set_cc_spell(id);
-                return;
-            end
-        end
-    end,
-    ["ADDON_LOADED"] = function(_, arg)
-        if arg == "SpellCoda" then
-            load_config();
-            load_localization();
-            -- initialize tables with localized strings
-            sc.loadouts.init_lnames();
-            sc.overlay.init_label_handler();
-            sc.overlay.init_ccfs();
-            core.active_spec = GetActiveTalentGroup();
-            set_active_settings();
-            set_active_loadout(__sc_p_char.active_loadout);
-            load_sw_ui();
-            activate_settings();
-            update_profile_frame();
-            update_loadout_frame(); -- activates activate_loadout_config()
-        end
-    end,
-    ["PLAYER_LOGOUT"] = function()
-        save_config();
-    end,
-    ["PLAYER_LOGIN"] = function()
-
-        -- force setup action bar to hook scroll script
-        -- even if overlays are disabled
-        sc.overlay.setup_action_bars();
-        core.sw_addon_loaded = true;
-        table.insert(UISpecialFrames, __sc_frame:GetName()) -- Allows ESC to close frame
-        if sc.expansion == sc.expansions.vanilla and C_Engraving.IsEngravingEnabled then
-            --after fresh login the runes cannot be queried until
-            --character frame has been opened!!!
-
-            if CharacterFrame then
-                ShowUIPanel(CharacterFrame);
-                if CharacterFrameTab1 then
-                    CharacterFrameTab1:Click();
-                end
-                HideUIPanel(CharacterFrame);
-            end
-        end
-        sc.ui.post_login_load();
-        C_ChatInfo.RegisterAddonMessagePrefix(addon_msg_sc_id);
-        if __spellcoda_debug__ or __spellcoda_test_all_data__ or __spellcoda_test_all_spells__ then
-            print("WARNING: SC DEBUG TOOLS ARE ON!!!");
-            for _ = 1, 10 do
-                print("WARNING: SC DEBUG TOOLS ARE ON!!!");
-            end
-            local num_spells = 0;
-            for _, _ in pairs(sc.spells) do
-                num_spells = num_spells + 1;
-            end
-            print("Spells in data:", num_spells);
-        end
-        -- don't warn about updates when build is relatively fresh
-        local version_warning_build_threshold_days = 14;
-        if __spellcoda_debug__ then
-            version_warning_build_threshold_days = 0;
-        end
-        if config.settings.general_version_mismatch_notify and
-            generated_data_is_outdated(sc.client_version_loaded, sc.client_version_src) and
-            client_age_days() > version_warning_build_threshold_days then
-            print(core.addon_name..": "..L["detected client and addon data mismatch for over 2 weeks. Consider checking for an update."]);
-        end
-
-        if not __sc_p_acc.localization_notified and sc.loc.locale_found then
-            locale_warning_popup();
-        end
-    end,
-    ["ACTIONBAR_SLOT_CHANGED"] = function(_, slot)
-        if not core.sw_addon_loaded or config.settings.overlay_disable then
-            return;
-        end
-
-        core.rescan_action_bar_needed = true;
-        reassign_overlay_icon(slot);
-        sc.loadouts.force_update = true;
-    end,
-    ["UPDATE_STEALTH"] = function()
-        if not core.sw_addon_loaded then
-            return;
-        end
-        core.special_action_bar_changed = true;
-        sc.loadouts.force_update = true;
-    end,
-    ["UPDATE_BONUS_ACTIONBAR"] = function()
-        if not core.sw_addon_loaded then
-            return;
-        end
-
-        core.special_action_bar_changed = true;
-        sc.loadouts.force_update = true;
-    end,
-    ["ACTIONBAR_PAGE_CHANGED"] = function()
-        if not core.sw_addon_loaded then
-            return;
-        end
-
-        core.special_action_bar_changed = true;
-        sc.loadouts.force_update = true;
-    end,
-    ["UNIT_EXITED_VEHICLE"] = function(_, arg)
-        if not core.sw_addon_loaded or config.settings.overlay_disable then
-            return;
-        end
-
-        if arg == "player" then
-            core.special_action_bar_changed = true;
-            sc.loadouts.force_update = true;
-        end
-    end,
-    ["ACTIVE_TALENT_GROUP_CHANGED"] = function()
-
-        core.active_spec = GetActiveTalentGroup();
-        update_profile_frame();
-        activate_settings();
-        core.update_action_bar_needed = true;
-        core.talents_update_needed = true;
-    end,
-    ["CHARACTER_POINTS_CHANGED"] = function()
-
-        sc.loadouts.force_update = true;
-        --set_active_settings();
-        --activate_settings();
-        if not config.loadout.use_custom_talents then
-            core.talents_update_needed = true;
-            update_loadout_frame();
-        end
-    end,
-    ["PLAYER_EQUIPMENT_CHANGED"] = function(_, slot)
-        core.equipment_update_needed = true;
-        update_calculator_character_items(slot);
-    end,
-    ["PLAYER_LEVEL_UP"] = function()
-        core.old_ranks_checks_needed = true;
-        sc.loadouts.force_update = true;
-    end,
-    ["LEARNED_SPELL_IN_TAB"] = function()
-        core.old_ranks_checks_needed = true;
-        sc.loadouts.force_update = true;
-    end,
-    ["SOCKET_INFO_UPDATE"] = function()
-        core.equipment_update_needed = true;
-        sc.loadouts.force_update = true;
-    end,
-    ["GLYPH_ADDED"] = function()
-        if not config.loadout.use_custom_talents then
-            core.talents_update_needed = true;
-        end
-    end,
-    ["GLYPH_REMOVED"] = function()
-        if not config.loadout.use_custom_talents then
-            core.talents_update_needed = true;
-        end
-    end,
-    ["GLYPH_UPDATED"] = function()
-        if not config.loadout.use_custom_talents then
-            core.talents_update_needed = true;
-        end
-    end,
-    ["CHAT_MSG_SKILL"] = function()
-        core.talents_update_needed = true;
-    end,
-    ["ENGRAVING_MODE_CHANGED"] = function()
-        core.equipment_update_needed = true;
-    end,
-    ["RUNE_UPDATED"] = function()
-        core.equipment_update_needed = true;
-    end,
-    ["PLAYER_REGEN_DISABLED"] = function()
-        -- Currently only registered when in Hardcore mode
-        -- Hide addon UI when in combat
-        __sc_frame:Hide();
-    end,
-    ["PLAYER_ENTERING_WORLD"] = function()
-        doing_raid_update();
-    end,
-    ["GROUP_ROSTER_UPDATE"] = function()
-        doing_raid_update();
-    end,
-};
-
-
-local event_dispatch_client_exceptions = {
-    ["ENGRAVING_MODE_CHANGED"] = sc.expansions.vanilla,
-    ["RUNE_UPDATED"]           = sc.expansions.vanilla,
-};
-
-core.event_dispatch = event_dispatch;
-core.event_dispatch_client_exceptions = event_dispatch_client_exceptions;
-
 local timestamp = 0.0;
 local pname = UnitName("player");
 
@@ -509,10 +266,251 @@ local function refresh_tooltip()
     C_Timer.After(dt, refresh_tooltip);
 end
 
-create_sw_base_ui();
+local event_dispatch = {
+    ["UNIT_SPELLCAST_SUCCEEDED"] = function(self, caster, _, spell_id)
+        if caster == "player" then
+            if spell_id == 53563 or spell_id == 407613 then -- beacon
+                core.beacon_snapshot_time = core.addon_running_time;
+            end
+            set_cc_spell(spell_id);
+            if not cc_channel then
+                cc_noexpire = false;
+            end
+        end
+    end,
+    ["UNIT_SPELLCAST_CHANNEL_START"] = function(_, caster, _, spell_id)
+        if caster == "player" then
+            set_cc_spell(spell_id);
+            cc_noexpire = true;
+            cc_channel = true;
+        end
+    end,
+    ["UNIT_SPELLCAST_CHANNEL_STOP"] = function(_, caster, _, spell_id)
+        if caster == "player" then
+            cc_noexpire = false;
+            cc_channel = false;
+            cc_expire_timer = config.settings.overlay_cc_hanging_time;
+        end
+    end,
+    ["UNIT_SPELLCAST_START"] = function(self, caster, _, spell_id)
+        if caster == "player" then
+            set_cc_spell(spell_id);
+            cc_noexpire = true;
+        end
+    end,
+    ["UNIT_SPELLCAST_STOP"] = function(self, caster, _, spell_id)
+        if caster == "player" then
+            cc_noexpire = false;
+            cc_expire_timer = config.settings.overlay_cc_hanging_time;
+        end
+    end,
+    ["UNIT_SPELLCAST_FAILED"] = function(self, caster, _, spell_id)
+        if caster == "player" then
+            cc_noexpire = false;
+            cc_expire_timer = config.settings.overlay_cc_hanging_time;
+        end
+    end,
+    ["START_AUTOREPEAT_SPELL"] = function(self, arg1, arg2, arg4)
+        cc_noexpire = false;
+        for _, id in pairs(auto_repeat_spells_tracking) do
+            if IsCurrentSpell(id) then
+                set_cc_spell(id);
+                return;
+            end
+        end
+    end,
+    ["ADDON_LOADED"] = function(_, arg)
+        if arg == "SpellCoda" then
+            load_config();
+            load_localization();
+        end
+    end,
+    ["PLAYER_LOGOUT"] = function()
+        save_config();
+    end,
+    ["PLAYER_LOGIN"] = function()
 
-C_Timer.After(1.0, main_update);
-C_Timer.After(1.0, refresh_tooltip);
+        local login_grace_period = 10;
+        core.login_grace_time = GetTime() + login_grace_period;
+
+        -- initialize tables with localized strings
+        sc.loadouts.init_lnames();
+        sc.overlay.init_label_handler();
+        sc.overlay.init_ccfs();
+        core.active_spec = GetActiveTalentGroup();
+        set_active_settings();
+        load_sw_ui();
+        activate_settings();
+        update_profile_frame();
+
+        -- force setup action bar to hook scroll script
+        -- even if overlays are disabled
+        sc.overlay.setup_action_bars();
+        core.sw_addon_loaded = true;
+        table.insert(UISpecialFrames, __sc_frame:GetName()) -- Allows ESC to close frame
+        if sc.expansion == sc.expansions.vanilla and C_Engraving.IsEngravingEnabled then
+            --after fresh login the runes cannot be queried until
+            --character frame has been opened!!!
+
+            if CharacterFrame then
+                ShowUIPanel(CharacterFrame);
+                if CharacterFrameTab1 then
+                    CharacterFrameTab1:Click();
+                end
+                HideUIPanel(CharacterFrame);
+            end
+        end
+        sc.ui.post_login_load();
+        C_ChatInfo.RegisterAddonMessagePrefix(addon_msg_sc_id);
+        if __spellcoda_debug__ or __spellcoda_test_all_data__ or __spellcoda_test_all_spells__ then
+            print("WARNING: SC DEBUG TOOLS ARE ON!!!");
+            for _ = 1, 10 do
+                print("WARNING: SC DEBUG TOOLS ARE ON!!!");
+            end
+            local num_spells = 0;
+            for _, _ in pairs(sc.spells) do
+                num_spells = num_spells + 1;
+            end
+            print("Spells in data:", num_spells);
+        end
+        -- don't warn about updates when build is relatively fresh
+        local version_warning_build_threshold_days = 14;
+        if __spellcoda_debug__ then
+            version_warning_build_threshold_days = 0;
+        end
+        if config.settings.general_version_mismatch_notify and
+            generated_data_is_outdated(sc.client_version_loaded, sc.client_version_src) and
+            client_age_days() > version_warning_build_threshold_days then
+            print(core.addon_name..": "..L["detected client and addon data mismatch for over 2 weeks. Consider checking for an update."]);
+        end
+
+        if not __sc_p_acc.localization_notified and sc.loc.locale_found then
+            locale_warning_popup();
+        end
+
+        sw_activate_frame("spells_frame");
+        __sc_frame:Hide();
+
+        C_Timer.After(1.0, main_update);
+        C_Timer.After(1.0, refresh_tooltip);
+    end,
+    ["ACTIONBAR_SLOT_CHANGED"] = function(_, slot)
+        if not core.sw_addon_loaded or config.settings.overlay_disable then
+            return;
+        end
+
+        core.rescan_action_bar_needed = true;
+        reassign_overlay_icon(slot);
+        sc.loadouts.force_update = true;
+    end,
+    ["UPDATE_STEALTH"] = function()
+        if not core.sw_addon_loaded then
+            return;
+        end
+        core.special_action_bar_changed = true;
+        sc.loadouts.force_update = true;
+    end,
+    ["UPDATE_BONUS_ACTIONBAR"] = function()
+        if not core.sw_addon_loaded then
+            return;
+        end
+
+        core.special_action_bar_changed = true;
+        sc.loadouts.force_update = true;
+    end,
+    ["ACTIONBAR_PAGE_CHANGED"] = function()
+        if not core.sw_addon_loaded then
+            return;
+        end
+
+        core.special_action_bar_changed = true;
+        sc.loadouts.force_update = true;
+    end,
+    ["UNIT_EXITED_VEHICLE"] = function(_, arg)
+        if not core.sw_addon_loaded or config.settings.overlay_disable then
+            return;
+        end
+
+        if arg == "player" then
+            core.special_action_bar_changed = true;
+            sc.loadouts.force_update = true;
+        end
+    end,
+    ["ACTIVE_TALENT_GROUP_CHANGED"] = function()
+
+        core.active_spec = GetActiveTalentGroup();
+        update_profile_frame();
+        activate_settings();
+        core.update_action_bar_needed = true;
+        core.talents_update_needed = true;
+    end,
+    ["CHARACTER_POINTS_CHANGED"] = function()
+
+        sc.loadouts.force_update = true;
+        update_talents_frame();
+    end,
+    ["PLAYER_EQUIPMENT_CHANGED"] = function(_, slot)
+        core.equipment_update_needed = true;
+        update_calculator_character_items(slot);
+    end,
+    ["PLAYER_LEVEL_UP"] = function()
+        core.old_ranks_checks_needed = true;
+        sc.loadouts.force_update = true;
+    end,
+    ["LEARNED_SPELL_IN_TAB"] = function()
+        core.old_ranks_checks_needed = true;
+        sc.loadouts.force_update = true;
+    end,
+    ["SOCKET_INFO_UPDATE"] = function()
+        core.equipment_update_needed = true;
+        sc.loadouts.force_update = true;
+    end,
+    ["GLYPH_ADDED"] = function()
+        if not config.loadout.use_custom_talents then
+            core.talents_update_needed = true;
+        end
+    end,
+    ["GLYPH_REMOVED"] = function()
+        if not config.loadout.use_custom_talents then
+            core.talents_update_needed = true;
+        end
+    end,
+    ["GLYPH_UPDATED"] = function()
+        if not config.loadout.use_custom_talents then
+            core.talents_update_needed = true;
+        end
+    end,
+    ["CHAT_MSG_SKILL"] = function()
+        core.talents_update_needed = true;
+    end,
+    ["ENGRAVING_MODE_CHANGED"] = function()
+        core.equipment_update_needed = true;
+    end,
+    ["RUNE_UPDATED"] = function()
+        core.equipment_update_needed = true;
+    end,
+    ["PLAYER_REGEN_DISABLED"] = function()
+        -- Currently only registered when in Hardcore mode
+        -- Hide addon UI when in combat
+        __sc_frame:Hide();
+    end,
+    ["PLAYER_ENTERING_WORLD"] = function()
+        doing_raid_update();
+    end,
+    ["GROUP_ROSTER_UPDATE"] = function()
+        doing_raid_update();
+    end,
+};
+
+
+local event_dispatch_client_exceptions = {
+    ["ENGRAVING_MODE_CHANGED"] = sc.expansions.vanilla,
+    ["RUNE_UPDATED"]           = sc.expansions.vanilla,
+};
+
+core.event_dispatch = event_dispatch;
+core.event_dispatch_client_exceptions = event_dispatch_client_exceptions;
+
 
 GameTooltip:HookScript("OnTooltipSetSpell", function()
     if not config.settings.tooltip_disable then
@@ -570,29 +568,6 @@ local function command(arg)
         sw_activate_frame("buffs_frame");
     elseif arg == "settings" or arg == "opt" or arg == "options" or arg == "conf" or arg == "config" or arg == "configure" then
         sw_activate_frame("settings_frame");
-    elseif string.find(arg, "force set") then
-        local substrs = {};
-        for s in arg:gmatch("%S+") do
-            table.insert(substrs, s);
-        end
-        local set_id = tonumber(substrs[3]);
-        local num_pieces = tonumber(substrs[4]);
-        if set_id and num_pieces then
-            core.equipment_update_needed = true;
-            sc.equipment.force_item_sets[set_id] = num_pieces;
-            print(string.format("Forcing item set %d to have %d pieces", set_id, num_pieces));
-        end
-    elseif string.find(arg, "force item") then
-        local substrs = {};
-        for s in arg:gmatch("%S+") do
-            table.insert(substrs, s);
-        end
-        local item_id = tonumber(substrs[3]);
-        if item_id then
-            core.equipment_update_needed = true;
-            sc.equipment.force_items[item_id] = item_id;
-            print(string.format("Forcing item %d", item_id));
-        end
     elseif arg == "reset" then
         core.use_char_defaults = 1;
         core.use_acc_defaults = 1;
@@ -618,6 +593,10 @@ sc.ext.version_id = core.version_id;
 
 __SC = sc.ext;
 
---__spellcoda_debug__ = 1;
+__spellcoda_debug__ = 1;
 --__spellcoda_test_all_data__ = 1;
 --__spellcoda_test_all_spells__ = 1;
+
+
+create_sw_base_ui();
+

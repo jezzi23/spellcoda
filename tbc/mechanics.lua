@@ -13,14 +13,14 @@ local lookups                                       = sc.lookups;
 
 local config                                        = sc.config;
 
-local l_talents                                     = sc.loadouts.active_loadout().talents;
-
 local auto_attack_spell_id                          = sc.auto_attack_spell_id;
 
 local spell_lname                                   = sc.utils.spell_lname;
 local dummy_value                                   = sc.utils.dummy_value;
 
 local num_set_pieces                                = sc.equipment.num_set_pieces;
+
+local talent_pts                                    = sc.talents.talent_pts;
 
 local effect_flags                                  = sc.calc.effect_flags;
 local add_extra_effect                              = sc.calc.add_extra_effect;
@@ -42,12 +42,12 @@ local class_stats_spell = (function()
         return function(anycomp, bid, stats, spell, loadout, effects)
             if bit.band(spell.flags, spell_flags.heal) ~= 0 then
                 -- illumination
-                local pts = l_talents.pts[109];
+                local pts = talent_pts(effects, 109);
                 if pts ~= 0 then
                     stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + 0.6 * pts * 0.2 * stats.original_base_cost;
                 end
                 if bid == spids.holy_light and config.settings.general_average_proc_effects then
-                    local pts = l_talents.pts[116];
+                    local pts = talent_pts(effects, 116);
                     stats.extra_cast_time_flat = stats.extra_cast_time_flat - pts * 0.5/3;
 
                 end
@@ -68,6 +68,22 @@ local class_stats_spell = (function()
         end
     elseif class == classes.shaman then
         return function(anycomp, bid, stats, spell, loadout, effects)
+
+            local pts = talent_pts(effects, 119);
+            if pts ~= 0 and (bid == spids.chain_lightning or bid == spids.lightning_bolt) then
+                local spid = sc.talent_ranks[119][pts];
+                if spid then
+                    local proc = 0.01*dummy_value(spid, 1);
+                    sc.calc.add_extra_effect(
+                        stats,
+                        0,
+                        proc,
+                        spell_lname(spid),
+                        0.5
+                    );
+                end
+
+            end
         end
     elseif class == classes.mage then
         return function(anycomp, bid, stats, spell, loadout, effects)
@@ -97,9 +113,14 @@ if class == classes.shaman then
 --elseif class == classes.paladin then
 --    special_abilities = {
 --    };
---elseif class == classes.mage then
---    special_abilities = {
---    };
+elseif class == classes.mage then
+    special_abilities = {
+        [spids.mana_shield] = function(spell, info, loadout, stats, effects)
+            local pts = talent_pts(effects, 110);
+            local drain_mod = 0.1 * pts;
+            stats.cost = stats.cost + 2 * info.min_noncrit_if_hit1 * (1.0 - drain_mod);
+        end,
+    };
 --elseif class == classes.rogue then
 --    special_abilities = {
 --    };

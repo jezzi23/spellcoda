@@ -46,6 +46,10 @@ lookups.divine_aegis                = 431622;
 lookups.overload                    = 408438;
 lookups.ancestral_awakening         = 425858;
 
+sc.dual_wield_class =
+    sc.class == sc.classes.warrior or
+    sc.class == sc.classes.rogue;
+
 sc.npc_armor_by_lvl = {
     -- "Intended as typical 100% of Heavy armor values"
     20,     21,     46,     82,     126,    180,    245,    322,    412,    518,    -- npc level 1-10
@@ -54,7 +58,7 @@ sc.npc_armor_by_lvl = {
     1247,   1283,   1317,   1353,   1387,   1494,   1607,   1724,   1849,   1980,   -- npc level 31-40
     2117,   2262,   2414,   2574,   2742,   2798,   2853,   2907,   2963,   3018,   -- npc level 41-50
     3072,   3128,   3183,   3237,   3292,   3348,   3402,   3457,   3512,   3566,   -- npc level 51-60
-    3622,   3677,   3731, --4870,   5050,   5230,   5410,   5590,   5770,   5950,   -- npc level 61-60
+    3622,   3677,   3731, --4870,   5050,   5230,   5410,   5590,   5770,   5950,   -- npc level 61-70
 --  6533,   7116,   7700,   8000,   8300,   8600,   8900,   9200,   9500,   9729,   -- npc level 71-80
 --  10033, 10338, 10643,                                                            -- npc level 81-90
 };
@@ -345,14 +349,5 @@ elseif sc.class == sc.classes.warrior then
     });
 elseif sc.class == sc.classes.hunter then
 
-    if spids.shoot_bow then
-        spells[spids.shoot_bow].flags = bit.band(spells[spids.shoot_bow].flags, bit.bnot(spell_flags.eval));
-    end
-    if spids.shoot_gun then
-        spells[spids.shoot_bow].flags = bit.band(spells[spids.shoot_bow].flags, bit.bnot(spell_flags.eval));
-    end
-    if spids.shoot_crossbow then
-        spells[spids.shoot_bow].flags = bit.band(spells[spids.shoot_bow].flags, bit.bnot(spell_flags.eval));
-    end
 end
 
