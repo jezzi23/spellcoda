@@ -604,7 +604,7 @@ local function add_field_line(info, val, txt, diff, perc, mul, raw)
         local perc_symbol = "";
         local val_disp = val;
         if not raw then
-            if diff and mul then
+            if mul then
                 perc = true;
                 val_disp = val_disp - 1;
             end
@@ -1365,10 +1365,10 @@ local function effects_raw_dump(effects, diff)
         for i, e in pairs(effect_cat) do
             if type(e) == "table" then
                 for j, _ in pairs(e) do
-                    add_field_line(info, e[j], cat..":"..i..":"..j, diff, false, true, true);
+                    add_field_line(info, e[j], "mul:"..cat..":"..i..":"..j, diff, false, true, true);
                 end
             else
-                add_field_line(info, effect_cat[i], cat..":"..i, diff, false, true, true);
+                add_field_line(info, effect_cat[i], "mul:"..cat..":"..i, diff, false, true, true);
             end
         end
     end
@@ -1781,7 +1781,17 @@ local function dynamic_loadout(loadout)
     loadout.armor = config.settings.loadout_target_armor;
     if config.settings.loadout_target_automatic_armor then
         if sc.npc_armor_by_lvl[loadout.target_lvl] then
-            loadout.armor = sc.npc_armor_by_lvl[loadout.target_lvl] * config.settings.loadout_target_automatic_armor_pct * 0.01;
+            local armor_pct;
+            if config.settings.loadout_target_automatic_armor_heavy then
+                armor_pct = 100;
+            elseif config.settings.loadout_target_automatic_armor_medium then
+                armor_pct = 80;
+            elseif config.settings.loadout_target_automatic_armor_light then
+                armor_pct = 50;
+            else
+                armor_pct = 100;
+            end
+            loadout.armor = sc.npc_armor_by_lvl[loadout.target_lvl] * armor_pct * 0.01;
         end
     end
 
@@ -1845,14 +1855,16 @@ local function apply_effect(effects, spid, auras, forced, stacks, undo, player_o
                     --if not effects["mul"][aura[category_idx]][aura_effect] then
                     --    print("Missing effects.mul."..aura[category_idx].."."..aura_effect);
                     --end
+
+                    val = 1.0 + val;
                     if undo then
                         val = 1/val;
                     end
                     if aura[category_idx] == "raw" then
-                        effects["mul"][aura[category_idx]][aura_effect] = effects["mul"][aura[category_idx]][aura_effect] * (1.0 + val);
+                        effects["mul"][aura[category_idx]][aura_effect] = effects["mul"][aura[category_idx]][aura_effect] * val;
                     else
                         for _, i in pairs(aura[subject_idx]) do
-                            effects["mul"][aura[category_idx]][aura_effect][i] = (effects["mul"][aura[category_idx]][aura_effect][i] or 1.0) * (1.0 + val);
+                            effects["mul"][aura[category_idx]][aura_effect][i] = (effects["mul"][aura[category_idx]][aura_effect][i] or 1.0) * val;
                         end
                     end
                 else

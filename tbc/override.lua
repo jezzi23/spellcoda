@@ -166,6 +166,8 @@ elseif sc.class == sc.classes.shaman then
     lookups.averaged_procs = {
     };
 
+
+
     -- THREAT
     add_threat_mod_all_ranks({
         {spids.earth_shock, 1.0}
@@ -203,11 +205,6 @@ elseif sc.class == sc.classes.rogue then
     end
     for _, v in pairs(rank_seqs[spids.slice_and_dice]) do
         spells[v].periodic.per_cp_dur = 3;
-    end
-
-    for _, v in pairs(rank_seqs[spids.mutilate]) do
-        spells[v].direct.flags =
-            bit.bor(spells[v].direct.flags, comp_flags.full_oh);
     end
 
     for _, v in pairs(rank_seqs[spids.envenom]) do

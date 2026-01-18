@@ -3189,7 +3189,6 @@ local function update_calculator_item_planner()
 end
 
 local function update_talents_frame()
-    print("talent update");
 
     local pframe =  __sc_frame.calculator_frame;
     local talents_frame =  pframe.talents;
@@ -3202,6 +3201,7 @@ local function update_talents_frame()
     end
 
     -- trigger editbox update
+    talents_frame.talent_editbox:SetText("");
     talents_frame.talent_editbox:SetText(wowhead_talent_link(working_talents.custom_code));
 end
 
@@ -5125,6 +5125,7 @@ local function create_sw_ui_loadout_frame(pframe)
 
     f:SetScript("OnClick", function(self)
 
+        sc.loadouts.force_update = true;
         config.settings.loadout_use_custom_lvl = self:GetChecked();
         sc.core.old_ranks_checks_needed = true;
         if config.settings.loadout_use_custom_lvl then
@@ -5143,6 +5144,7 @@ local function create_sw_ui_loadout_frame(pframe)
     f:Hide();
     f.number_editbox = true;
     local clvl_editbox_update = function(self)
+        sc.loadouts.force_update = true;
         local lvl = tonumber(self:GetText());
         local valid = lvl and lvl >= 1 and lvl <= sc.max_lvl;
         sc.core.old_ranks_checks_needed = true;
@@ -5172,6 +5174,7 @@ local function create_sw_ui_loadout_frame(pframe)
     getglobal(f:GetName()).tooltip = 
         L["Assumes you are casting from maximum mana, energy, rage or combo points."];
     f:SetScript("OnClick", function(self)
+        sc.loadouts.force_update = true;
         config.settings.loadout_always_max_resource = self:GetChecked();
     end)
     pframe.max_mana_checkbutton = f;
@@ -5203,6 +5206,7 @@ local function create_sw_ui_loadout_frame(pframe)
     getglobal(f:GetName()).tooltip = 
         L["Estimates armor from target level."];
     f:SetScript("OnClick", function(self)
+        sc.loadouts.force_update = true;
         local checked = self:GetChecked();
         config.settings.loadout_target_automatic_armor = checked;
         if checked then
@@ -5250,6 +5254,7 @@ local function create_sw_ui_loadout_frame(pframe)
     end
     local editbox_target_armor_close = function(self)
 
+        sc.loadouts.force_update = true;
         if not editbox_target_armor_update(self) then
             self:SetText("0");
             config.settings.loadout_target_armor = 0;
@@ -5261,35 +5266,50 @@ local function create_sw_ui_loadout_frame(pframe)
     pframe.custom_armor_frames[2] = f;
 
     local armor_pct_fn = function(self)
-        if self:GetChecked() then
-            config.settings.loadout_target_automatic_armor_pct = self._value;
-        end
-        for _, v in pairs(pframe.auto_armor_frames) do
-            v:SetChecked(config.settings.loadout_target_automatic_armor_pct == v._value);
+        sc.loadouts.force_update = true;
+
+        local checked = self:GetChecked();
+        config.settings["loadout_target_automatic_armor_"..self._armor] = checked;
+        if checked then
+            for i, v in ipairs(pframe.auto_armor_frames) do
+                if self ~= v and v:GetChecked() then
+                    v:Click();
+                end
+            end
+        else
+            local others_unchecked = true;
+            for i, v in ipairs(pframe.auto_armor_frames) do
+                if v:GetChecked() then
+                    others_unchecked = false;
+                end
+            end
+            if others_unchecked then
+                self:Click();
+            end
         end
     end;
 
-    f = CreateFrame("CheckButton", "__sc_frame_setting_loadout_target_automatic_armor_100", pframe, "ChatConfigCheckButtonTemplate");
+    f = CreateFrame("CheckButton", "__sc_frame_setting_loadout_target_automatic_armor_heavy", pframe, "ChatConfigCheckButtonTemplate");
     f._type = "CheckButton";
-    f._value = 100;
+    f._armor = "heavy";
     f:SetPoint("LEFT", getglobal(pframe.automatic_armor:GetName()..'Text'), "RIGHT", 40, 0);
     getglobal(f:GetName()..'Text'):SetText(L["Heavy"].." 100%");
     f:SetHitRectInsets(0, 0, 0, 0);
     f:SetScript("OnClick", armor_pct_fn);
     pframe.auto_armor_frames[1] = f;
 
-    f = CreateFrame("CheckButton", "__sc_frame_setting_loadout_target_automatic_armor_80", pframe, "ChatConfigCheckButtonTemplate");
+    f = CreateFrame("CheckButton", "__sc_frame_setting_loadout_target_automatic_armor_medium", pframe, "ChatConfigCheckButtonTemplate");
     f._type = "CheckButton";
-    f._value = 80;
+    f._armor = "medium";
     f:SetPoint("LEFT", getglobal(pframe.auto_armor_frames[1]:GetName()..'Text'), "RIGHT", 10, 0);
     getglobal(f:GetName()..'Text'):SetText(L["Medium"].." 80%");
     f:SetHitRectInsets(0, 0, 0, 0);
     f:SetScript("OnClick", armor_pct_fn);
     pframe.auto_armor_frames[2] = f;
 
-    f = CreateFrame("CheckButton", "__sc_frame_setting_loadout_target_automatic_armor_50", pframe, "ChatConfigCheckButtonTemplate");
+    f = CreateFrame("CheckButton", "__sc_frame_setting_loadout_target_automatic_armor_light", pframe, "ChatConfigCheckButtonTemplate");
     f._type = "CheckButton";
-    f._value = 50;
+    f._armor = "light";
     f:SetPoint("LEFT", getglobal(pframe.auto_armor_frames[2]:GetName()..'Text'), "RIGHT", 10, 0);
     getglobal(f:GetName()..'Text'):SetText(L["Light"].." 50%");
     f:SetHitRectInsets(0, 0, 0, 0);
@@ -5311,6 +5331,7 @@ local function create_sw_ui_loadout_frame(pframe)
     getglobal(f:GetName()..'Text'):SetText(L["Attacked from behind, eliminating parry and block"]);
     f:SetScript("OnClick", function(self)
         config.settings.loadout_behind_target = self:GetChecked();
+        sc.loadouts.force_update = true;
     end)
 
     pframe.y_offset = pframe.y_offset - 30;
@@ -5330,6 +5351,7 @@ local function create_sw_ui_loadout_frame(pframe)
     f:SetAutoFocus(false);
     f.number_editbox = true;
     local editbox_update = function(self)
+        sc.loadouts.force_update = true;
         -- silently try to apply valid changes but don't panic while focus is on
         local lvl_diff = tonumber(self:GetText());
         local valid = lvl_diff and lvl_diff == math.floor(lvl_diff) and config.settings.loadout_lvl + lvl_diff >= 1 and config.settings.loadout_lvl + lvl_diff <= 83;
@@ -5369,6 +5391,7 @@ local function create_sw_ui_loadout_frame(pframe)
     f:SetAutoFocus(false);
     f.number_editbox = true;
     local editbox_hp_perc_update = function(self)
+        sc.loadouts.force_update = true;
         local hp_perc = tonumber(self:GetText());
         local valid = hp_perc and hp_perc >= 0;
         if valid then
@@ -5418,6 +5441,7 @@ local function create_sw_ui_loadout_frame(pframe)
                     text = L["None"],
                     checked = config.settings.loadout_default_target_creature_type == 0,
                     func = function()
+                        sc.loadouts.force_update = true;
                         config.settings.loadout_default_target_creature_type = 0;
 
                         libDD:UIDropDownMenu_SetText(pframe.creature_type_dd, L["None"]);
@@ -5432,6 +5456,7 @@ local function create_sw_ui_loadout_frame(pframe)
                         text = lname,
                         checked = config.settings.loadout_default_target_creature_type == id,
                         func = function()
+                            sc.loadouts.force_update = true;
                             config.settings.loadout_default_target_creature_type = id;
                             config.settings.calc_fight_type = fight_types.repeated_casts;
 
@@ -5465,6 +5490,7 @@ local function create_sw_ui_loadout_frame(pframe)
     f:SetAutoFocus(false);
     f.number_editbox = true;
     local editbox_target_res_update = function(self)
+        sc.loadouts.force_update = true;
         local target_res = tonumber(self:GetText());
         local valid = target_res and target_res >= 0;
         if valid then
@@ -5535,6 +5561,7 @@ local function create_sw_ui_loadout_frame(pframe)
     f:SetAutoFocus(false);
     f.number_editbox = true;
     local aoe_targets_editbox_update = function(self)
+        sc.loadouts.force_update = true;
         local targets = tonumber(self:GetText());
         local valid = targets and targets >= 1;
         if valid then
@@ -5558,20 +5585,21 @@ end
 local function update_profile_frame()
 
     sc.config.set_active_settings();
+    local pframe = __sc_frame.profile_frame;
 
-    __sc_frame.profile_frame.primary_spec.init_func();
-    __sc_frame.profile_frame.second_spec.init_func();
+    pframe.primary_spec.init_func();
+    pframe.second_spec.init_func();
 
-    __sc_frame.profile_frame.active_main_spec:Hide();
-    __sc_frame.profile_frame.active_second_spec:Hide();
+    pframe.active_main_spec:Hide();
+    pframe.active_second_spec:Hide();
     if sc.core.active_spec == 1 then
-        __sc_frame.profile_frame.active_main_spec:Show();
+        pframe.active_main_spec:Show();
     else
-        __sc_frame.profile_frame.active_second_spec:Show();
+        pframe.active_second_spec:Show();
     end
 
-    __sc_frame.profile_frame.delete_profile_button:Hide();
-    __sc_frame.profile_frame.delete_profile_label:Hide();
+    pframe.delete_profile_button:Hide();
+    pframe.delete_profile_label:Hide();
 
     local cnt = 0;
     for _, _ in pairs(__sc_p_acc.profiles) do
@@ -5582,11 +5610,11 @@ local function update_profile_frame()
     end
     if cnt > 1 then
 
-        __sc_frame.profile_frame.delete_profile_button:Show();
-        __sc_frame.profile_frame.delete_profile_label:Show();
+        pframe.delete_profile_button:Show();
+        pframe.delete_profile_label:Show();
     end
 
-    __sc_frame.profile_frame.rename_editbox:SetText(config.active_profile_name);
+    pframe.rename_editbox:SetText(config.active_profile_name);
 
     __sc_frame.calculator_frame.profile_name_label:SetText(
         L["Active profile: "]..config.active_profile_name

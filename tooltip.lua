@@ -580,14 +580,6 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         end
     end
 
-    if config.settings.loadout_force_apply_buffs or config.settings.loadout_use_custom_talents or config.settings.loadout_use_custom_lvl then
-        add_line(
-            tooltip,
-            L["WARNING"]..":",
-            L["using custom talents, glyphs, runes, lvl or buffs!"],
-            1, 0, 0);
-    end
-
     local display_direct_avoidance = spell.direct and
         bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb, spell_flags.alias)) == 0 and
         bit.band(eval_flags, evaluation_flags.isolate_periodic) == 0;

@@ -438,6 +438,10 @@ local event_dispatch = {
     end,
     ["ACTIVE_TALENT_GROUP_CHANGED"] = function()
 
+        if not core.sw_addon_loaded then
+            return;
+        end
+
         core.active_spec = GetActiveTalentGroup();
         update_profile_frame();
         activate_settings();
@@ -501,7 +505,6 @@ local event_dispatch = {
         doing_raid_update();
     end,
 };
-
 
 local event_dispatch_client_exceptions = {
     ["ENGRAVING_MODE_CHANGED"] = sc.expansions.vanilla,
