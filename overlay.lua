@@ -35,9 +35,7 @@ local externally_registered_spells = {};
 local external_overlay_frames = {};
 local num_overlay_components_toggled = 0;
 local action_id_frames = {};
-for i = 1, 120 do
-    action_id_frames[i] = {};
-end
+local num_actions = 120;
 
 overlay.decimals_cap = 3;
 
@@ -220,12 +218,13 @@ local function action_id_of_button(button)
     if not button then
         return nil;
     end
-    if action_bar_addon_name == "Default" then
+    if button.action then
         return button.action;
-    else
-        -- Dominos seems to set GetAttribute function for the 1-6 default blizz bars
+    end
+    if button.GetAttribute then
         return button:GetAttribute("action");
     end
+    return nil;
 end
 
 local function spell_id_of_action(action_id)
@@ -237,6 +236,7 @@ local function spell_id_of_action(action_id)
     elseif action_type == "spell" then
          spell_id = id;
     end
+
     if not spells[spell_id] then
         spell_id = 0;
     elseif (bit.band(spells[spell_id].flags, spell_flags.eval) == 0) and
@@ -245,6 +245,7 @@ local function spell_id_of_action(action_id)
         (anyspell_overlay and not spell_cost(spell_id) and not spell_cast_time(spell_id)) then
         spell_id = 0;
     end
+
 
     return spell_id;
 end
@@ -294,6 +295,10 @@ local IsAddOnLoaded = IsAddOnLoaded or function(addon_name)
     end
 end;
 
+
+local default_bars = {
+};
+
 local function gather_spell_icons()
 
     active_overlays = {};
@@ -324,7 +329,7 @@ local function gather_spell_icons()
     -- check for some common addons if they overrite spellbook frames
     if IsAddOnLoaded("Bartender4") then
 
-        for i = 1, 120 do
+        for i = 1, num_actions do
             action_bar_frame_names[i] = "BT4Button"..i;
         end
         action_bar_addon_name = "Bartender4";
@@ -343,34 +348,63 @@ local function gather_spell_icons()
 
     elseif IsAddOnLoaded("Dominos") then
 
-        local bars = {
-            "ActionButton", "DominosActionButton", "MultiBarRightButton",
-            "MultiBarLeftButton", "MultiBarBottomRightButton", "MultiBarBottomLeftButton"
-        };
-        for k, v in pairs(bars) do
+        local highest_action_found = 0;
+        for k, v in pairs({
+            "Action",
+            "Bonus",
+            "MultiBarRight",
+            "MultiBarLeft",
+            "MultiBarBottomRight",
+            "MultiBarBottomLeft",
+            "",
+            "MultiBar0",
+            "MultiBar1",
+            "MultiBar2",
+            "MultiBar3",
+            "MultiBar4",
+            "MultiBar5",
+            "MultiBar6",
+            "MultiBar7",
+        }) do
             for j = 1, 12 do
-                action_bar_frame_names[index] = v..j;
-
+                if v ~= "" then
+                    if getglobal(v.."ActionButton"..j) then
+                        action_bar_frame_names[index] = v.."ActionButton"..j;
+                        highest_action_found = index;
+                    elseif getglobal(v.."Button"..j) then
+                        action_bar_frame_names[index] = v.."Button"..j;
+                        highest_action_found = index;
+                    end
+                end
                 index = index + 1;
             end
         end
+        -- Overwrite default bar names where DominosActionButtons are defined
+        for i = 1, 180 do
+            local bar_name = "DominosActionButton"..i;
+            local slotf = getglobal(bar_name)
+            if slotf then
+                local idx = slotf.action or i;
 
-        for i = index, 120 do
-            action_bar_frame_names[i] = "DominosActionButton"..i;
+                action_bar_frame_names[idx] = bar_name;
+                highest_action_found = math.max(highest_action_found, idx);
+            end
         end
-        for i = 13, 24 do
-            action_bar_frame_names[i] = "DominosActionButton"..i;
-        end
+        num_actions = math.max(num_actions, highest_action_found);
+
         action_bar_addon_name = "Dominos";
 
     else -- default action bars
 
-        local bars = {
-            "ActionButton", "BonusActionButton", "MultiBarRightButton",
-            "MultiBarLeftButton", "MultiBarBottomRightButton", "MultiBarBottomLeftButton"
-        };
         index = 1;
-        for k, v in pairs(bars) do
+        for k, v in pairs({
+            "ActionButton",
+            "BonusActionButton",
+            "MultiBarRightButton",
+            "MultiBarLeftButton",
+            "MultiBarBottomRightButton",
+            "MultiBarBottomLeftButton"
+        }) do
             for j = 1, 12 do
                 action_bar_frame_names[index] = v..j;
 
@@ -378,6 +412,10 @@ local function gather_spell_icons()
             end
         end
         action_bar_addon_name = "Default";
+    end
+
+    for i = 1, num_actions do
+        action_id_frames[i] = {};
     end
 end
 
@@ -402,7 +440,8 @@ local function reassign_overlay_icon(action_id)
 
     --action_id might not have a named frame (e.g. blizzard bars) at high IDs
     --but still be mirrored to named frames 1-12
-    if action_id > 120 or action_id <= 0 then
+    --if action_id > 120 or action_id <= 0 then
+    if action_id > num_actions or action_id <= 0 then
         return;
     end
 
@@ -934,6 +973,7 @@ local function update_spell_icon_frame(frame_info, spell, spell_id, loadout, eff
         elseif anyspell_cast_until_oom_overlay then
             spell_effect, stats = calc_spell_dummy_cast_until_oom(spell_id, loadout, effects);
         end
+
 
         for i, v in pairs(active_overlay_indices) do
             local handler = overlay_label_handler[v];
@@ -1548,7 +1588,6 @@ local function update_spell_icons(loadout, effects, eval_flags)
             update_overlay_frame(v, loadout, effects, v.spell_id, eval_flags);
         end
     end
-
     for _, v in pairs(external_overlay_frames) do
         if v.frame and v.frame:IsShown() and spells[v.spell_id] then
             update_overlay_frame(v, loadout, effects, v.spell_id, eval_flags);

@@ -399,7 +399,10 @@ local event_dispatch = {
             return;
         end
 
-        core.rescan_action_bar_needed = true;
+        -- rescanning action bar here seems like bad idea,
+        -- commenting out until it turns out that this was needed
+        --core.rescan_action_bar_needed = true;
+
         reassign_overlay_icon(slot);
         sc.loadouts.force_update = true;
     end,
