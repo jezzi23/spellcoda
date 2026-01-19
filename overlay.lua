@@ -35,9 +35,7 @@ local externally_registered_spells = {};
 local external_overlay_frames = {};
 local num_overlay_components_toggled = 0;
 local action_id_frames = {};
-for i = 1, 120 do
-    action_id_frames[i] = {};
-end
+local num_actions = 120;
 
 overlay.decimals_cap = 3;
 
@@ -220,12 +218,13 @@ local function action_id_of_button(button)
     if not button then
         return nil;
     end
-    if action_bar_addon_name == "Default" then
+    if button.action then
         return button.action;
-    else
-        -- Dominos seems to set GetAttribute function for the 1-6 default blizz bars
+    end
+    if button.GetAttribute then
         return button:GetAttribute("action");
     end
+    return nil;
 end
 
 local function spell_id_of_action(action_id)
@@ -237,6 +236,7 @@ local function spell_id_of_action(action_id)
     elseif action_type == "spell" then
          spell_id = id;
     end
+
     if not spells[spell_id] then
         spell_id = 0;
     elseif (bit.band(spells[spell_id].flags, spell_flags.eval) == 0) and
@@ -245,6 +245,7 @@ local function spell_id_of_action(action_id)
         (anyspell_overlay and not spell_cost(spell_id) and not spell_cast_time(spell_id)) then
         spell_id = 0;
     end
+
 
     return spell_id;
 end
@@ -280,6 +281,24 @@ local function scan_action_frames()
     end
 end
 
+local IsAddOnLoaded = IsAddOnLoaded or function(addon_name)
+
+    -- If for whatever reason IsAddOnLoaded is not defined, have some backup, and this can happen in clients builds...
+    if addon_name == "Bartender4" then
+        return BT4Button1 ~= nil;
+    elseif addon_name == "ElvUI" then
+        return ElvUI_Bar1Button1 ~= nil;
+    elseif addon_name == "Dominos" then
+        return DominosActionButton1 ~= nil;
+    else
+        return false;
+    end
+end;
+
+
+local default_bars = {
+};
+
 local function gather_spell_icons()
 
     active_overlays = {};
@@ -306,14 +325,11 @@ local function gather_spell_icons()
 
     -- gather action bar icons
     local index = 1;
-    if not IsAddOnLoaded then
-        -- BROKEN PTR TEMPORARY FIX: remember to grep for this phrase to remove later
-        IsAddOnLoaded = function() return false end;
-    end
+
     -- check for some common addons if they overrite spellbook frames
     if IsAddOnLoaded("Bartender4") then
 
-        for i = 1, 120 do
+        for i = 1, num_actions do
             action_bar_frame_names[i] = "BT4Button"..i;
         end
         action_bar_addon_name = "Bartender4";
@@ -332,34 +348,63 @@ local function gather_spell_icons()
 
     elseif IsAddOnLoaded("Dominos") then
 
-        local bars = {
-            "ActionButton", "DominosActionButton", "MultiBarRightButton",
-            "MultiBarLeftButton", "MultiBarBottomRightButton", "MultiBarBottomLeftButton"
-        };
-        for k, v in pairs(bars) do
+        local highest_action_found = 0;
+        for k, v in pairs({
+            "Action",
+            "Bonus",
+            "MultiBarRight",
+            "MultiBarLeft",
+            "MultiBarBottomRight",
+            "MultiBarBottomLeft",
+            "",
+            "MultiBar0",
+            "MultiBar1",
+            "MultiBar2",
+            "MultiBar3",
+            "MultiBar4",
+            "MultiBar5",
+            "MultiBar6",
+            "MultiBar7",
+        }) do
             for j = 1, 12 do
-                action_bar_frame_names[index] = v..j;
-
+                if v ~= "" then
+                    if getglobal(v.."ActionButton"..j) then
+                        action_bar_frame_names[index] = v.."ActionButton"..j;
+                        highest_action_found = index;
+                    elseif getglobal(v.."Button"..j) then
+                        action_bar_frame_names[index] = v.."Button"..j;
+                        highest_action_found = index;
+                    end
+                end
                 index = index + 1;
             end
         end
+        -- Overwrite default bar names where DominosActionButtons are defined
+        for i = 1, 180 do
+            local bar_name = "DominosActionButton"..i;
+            local slotf = getglobal(bar_name)
+            if slotf then
+                local idx = slotf.action or i;
 
-        for i = index, 120 do
-            action_bar_frame_names[i] = "DominosActionButton"..i;
+                action_bar_frame_names[idx] = bar_name;
+                highest_action_found = math.max(highest_action_found, idx);
+            end
         end
-        for i = 13, 24 do
-            action_bar_frame_names[i] = "DominosActionButton"..i;
-        end
+        num_actions = math.max(num_actions, highest_action_found);
+
         action_bar_addon_name = "Dominos";
 
     else -- default action bars
 
-        local bars = {
-            "ActionButton", "BonusActionButton", "MultiBarRightButton",
-            "MultiBarLeftButton", "MultiBarBottomRightButton", "MultiBarBottomLeftButton"
-        };
         index = 1;
-        for k, v in pairs(bars) do
+        for k, v in pairs({
+            "ActionButton",
+            "BonusActionButton",
+            "MultiBarRightButton",
+            "MultiBarLeftButton",
+            "MultiBarBottomRightButton",
+            "MultiBarBottomLeftButton"
+        }) do
             for j = 1, 12 do
                 action_bar_frame_names[index] = v..j;
 
@@ -367,6 +412,10 @@ local function gather_spell_icons()
             end
         end
         action_bar_addon_name = "Default";
+    end
+
+    for i = 1, num_actions do
+        action_id_frames[i] = {};
     end
 end
 
@@ -391,7 +440,8 @@ local function reassign_overlay_icon(action_id)
 
     --action_id might not have a named frame (e.g. blizzard bars) at high IDs
     --but still be mirrored to named frames 1-12
-    if action_id > 120 or action_id <= 0 then
+    --if action_id > 120 or action_id <= 0 then
+    if action_id > num_actions or action_id <= 0 then
         return;
     end
 
@@ -924,6 +974,7 @@ local function update_spell_icon_frame(frame_info, spell, spell_id, loadout, eff
             spell_effect, stats = calc_spell_dummy_cast_until_oom(spell_id, loadout, effects);
         end
 
+
         for i, v in pairs(active_overlay_indices) do
             local handler = overlay_label_handler[v];
             if not handler.requires_spell_flags or
@@ -956,6 +1007,7 @@ local function update_overlay_frame(frame, loadout, effects, id, eval_flags)
         update_spell_icon_frame(frame, spells[id], id, loadout, effects, eval_flags);
     end
 end
+
 
 local ccf_parent = CreateFrame("Frame", nil, UIParent);
 ccf_parent:RegisterForDrag("LeftButton");
@@ -1073,6 +1125,152 @@ local function cc_demo_dummy_fill(info, stats)
     stats.target_avg_resi = 0.2;
     stats.target_avg_resi_ot = 0.2;
 end
+
+local cc_spell_id           = 0;
+local cc_noexpire           = false;
+local cc_channel            = true;
+local cc_expire_timer       = 0;
+local cc_waiting_on_anim    = false;
+local cc_enqueued_spell_id  = 0;
+
+local function cc_enqueue(spell_id)
+
+    if sc.overlay.cc_f1.icon_frame.animating and not config.settings.overlay_cc_transition_nocd then
+        cc_waiting_on_anim = true;
+        cc_enqueued_spell_id = spell_id;
+    else
+        cc_spell_id = spell_id;
+        cc_new_spell(spell_id);
+        cc_waiting_on_anim = false;
+        cc_enqueued_spell_id = 0;
+    end
+end
+
+local function set_cc_spell(spell_id)
+
+    if spells[spell_id] and
+        (not config.settings.overlay_cc_only_eval or
+        bit.band(spells[spell_id].flags, spell_flags.eval) ~= 0) then
+
+        cc_expire_timer = config.settings.overlay_cc_hanging_time;
+        if cc_spell_id ~= spell_id then
+            cc_enqueue(spell_id);
+        end
+    end
+end
+
+local auto_repeat_spells_tracking = {};
+for _, v in pairs({"attack", "shoot", "auto_shot"}) do
+    if sc.spids[v] then
+        table.insert(auto_repeat_spells_tracking, sc.spids[v]);
+    end
+end
+
+local function spell_tracking(dt)
+    cc_expire_timer = cc_expire_timer - dt;
+    if cc_noexpire then
+        return;
+    end
+    if cc_expire_timer < 0.0 then
+
+        -- degrade to autorepeat or 0
+        local is_repeating = false;
+        for _, id in pairs(auto_repeat_spells_tracking) do
+            if IsCurrentSpell(id) then
+                is_repeating = true;
+                set_cc_spell(id);
+                break;
+            end
+        end
+
+        if not is_repeating then
+
+            if cc_spell_id ~= 0 then
+                cc_enqueue(0);
+            end
+            cc_spell_id = 0;
+        end
+    end
+
+    if cc_waiting_on_anim then
+        cc_enqueue(cc_enqueued_spell_id);
+    end
+end
+
+local cc_event_dispatch = {
+    ["UNIT_SPELLCAST_SUCCEEDED"] = function(self, caster, _, spell_id)
+        if caster == "player" then
+            set_cc_spell(spell_id);
+            if not cc_channel then
+                cc_noexpire = false;
+            end
+        end
+    end,
+    ["UNIT_SPELLCAST_CHANNEL_START"] = function(_, caster, _, spell_id)
+        if caster == "player" then
+            set_cc_spell(spell_id);
+            cc_noexpire = true;
+            cc_channel = true;
+        end
+    end,
+    ["UNIT_SPELLCAST_CHANNEL_STOP"] = function(_, caster, _, spell_id)
+        if caster == "player" then
+            cc_noexpire = false;
+            cc_channel = false;
+            cc_expire_timer = config.settings.overlay_cc_hanging_time;
+        end
+    end,
+    ["UNIT_SPELLCAST_START"] = function(self, caster, _, spell_id)
+        if caster == "player" then
+            set_cc_spell(spell_id);
+            cc_noexpire = true;
+        end
+    end,
+    ["UNIT_SPELLCAST_STOP"] = function(self, caster, _, spell_id)
+        if caster == "player" then
+            cc_noexpire = false;
+            cc_expire_timer = config.settings.overlay_cc_hanging_time;
+        end
+    end,
+    ["UNIT_SPELLCAST_FAILED"] = function(self, caster, _, spell_id)
+        if caster == "player" then
+            cc_noexpire = false;
+            cc_expire_timer = config.settings.overlay_cc_hanging_time;
+        end
+    end,
+    ["START_AUTOREPEAT_SPELL"] = function(self, arg1, arg2, arg4)
+        cc_noexpire = false;
+        for _, id in pairs(auto_repeat_spells_tracking) do
+            if IsCurrentSpell(id) then
+                set_cc_spell(id);
+                return;
+            end
+        end
+    end,
+};
+
+
+ccf_parent:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
+    cc_event_dispatch[event](self, arg1, arg2, arg3);
+end);
+
+local function ccf_hook_events(should_hook)
+    if should_hook then
+        for k, v in pairs(cc_event_dispatch) do
+            ccf_parent:RegisterEvent(k);
+        end
+    else
+        for k, v in pairs(cc_event_dispatch) do
+            ccf_parent:UnregisterEvent(k);
+        end
+        cc_noexpire = false;
+        cc_expire_timer = 0;
+        overlay.cc_f1.icon_frame:Hide();
+        overlay.cc_f2.icon_frame:Hide();
+    end
+end
+
+ccf_hook_events(true);
 
 
 local active_ccf_labels = {};
@@ -1537,7 +1735,6 @@ local function update_spell_icons(loadout, effects, eval_flags)
             update_overlay_frame(v, loadout, effects, v.spell_id, eval_flags);
         end
     end
-
     for _, v in pairs(external_overlay_frames) do
         if v.frame and v.frame:IsShown() and spells[v.spell_id] then
             update_overlay_frame(v, loadout, effects, v.spell_id, eval_flags);
@@ -1635,6 +1832,8 @@ overlay.overlay_reconfig                            = overlay_reconfig;
 overlay.init_ccfs                                   = init_ccfs;
 overlay.cc_new_spell                                = cc_new_spell;
 overlay.ccf_parent                                  = ccf_parent;
+overlay.spell_tracking                              = spell_tracking;
+overlay.ccf_hook_events                             = ccf_hook_events;
 overlay.cc_demo                                     = cc_demo;
 overlay.ccf_label_reconfig                          = ccf_label_reconfig;
 overlay.ccf_anim_reconfig                           = ccf_anim_reconfig;

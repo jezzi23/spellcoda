@@ -64,91 +64,53 @@ local function wowhead_talent_code()
     return talent_code .. "_";
 end
 
-local function talent_table(wowhead_code)
-    local talents_t = {};
+local function talent_pts(effects, idx)
+    return effects.talent_pts[idx] or 0;
+end
 
-    for k, v in pairs(sc.talent_order) do
-        for i, _ in pairs(v) do
-            talents_t[k*100+i] = 0;
-        end
-    end
+local function apply_talents(loadout, effects, wowhead_code, forced, undo)
 
     local i = 1;
     local tree_index = 1;
     local talent_index = 1;
 
     while wowhead_code:sub(i, i) ~= "" and wowhead_code:sub(i, i) ~= "_" do
-        if wowhead_code:sub(i, i) == "-" then
+        local next = wowhead_code:sub(i, i);
+        local next_num = tonumber(next);
+        if next == "-" then
             tree_index = tree_index + 1;
             talent_index = 1;
-        elseif tonumber(wowhead_code:sub(i, i)) then
-            talents_t[tree_index*100 + talent_index] = tonumber(wowhead_code:sub(i, i));
+        elseif next_num then
+            local pts = next_num;
+            local pts_change;
+            if undo then
+                pts_change = -pts;
+            else
+                pts_change = pts;
+            end
+            local idx = tree_index*100 + talent_index;
+
+            effects.talent_pts[idx] = (effects.talent_pts[idx] or 0) + pts_change;
+            if pts > 0 and sc.talent_ranks[idx] then
+
+                local effect_id = sc.talent_ranks[idx][pts];
+                if effect_id then
+                    apply_effect(effects,
+                                 effect_id,
+                                 sc.talent_effects[effect_id],
+                                 forced,
+                                 1,
+                                 undo);
+                end
+            end
+
             talent_index = talent_index + 1;
         end
         i = i + 1;
     end
 
-    return talents_t;
-end
 
-local function apply_talents(loadout, effects)
-
-    -- weapon skills 
-    local success = GetNumSkillLines() ~= 0;
-    for i = 1, GetNumSkillLines() do
-        local skill_lname, _, _, skill = GetSkillLineInfo(i);
-        local wep_subclass = sc.wpn_skill_lname_to_subclass[skill_lname];
-        if wep_subclass then
-            loadout.wpn_skills[wep_subclass] = skill;
-        end
-    end
-
-    if loadout.talents.code == "_" and UnitLevel("player") >= 10 then
-        -- edge case when the talents query won't work shortly after logging in
-        success = false;
-    end
-
-    local dynamic_talents, _ = talent_table(loadout.talents.code);
-
-    local custom_talents, _ = nil, nil;
-
-    if not config.loadout.use_custom_talents then
-        loadout.talents.pts = dynamic_talents;
-    else
-        custom_talents, _ = talent_table(config.loadout.custom_talents_code);
-        loadout.talents.pts = custom_talents;
-    end
-    for id, pts in pairs(loadout.talents.pts) do
-        if pts > 0 and sc.talent_ranks[id] then
-            local effect_id = sc.talent_ranks[id][pts];
-            if effect_id then
-                apply_effect(effects,
-                             effect_id,
-                             sc.talent_effects[effect_id],
-                             config.loadout.use_custom_talents,
-                             1,
-                             false);
-            end
-        end
-    end
-    --if config.loadout.use_custom_talents then
-    --    -- undo dynamic talents
-    --    for id, pts in pairs(dynamic_talents) do
-    --        if pts > 0 and sc.talent_ranks[id] then
-    --            local effect_id = sc.talent_ranks[id][pts];
-    --            if effect_id then
-    --                apply_effect(effects,
-    --                             effect_id,
-    --                             sc.talent_effects[effect_id],
-    --                             false,
-    --                             1,
-    --                             true);
-    --            end
-    --        end
-    --    end
-    --end
-
-    if sc.core.__sw__test_all_codepaths then
+    if __spellcoda_test_all_data__ and not forced then
         -- Testing all special passives
         local passives_applied = 0;
         for id, e in pairs(sc.passives) do
@@ -160,13 +122,8 @@ local function apply_talents(loadout, effects)
 
         -- Testing all talents
         local applied = 0;
-        for k, _ in pairs(loadout.talents.pts) do
-            if sc.talent_ranks[k] then
-                loadout.talents.pts[k] = #sc.talent_ranks[k];
-            else
-                loadout.talents.pts[k] = 1;
-            end
-
+        for k, _  in pairs(sc.talent_ranks) do
+            effects.talent_pts[k] = #sc.talent_ranks[k];
         end
 
         for _, v in pairs(sc.talent_ranks) do
@@ -178,15 +135,39 @@ local function apply_talents(loadout, effects)
         print(applied, "gen talents applied");
 
     end
+end
+
+local function loadout_talents_info(loadout)
+
+    --loadout_front.talents.code = sc.talents.wowhead_talent_code();
+    loadout.talents.code = wowhead_talent_code();
+
+    -- weapon skills 
+    local success = GetNumSkillLines() ~= 0;
+    for i = 1, GetNumSkillLines() do
+        local skill_lname, _, _, skill = GetSkillLineInfo(i);
+        local wep_subclass = sc.wpn_skill_lname_to_subclass[skill_lname];
+        if wep_subclass then
+            loadout.wpn_skills[wep_subclass] = skill;
+        end
+    end
+
+    if sc.core.addon_running_time < sc.core.login_grace_time and
+        loadout.talents_code == "_" and
+        UnitLevel("player") >= 10 then
+        -- edge case when the talents query won't work shortly after logging in
+        success = false;
+    end
 
     return success;
 end
 
+---------------------------------------------------------------------------------------------------
 talents_export.wowhead_talent_link = wowhead_talent_link
 talents_export.wowhead_talent_code_from_url = wowhead_talent_code_from_url;
 talents_export.wowhead_talent_code = wowhead_talent_code;
-talents_export.talent_table = talent_table;
+talents_export.loadout_talents_info = loadout_talents_info;
+talents_export.talent_pts = talent_pts;
 talents_export.apply_talents = apply_talents;
-talents_export.rune_ids = rune_ids;
 
 sc.talents = talents_export;

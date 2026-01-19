@@ -2,7 +2,10 @@ local _, sc               = ...;
 
 local class               = sc.class;
 local classes             = sc.classes;
+
 local apply_effect        = sc.loadouts.apply_effect;
+
+local has_enchant         = sc.equipment.has_enchant;
 
 local config              = sc.config;
 
@@ -39,7 +42,8 @@ for k, _ in pairs(sc.player_buffs) do
 end
 -- allows weapon enchant buffs to be registered as buffs
 for k, _ in pairs(sc.enchant_effects) do
-    if not unique_buffs[k] then
+
+    if k > 0 and not unique_buffs[k] then
         unique_buffs[k] = {
             id = k,
             --lname = GetSpellInfo(sc.enchant_effects[k]),
@@ -139,75 +143,37 @@ local function detect_buffs(loadout)
     end
 end
 
-local function apply_buffs(loadout, effects)
+local function apply_buffs(loadout, effects, forced, undo)
+
     for k, v in pairs(loadout.dynamic_buffs["player"]) do
         if sc.class_buffs[k] then
-            apply_effect(effects, k, sc.class_buffs[k], false, v.count, false, v.player_owned);
+            apply_effect(effects, k, sc.class_buffs[k], forced, v.count, undo, v.player_owned);
         elseif sc.player_buffs[k] then
-            apply_effect(effects, k, sc.player_buffs[k], false, v.count, false, v.player_owned);
+            apply_effect(effects, k, sc.player_buffs[k], forced, v.count, undo, v.player_owned);
         end
     end
     for k, v in pairs(loadout.dynamic_buffs[loadout.friendly_towards]) do
         if sc.friendly_buffs[k] then
-            apply_effect(effects, k, sc.friendly_buffs[k], false, v.count, false, v.player_owned);
+            apply_effect(effects, k, sc.friendly_buffs[k], forced, v.count, undo, v.player_owned);
         end
     end
     if loadout.hostile_towards ~= "" then
         for k, v in pairs(loadout.dynamic_buffs[loadout.hostile_towards]) do
             if sc.hostile_buffs[k] then
-                apply_effect(effects, k, sc.hostile_buffs[k], false, v.count, false, v.player_owned);
+                apply_effect(effects, k, sc.hostile_buffs[k], forced, v.count, undo, v.player_owned);
             end
         end
-    end
-
-    local beacon_duration = 60;
-    if class == classes.paladin and loadout.enchants[407613] and
-        sc.core.beacon_snapshot_time + beacon_duration >= sc.core.addon_running_time then
-        loadout.beacon = true;
-    else
-        loadout.beacon = nil
     end
 
     -- some shapeshifts like stances cannot be detected as buff
     -- assigned from data override
     if sc.shapeshift_id_to_effects and sc.shapeshift_id_to_effects[loadout.shapeshift] then
         for _, k in pairs(sc.shapeshift_id_to_effects[loadout.shapeshift]) do
-            apply_effect(effects, k, sc.shapeshift_passives[k], false, 1);
+            apply_effect(effects, k, sc.shapeshift_passives[k], forced, 1, undo);
         end
     end
 
-
-    if config.loadout.force_apply_buffs then
-        for k, cnt in pairs(config.loadout.buffs) do
-            if not loadout.dynamic_buffs["player"][k] then
-                if sc.class_buffs[k] then
-                    apply_effect(effects, k, sc.class_buffs[k], true, cnt, false, true);
-                elseif sc.player_buffs[k] then
-                    apply_effect(effects, k, sc.player_buffs[k], true, cnt, false, true);
-                elseif sc.enchant_effects[k] and not loadout.enchants[k] then
-                    apply_effect(effects, k, sc.enchant_effects[k], true, cnt, false, true);
-                end
-            end
-        end
-        for k, cnt in pairs(config.loadout.target_buffs) do
-            if not loadout.dynamic_buffs[loadout.friendly_towards][k] and
-                (loadout.hostile_towards == "" or not loadout.dynamic_buffs[loadout.hostile_towards][k])
-            then
-                if sc.friendly_buffs[k] then
-                    apply_effect(effects, k, sc.friendly_buffs[k], true, cnt, false, true);
-                end
-                if sc.hostile_buffs[k] then
-                    apply_effect(effects, k, sc.hostile_buffs[k], true, cnt, false, true);
-                end
-            end
-        end
-
-        if class == classes.paladin and config.loadout.target_buffs[407613] then
-            loadout.beacon = true;
-        end
-    end
-
-    if sc.core.__sw__test_all_codepaths then
+    if __spellcoda_test_all_data__ then
         -- Testing all buffs
         local buffs_applied = 0;
         for k, v in pairs(sc.player_buffs) do
@@ -227,6 +193,39 @@ local function apply_buffs(loadout, effects)
             buffs_applied = buffs_applied + 1;
         end
         print(buffs_applied, "gen buffs applied");
+    end
+end
+
+local function apply_fake_buffs(loadout, effects, buffs_cfg)
+
+    local preserve = buffs_cfg.preserve_active;
+    if not preserve then
+        apply_buffs(loadout, effects, true, true);
+    end
+
+    for k, cnt in pairs(buffs_cfg.player_buffs) do
+        if not preserve or not loadout.dynamic_buffs["player"][k] then
+            if sc.class_buffs[k] then
+                apply_effect(effects, k, sc.class_buffs[k], true, cnt, false, true);
+            elseif sc.player_buffs[k] then
+                apply_effect(effects, k, sc.player_buffs[k], true, cnt, false, true);
+            elseif sc.enchant_effects[k] then
+                apply_effect(effects, k, sc.enchant_effects[k], true, cnt, false, true);
+            end
+        end
+    end
+    for k, cnt in pairs(buffs_cfg.target_buffs) do
+        if not preserve or
+            (not loadout.dynamic_buffs[loadout.friendly_towards][k]
+            and
+            (loadout.hostile_towards == "" or not loadout.dynamic_buffs[loadout.hostile_towards][k])) then
+            if sc.friendly_buffs[k] then
+                apply_effect(effects, k, sc.friendly_buffs[k], true, cnt, false, true);
+            end
+            if sc.hostile_buffs[k] then
+                apply_effect(effects, k, sc.hostile_buffs[k], true, cnt, false, true);
+            end
+        end
     end
 end
 
@@ -275,6 +274,7 @@ buffs_export.buffs = buffs;
 buffs_export.target_buffs = target_buffs;
 buffs_export.detect_buffs = detect_buffs;
 buffs_export.apply_buffs = apply_buffs;
+buffs_export.apply_fake_buffs = apply_fake_buffs;
 buffs_export.non_stackable_effects = non_stackable_effects;
 buffs_export.get_buff = get_buff;
 buffs_export.get_buff_by_lname = get_buff_by_lname;

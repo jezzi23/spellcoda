@@ -11,14 +11,14 @@ local spell_flags                                   = sc.spell_flags;
 local comp_flags                                    = sc.comp_flags;
 local lookups                                       = sc.lookups;
 
-local l_talents                                     = sc.loadouts.active_loadout().talents;
-
 local auto_attack_spell_id                          = sc.auto_attack_spell_id;
 
 local spell_lname                                   = sc.utils.spell_lname;
 local dummy_value                                   = sc.utils.dummy_value;
 
 local num_set_pieces                                = sc.equipment.num_set_pieces;
+local has_enchant                                   = sc.equipment.has_enchant;
+local talent_pts                                    = sc.talents.talent_pts;
 
 local effect_flags                                  = sc.calc.effect_flags;
 local add_extra_effect                              = sc.calc.add_extra_effect;
@@ -31,6 +31,7 @@ local mechanics = {};
 mechanics.gcd = 1.5;
 mechanics.gcd_min = 1.5;
 
+
 local class_stats_spell = (function()
     if class == classes.warrior then
         return function(anycomp, bid, stats, spell, loadout, effects)
@@ -40,12 +41,12 @@ local class_stats_spell = (function()
             if bit.band(spell.flags, spell_flags.heal) ~= 0 then
 
                 -- illumination
-                local pts = l_talents.pts[109];
+                local pts = talent_pts(effects, 109);
                 if pts ~= 0 then
                     stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + pts * 0.2 * stats.original_base_cost;
                 end
 
-                if loadout.enchants[lookups.rune_fanaticism] and spell.direct then
+                if has_enchant(effects, lookups.rune_fanaticism) and spell.direct then
                     add_extra_effect(
                         stats,
                         bit.bor(effect_flags.is_periodic, effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod),
@@ -65,6 +66,13 @@ local class_stats_spell = (function()
                         12,
                         1);
                 end
+            else
+                if has_enchant(effects, lookups.rune_wrath) then
+                    stats.extra_crit = stats.extra_crit + loadout.melee_crit;
+                end
+                if has_enchant(effects, lookups.rune_infusion_of_light) and bid == spids.holy_shock then
+                    stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + stats.cost_actual;
+                end
             end
         end
     elseif class == classes.hunter then
@@ -76,7 +84,7 @@ local class_stats_spell = (function()
     elseif class == classes.priest then
         return function(anycomp, bid, stats, spell, loadout, effects)
             if bit.band(spell_flags.heal, spell.flags) ~= 0 then
-                if loadout.enchants[lookups.rune_divine_aegis] then
+                if has_enchant(effects, lookups.rune_divine_aegis) then
                     if spell.direct then
                         local aegis_flags = bit.bor(effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod);
                         add_extra_effect(stats,
@@ -100,11 +108,21 @@ local class_stats_spell = (function()
         end
     elseif class == classes.shaman then
         return function(anycomp, bid, stats, spell, loadout, effects)
-            if num_set_pieces(loadout, 1816) >= 2 and spell.direct and get_buff(loadout, "player", lookups.water_shield, true) then
+
+            -- shaman clearcast
+            if bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 then
+                -- clearcast
+                local pts = talent_pts(effects, 106);
+                if pts ~= 0 then
+                    stats.clearcast_p = stats.clearcast_p + 0.1;
+                end
+            end
+
+            if num_set_pieces(effects, 1816) >= 2 and spell.direct and get_buff(loadout, "player", lookups.water_shield, true) then
 
                 stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + 0.04 * loadout.resources_max[powers.mana];
             end
-            if loadout.enchants[lookups.rune_overload] and
+            if has_enchant(effects, lookups.rune_overload) and
                    (bid == spids.chain_heal or
                     bid == spids.chain_lightning or
                     bid == spids.healing_wave or
@@ -120,17 +138,33 @@ local class_stats_spell = (function()
                     0.01*dummy_value(lookups.overload, 0)/proc
                 );
             end
+            if bid == spids.healing_wave or
+                bid == spids.lesser_healing_wave or
+                bid == spids.riptide then
+                if num_set_pieces(effects, 207) >= 5 or num_set_pieces(effects, 1713) >= 4 then
+                    stats.resource_refund = stats.resource_refund + 0.25 * 0.35 * stats.original_base_cost;
+                end
+                if has_enchant(effects, lookups.rune_ancestral_awakening) then
+                    add_extra_effect(
+                        stats,
+                        bit.bor(effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod),
+                        1.0,
+                        spell_lname(lookups.ancestral_awakening),
+                        0.01*dummy_value(lookups.ancestral_awakening, 0)
+                    );
+                end
+            end
 
         end
     elseif class == classes.mage then
         return function(anycomp, bid, stats, spell, loadout, effects)
 
             if bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 then
-                if loadout.enchants[lookups.rune_burnout] and spell.direct then
+                if has_enchant(effects, lookups.rune_burnout) and spell.direct then
                     stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + 0.01 * base_mana;
                 end
 
-                if num_set_pieces(loadout, 1807) >= 6 and bid == spids.fireball then
+                if num_set_pieces(effects, 1807) >= 6 and bid == spids.fireball then
                     add_extra_effect(stats,
                         effect_flags.is_periodic,
                         1.0,
@@ -140,7 +174,7 @@ local class_stats_spell = (function()
                         2);
                 end
 
-                if num_set_pieces(loadout, 1808) >= 2 and bid == spids.arcane_missiles then
+                if num_set_pieces(effects, 1808) >= 2 and bid == spids.arcane_missiles then
                     stats.resource_refund = stats.resource_refund + 0.5 * stats.original_base_cost;
                 end
                 if bid == spids.arcane_surge then
@@ -151,10 +185,10 @@ local class_stats_spell = (function()
         end
     elseif class == classes.warlock then
         return function(anycomp, bid, stats, spell, loadout, effects)
-            if loadout.enchants[lookups.rune_dance_of_the_wicked] and spell.direct then
+            if has_enchant(effects, lookups.rune_dance_of_the_wicked) and spell.direct then
                 stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + 0.02 * loadout.resources_max[powers.mana];
             end
-            if loadout.enchants[lookups.rune_soul_siphon] then
+            if has_enchant(effects, lookups.rune_soul_siphon) then
                 if bid == spids.drain_soul and loadout.enemy_hp_perc and loadout.enemy_hp_perc <= 0.2 then
                     stats.target_vuln_mod_mul =
                         stats.target_vuln_mod_mul * math.min(2.5, 1.0 + 0.5 * effects.raw.class_misc);
@@ -163,7 +197,7 @@ local class_stats_spell = (function()
                         stats.target_vuln_mod_mul * math.min(1.18, 1.0 + 0.06 * effects.raw.class_misc);
                 end
             end
-            if bid == spids.shadow_bolt and num_set_pieces(loadout, 1820) >= 6 then
+            if bid == spids.shadow_bolt and num_set_pieces(effects, 1820) >= 6 then
                 stats.target_vuln_mod_mul =
                     stats.target_vuln_mod_mul * math.min(1.3, 1.1 + 0.05 * effects.raw.class_misc);
             end
@@ -171,7 +205,12 @@ local class_stats_spell = (function()
     elseif class == classes.druid then
         return function(anycomp, bid, stats, spell, loadout, effects)
             if bit.band(spell.flags, spell_flags.heal) ~= 0 then
-                if loadout.enchants[lookups.rune_living_seed] then
+
+                if bid == spids.lifebloom then
+                    stats.resource_refund_mul_hit = stats.resource_refund + 0.5 * stats.cost_actual;
+                end
+
+                if has_enchant(effects, lookups.rune_living_seed) then
                     if spell.direct or bid == spids.swiftmend then
                         add_extra_effect(stats,
                                          bit.bor(effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod),
@@ -186,7 +225,7 @@ local class_stats_spell = (function()
 
                     stats.target_vuln_mod_mul = stats.target_vuln_mod_mul * 1.2;
                 end
-                if num_set_pieces(loadout, 1835) >= 4 and
+                if num_set_pieces(effects, 1835) >= 4 and
                     (bid == spids.healing_touch or bid == spids.nourish and bid == spids.regrowth or bid == spids.regrowth_2) then
                         add_extra_effect(
                             stats,
@@ -196,7 +235,7 @@ local class_stats_spell = (function()
                             0.01*dummy_value(1213160, 0));
                 end
             else
-                if num_set_pieces(loadout, 1838) >= 4 and
+                if num_set_pieces(effects, 1838) >= 4 and
                     (bid == spids.shred or bid == spids.ferocious_bite or bid == spids.mangle or bid == spids.mangle_2 or bid == spids.mangle_3) then
                         add_extra_effect(
                             stats,
@@ -229,9 +268,17 @@ if class == classes.shaman then
 --elseif class == classes.paladin then
 --    special_abilities = {
 --    };
---elseif class == classes.mage then
---    special_abilities = {
---    };
+elseif class == classes.mage then
+    special_abilities = {
+        [spids.mana_shield] = function(spell, info, loadout, stats, effects)
+            local pts = talent_pts(effects, 110);
+            local drain_mod = 0.1 * pts;
+            if has_enchant(effects, lookups.rune_advanced_warding) then
+                drain_mod = drain_mod + 0.5;
+            end
+            stats.cost = stats.cost + 2 * info.min_noncrit_if_hit1 * (1.0 - drain_mod);
+        end,
+    };
 --elseif class == classes.rogue then
 --    special_abilities = {
 --    };
@@ -252,7 +299,7 @@ local function stats_glance(stats, bid, loadout)
     local glance_p = 0.1 + (loadout.target_lvl*5 - math.min(loadout.lvl*5, stats.attack_skill)) * 0.02;
     local glance_min =
         math.max(0.01, math.min(0.91, 1.3 - 0.05*(loadout.target_defense-stats.attack_skill)))
-    local glance_max = 
+    local glance_max =
         math.max(0.2, math.min(0.99, 1.3 - 0.03*(loadout.target_defense-stats.attack_skill)))
 
     return math.max(0.0, math.min(1.0, glance_p)), glance_min, glance_max;

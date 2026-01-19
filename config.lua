@@ -13,7 +13,7 @@ local spell_filter_options = {
     spells_filter_only_highest_learned_ranks = false
 };
 
--- Avoiding all bit flags here simply any changes between versions
+-- Fairly flat settings structure to simplify transitions between versions
 local default_settings     = {
     -- tooltip
     tooltip_display_addon_name                                  = true,
@@ -36,9 +36,9 @@ local default_settings     = {
     tooltip_display_avg_cast                                    = true,
     tooltip_display_cast_until_oom                              = false,
     tooltip_display_cast_and_tap                                = false,
-    tooltip_display_sp_effect_calc                              = false,
+    tooltip_display_sp_effect_calc                              = true,
     tooltip_display_sp_effect_ratio                             = false,
-    tooltip_display_base_mod                                    = false,
+    --tooltip_display_base_mod                                    = false,
     tooltip_display_spell_id                                    = false,
     tooltip_display_eval_options                                = true,
     tooltip_display_resource_regen                              = true,
@@ -53,6 +53,11 @@ local default_settings     = {
     tooltip_item_leveling_skill_normalize                       = true,
     tooltip_item_weapon_skill                                   = true,
     tooltip_item_smart                                          = true,
+
+    tooltip_item_apply_set_bonuses                              = false,
+    tooltip_item_apply_gems                                     = false,
+    tooltip_item_apply_enchant                                  = false,
+
     tooltip_item_show_evaluation_modes                          = false,
     tooltip_item_ignore_unequippable                            = false,
     tooltip_item_ignore_cloth                                   = false,
@@ -256,6 +261,11 @@ local default_settings     = {
     general_prio_multiplied_effect                              = true,
     general_average_proc_effects                                = true,
 
+    -- general calc settings
+    general_calc_secondary_tooltip                              = true,
+    general_calc_stats_raw_dump                                 = false,
+    general_calc_global_compare                                 = false,
+
     -- general color palette settings
     general_color_normal_r                                      = 232,
     general_color_normal_g                                      = 225,
@@ -312,6 +322,24 @@ local default_settings     = {
     general_color_threat_g                                      = 105,
     general_color_threat_b                                      = 25,
 
+    -- loadout settings
+    loadout_use_custom_lvl                                      = false,
+    loadout_lvl                                                 = 1,
+    loadout_default_target_lvl_diff                             = 3,
+    loadout_default_target_hp_perc                              = 100.0,
+    loadout_default_target_creature_type                        = 0,
+    loadout_target_res                                          = 0,
+    loadout_target_pvpres                                       = 0,
+    loadout_target_automatic_armor                              = true,
+    loadout_target_automatic_armor_heavy                        = true,
+    loadout_target_automatic_armor_medium                       = false,
+    loadout_target_automatic_armor_light                        = false,
+    loadout_target_armor                                        = 0,
+    loadout_target_facing                                       = false,
+    loadout_unbounded_aoe_targets                               = 1,
+    loadout_always_max_resource                                 = false,
+    loadout_behind_target                                       = false,
+
     libstub_icon_conf                                           = { hide = false },
 };
 
@@ -334,7 +362,11 @@ local function load_persistent_data(persistent_data, template_data)
     -- load defaults for new settings
     for k, v in pairs(template_data) do
         if persistent_data[k] == nil then
-            persistent_data[k] = v
+            if type(v) == "table" then
+                persistent_data[k] = sc.utils.deep_table_copy(v);
+            else
+                persistent_data[k] = v
+            end
         end
     end
 end
@@ -356,41 +388,18 @@ local function default_p_acc()
     };
 end
 
-local default_loadout_config = {
-
-    name = "Main",
-
-    use_custom_talents = false,
-    custom_talents_code = "",
-    force_apply_buffs = false,
-    use_custom_lvl = false,
-    lvl = 1,
-    default_target_lvl_diff = 3,
-    default_target_hp_perc = 100.0,
-    default_target_creature_type = 0,
-    target_res = 0,
-    target_pvpres = 0,
-    target_automatic_armor = true,
-    target_automatic_armor_pct = 100,
-    target_armor = 0,
-    target_facing = false,
-    unbounded_aoe_targets = 1,
-    always_max_resource = false,
-    behind_target = false,
-    extra_mana = 0,
-
+local default_calculator_save_config = {
+    items = {},
+    stats = {},
+    talents = {},
     buffs = {},
-    target_buffs = {}
 };
 
 local function default_p_char()
     local data = {
         main_spec_profile = "Primary",
         second_spec_profile = "Primary",
-        active_loadout = 1,
-        loadouts = {
-            sc.utils.deep_table_copy(default_loadout_config),
-        },
+        calculator_saves = {},
     };
     return data;
 end
@@ -414,8 +423,9 @@ local function load_config()
         __sc_p_char = {};
     end
     load_persistent_data(__sc_p_char, default_p_char());
-    for _, v in pairs(__sc_p_char.loadouts) do
-        load_persistent_data(v, default_loadout_config);
+
+    for _, v in pairs(__sc_p_char.calculator_saves) do
+        load_persistent_data(v, default_calculator_save_config);
     end
 end
 
@@ -480,14 +490,14 @@ local function activate_settings()
     );
 end
 
-local function set_active_loadout(idx)
-    __sc_p_char.active_loadout = idx;
-    config.loadout = __sc_p_char.loadouts[idx];
-end
-
-local function activate_loadout_config()
-    activate_config("loadout", "__sc_frame_loadout_");
-end
+--local function set_active_loadout(idx)
+--    __sc_p_char.active_loadout = idx;
+--    config.loadout = __sc_p_char.loadouts[idx];
+--end
+--
+--local function activate_loadout_config()
+--    activate_config("loadout", "__sc_frame_loadout_");
+--end
 
 local function save_config()
 
@@ -545,78 +555,15 @@ local function new_profile_from_active_copy(profile_name)
     return new_profile(profile_name, __sc_p_acc.profiles[config.active_profile_name]);
 end
 
-local function delete_loadout()
-        local n = #__sc_p_char.loadouts;
-        if n == 1 then
-            return;
-        end
-
-        if n ~= active_loadout then
-            for i = __sc_p_char.active_loadout, n-1 do
-                __sc_p_char.loadouts[i] = __sc_p_char.loadouts[i+1];
-            end
-        end
-        __sc_p_char.loadouts[n] = nil;
-
-        config.set_active_loadout(1);
-end
-
-local function reset_loadout()
-
-    local idx = __sc_p_char.active_loadout;
-    local name = __sc_p_char.loadouts[idx].name;
-    __sc_p_char.loadouts[idx] = {name = name};
-    load_persistent_data(__sc_p_char.loadouts[idx], default_loadout_config);
-
-    config.set_active_loadout(idx);
-end
-
-local function new_loadout(name, loadout_to_copy)
-    if name == "" then
-        return false;
-    end
-    for _, v in pairs(__sc_p_char.loadouts) do
-        if v.name == name then
-            return false;
-        end
-    end
-
-    local n = #__sc_p_char.loadouts + 1;
-    __sc_p_char.loadouts[n] = {};
-    load_persistent_data(__sc_p_char.loadouts[n], loadout_to_copy);
-    __sc_p_char.active_loadout = n;
-    __sc_p_char.loadouts[n].name = name;
-
-    set_active_loadout(n);
-
-    return true;
-end
-
-local function new_loadout_from_active_copy(name)
-    return new_loadout(name, sc.utils.deep_table_copy(__sc_p_char.loadouts[__sc_p_char.active_loadout]));
-end
-
-local function new_loadout_from_default(name)
-    return new_loadout(name, sc.utils.deep_table_copy(default_loadout_config));
-end
-
 --------------------------------------------------------------------------------
 config.delete_profile = delete_profile;
 config.reset_profile = reset_profile;
-config.reset_loadout = reset_loadout;
-config.delete_loadout = delete_loadout;
 config.new_profile_from_default = new_profile_from_default;
 config.new_profile_from_active_copy = new_profile_from_active_copy;
-config.load_settings = load_settings;
 config.load_config = load_config;
 config.save_config = save_config;
 config.set_active_settings = set_active_settings;
 config.activate_settings = activate_settings;
-config.activate_loadout_config = activate_loadout_config;
-config.set_active_loadout = set_active_loadout;
-config.new_loadout_from_active_copy = new_loadout_from_active_copy;
-config.new_loadout_from_default = new_loadout_from_default;
-config.active_profile_name = active_profile_name;
 config.spec_keys = spec_keys;
 config.spell_filter_options = spell_filter_options;
 config.default_settings = default_settings;

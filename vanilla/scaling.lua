@@ -1,13 +1,16 @@
 
 local _, sc = ...;
 
-local classes   = sc.classes;
-local class     = sc.class;
+local classes               = sc.classes;
+local class                 = sc.class;
+
+local combat_ratings        = sc.utils.combat_ratings;
 ---------------------------------------------------------------------------------------------------
 local scaling = {};
 
 local dps_per_ap = 1/14;
 local mana_per_int = 15;
+local hp_per_stam = 10;
 
 local function spirit_mana_regen(spirit)
     -- src: https://wowwiki-archive.fandom.com/wiki/Spirit
@@ -59,121 +62,36 @@ local rap_per_agi = {
     [classes.druid]   = 0,
 };
 
+-- combat rating weights are multiplied by the general combat rating level scaling formula
+local cr_weights = {
+    -- in vanilla we treat this as 1:1 for generality
+    [combat_ratings.CR_DEFENSE_SKILL]                  = 1,
+    [combat_ratings.CR_BLOCK]                          = 1,
+    [combat_ratings.CR_DODGE]                          = 1,
+    [combat_ratings.CR_PARRY]                          = 1,
+    [combat_ratings.CR_HIT_MELEE]                      = 1,
+    [combat_ratings.CR_HIT_RANGED]                     = 1,
+    [combat_ratings.CR_CRIT_MELEE]                     = 1,
+    [combat_ratings.CR_CRIT_RANGED]                    = 1,
+    [combat_ratings.CR_HASTE_MELEE]                    = 1,
+    [combat_ratings.CR_HASTE_RANGED]                   = 1,
+    [combat_ratings.CR_EXPERTISE]                      = 1,
 
--- NOTE: intellect to spell crit and agi to physical crit
---       is not a linear scale by level. However we approximate here
---       with linear interpolation between lvl 1 and 60.
---       We may want better accuracy here
-local class_int_to_spell_crit = {
-    [classes.warrior] = {
-        [1] = 0.0,
-        [60] = 0.0,
-    },
-    [classes.paladin] = {
-        [1] = 13.333,
-        [60] = 59.880,
-    },
-    [classes.hunter] = {
-        [1] = 14.286,
-        [60] = 60.606,
-    },
-    [classes.rogue] = {
-        [1] = 0.0,
-        [60] = 0.0,
-    },
-    [classes.priest] = {
-        [1] = 5.238,
-        [60] = 59.524,
-    },
-    [classes.shaman] = {
-        [1] = 7.776,
-        [60] = 59.172,
-    },
-    [classes.mage] = {
-        [1] = 5.208,
-        [60] = 59.524,
-    },
-    [classes.warlock] = {
-        [1] = 6.666,
-        [60] = 60.606,
-    },
-    [classes.druid] = {
-        [1] = 6.873,
-        [60] = 59.880,
-    },
+    [combat_ratings.CR_HIT_SPELL]                      = 1,
+    [combat_ratings.CR_CRIT_SPELL]                     = 1,
+    [combat_ratings.CR_HASTE_SPELL]                    = 1,
+
+    [combat_ratings.CR_RESILIENCE_CRIT_TAKEN]          = 1,
 };
-
-local class_agi_to_physical_crit = {
-    [classes.warrior] = {
-        [1] = 4.000,
-        [60] = 20.000,
-    },
-    [classes.paladin] = {
-        [1] = 4.651,
-        [60] = 19.763,
-    },
-    [classes.hunter] = {
-        [1] = 5.600,
-        [60] = 52.910,
-    },
-    [classes.rogue] = {
-        [1] = 2.300,
-        [60] = 28.986,
-    },
-    [classes.priest] = {
-        [1] = 10.000,
-        [60] = 20.000,
-    },
-    [classes.shaman] = {
-        [1] = 6.061,
-        [60] = 19.685,
-    },
-    [classes.mage] = {
-        [1] = 11.111,
-        [60] = 19.455,
-    },
-    [classes.warlock] = {
-        [1] = 6.666,
-        [60] = 20.000,
-    },
-    [classes.druid] = {
-        [1] = 4.878,
-        [60] = 20.000,
-    },
-};
-
-local function lerp_by_lvl(by_lvl, lvl, min, max)
-
-    local range = max-min;
-    return by_lvl[min] + (by_lvl[max] - by_lvl[min])*(lvl-min)/range;
-end
-
-local function int_to_spell_crit(int, lvl)
-    local int_to_crit = lerp_by_lvl(class_int_to_spell_crit[class], lvl, 1, 60);
-    if int_to_crit == 0 then
-        return 0;
-    else
-        return 0.01*int/int_to_crit;
-    end
-end
-
-local function agi_to_physical_crit(agi, lvl)
-    local agi_to_crit = lerp_by_lvl(class_agi_to_physical_crit[class], lvl, 1, 60);
-    if agi_to_crit == 0 then
-        return 0;
-    else
-        return 0.01*agi/agi_to_crit;
-    end
-end
 
 scaling.dps_per_ap                       = dps_per_ap;
 scaling.spirit_mana_regen                = spirit_mana_regen;
 scaling.mana_per_int                     = mana_per_int;
-scaling.int_to_spell_crit                = int_to_spell_crit;
-scaling.agi_to_physical_crit             = agi_to_physical_crit;
+scaling.hp_per_stam                      = hp_per_stam;
 scaling.ap_per_str                       = ap_per_str;
 scaling.ap_per_agi                       = ap_per_agi;
 scaling.rap_per_agi                      = rap_per_agi;
+scaling.cr_weights                       = cr_weights;
 
 sc.scaling = scaling;
 
