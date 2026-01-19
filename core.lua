@@ -24,6 +24,7 @@ local activate_settings                     = sc.config.activate_settings;
 
 local reassign_overlay_icon                 = sc.overlay.reassign_overlay_icon;
 local update_overlay                        = sc.overlay.update_overlay;
+local spell_tracking                        = sc.overlay.spell_tracking;
 
 local update_tooltip                        = sc.tooltip.update_tooltip;
 local write_spell_tooltip                   = sc.tooltip.write_spell_tooltip;
@@ -63,7 +64,6 @@ core.addon_message_on_update    = false;
 core.old_ranks_checks_needed    = true;
 core.rescan_action_bar_needed   = false;
 
-core.beacon_snapshot_time       = -1000;
 local addon_msg_sc_id = "__SpellCoda";
 
 local function generated_data_is_outdated(loaded_version, gen_version)
@@ -106,76 +106,6 @@ local function client_age_days()
     return diff_days;
 end
 
-local cc_spell_id           = 0;
-local cc_noexpire           = false;
-local cc_channel            = true;
-local cc_expire_timer       = 0;
-local cc_waiting_on_anim    = false;
-local cc_enqueued_spell_id  = 0;
-
-local function cc_enqueue(spell_id)
-
-    if sc.overlay.cc_f1.icon_frame.animating and not config.settings.overlay_cc_transition_nocd then
-        cc_waiting_on_anim = true;
-        cc_enqueued_spell_id = spell_id;
-    else
-        cc_spell_id = spell_id;
-        sc.overlay.cc_new_spell(spell_id);
-        cc_waiting_on_anim = false;
-        cc_enqueued_spell_id = 0;
-    end
-end
-
-local function set_cc_spell(spell_id)
-
-    if spells[spell_id] and
-        (not config.settings.overlay_cc_only_eval or
-        bit.band(spells[spell_id].flags, spell_flags.eval) ~= 0) then
-
-        cc_expire_timer = config.settings.overlay_cc_hanging_time;
-        if cc_spell_id ~= spell_id then
-            cc_enqueue(spell_id);
-        end
-    end
-end
-
-local auto_repeat_spells_tracking = {};
-for _, v in pairs({"attack", "shoot", "auto_shot"}) do
-    if sc.spids[v] then
-        table.insert(auto_repeat_spells_tracking, sc.spids[v]);
-    end
-end
-
-local function spell_tracking(dt)
-    cc_expire_timer = cc_expire_timer - dt;
-    if cc_noexpire then
-        return;
-    end
-    if cc_expire_timer < 0.0 then
-
-        -- degrade to autorepeat or 0
-        local is_repeating = false;
-        for _, id in pairs(auto_repeat_spells_tracking) do
-            if IsCurrentSpell(id) then
-                is_repeating = true;
-                set_cc_spell(id);
-                break;
-            end
-        end
-
-        if not is_repeating then
-
-            if cc_spell_id ~= 0 then
-                cc_enqueue(0);
-            end
-            cc_spell_id = 0;
-        end
-    end
-
-    if cc_waiting_on_anim then
-        cc_enqueue(cc_enqueued_spell_id);
-    end
-end
 
 local function doing_raid_update()
     local in_instance, instance_type = IsInInstance();
@@ -267,58 +197,6 @@ local function refresh_tooltip()
 end
 
 local event_dispatch = {
-    ["UNIT_SPELLCAST_SUCCEEDED"] = function(self, caster, _, spell_id)
-        if caster == "player" then
-            if spell_id == 53563 or spell_id == 407613 then -- beacon
-                core.beacon_snapshot_time = core.addon_running_time;
-            end
-            set_cc_spell(spell_id);
-            if not cc_channel then
-                cc_noexpire = false;
-            end
-        end
-    end,
-    ["UNIT_SPELLCAST_CHANNEL_START"] = function(_, caster, _, spell_id)
-        if caster == "player" then
-            set_cc_spell(spell_id);
-            cc_noexpire = true;
-            cc_channel = true;
-        end
-    end,
-    ["UNIT_SPELLCAST_CHANNEL_STOP"] = function(_, caster, _, spell_id)
-        if caster == "player" then
-            cc_noexpire = false;
-            cc_channel = false;
-            cc_expire_timer = config.settings.overlay_cc_hanging_time;
-        end
-    end,
-    ["UNIT_SPELLCAST_START"] = function(self, caster, _, spell_id)
-        if caster == "player" then
-            set_cc_spell(spell_id);
-            cc_noexpire = true;
-        end
-    end,
-    ["UNIT_SPELLCAST_STOP"] = function(self, caster, _, spell_id)
-        if caster == "player" then
-            cc_noexpire = false;
-            cc_expire_timer = config.settings.overlay_cc_hanging_time;
-        end
-    end,
-    ["UNIT_SPELLCAST_FAILED"] = function(self, caster, _, spell_id)
-        if caster == "player" then
-            cc_noexpire = false;
-            cc_expire_timer = config.settings.overlay_cc_hanging_time;
-        end
-    end,
-    ["START_AUTOREPEAT_SPELL"] = function(self, arg1, arg2, arg4)
-        cc_noexpire = false;
-        for _, id in pairs(auto_repeat_spells_tracking) do
-            if IsCurrentSpell(id) then
-                set_cc_spell(id);
-                return;
-            end
-        end
-    end,
     ["ADDON_LOADED"] = function(_, arg)
         if arg == "SpellCoda" then
             load_config();
@@ -599,7 +477,7 @@ sc.ext.version_id = core.version_id;
 
 __SC = sc.ext;
 
-__spellcoda_debug__ = 1;
+--__spellcoda_debug__ = 1;
 --__spellcoda_test_all_data__ = 1;
 --__spellcoda_test_all_spells__ = 1;
 

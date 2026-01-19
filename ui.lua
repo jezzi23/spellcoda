@@ -2472,7 +2472,10 @@ local function create_sw_ui_overlay_frame(pframe)
 
                     local alpha = 1.0;
                     if self:GetChecked() then
+                        sc.overlay.ccf_hook_events(false);
                         alpha = 0.2;
+                    else
+                        sc.overlay.ccf_hook_events(true);
                     end
                     for _, v in ipairs(cfs) do
                         v:SetAlpha(alpha);
@@ -3372,19 +3375,19 @@ local function load_calculator_plan(plan)
         end
     end
     for k, v in pairs(default_buffs_plan) do
-        if v == "table" then
-            if not plan.buffs[k] then
-                working_buffs[k] = {};
-            else
+        if type(v) == "table" then
+            working_buffs[k] = {};
+            if plan.buffs[k] then
                 for kk, vv in pairs(plan.buffs[k]) do
                     working_buffs[k][kk] = vv;
                 end
             end
-        end
-        if not plan.buffs[k] then
-            working_buffs[k] = v;
         else
-            working_buffs[k] = plan.buffs[k];
+            if not plan.buffs[k] then
+                working_buffs[k] = v;
+            else
+                working_buffs[k] = plan.buffs[k];
+            end
         end
     end
     update_talents_frame();
@@ -3421,11 +3424,11 @@ local function save_calculator_plan(plan_name)
     plan.buffs.use_custom = working_buffs.use_custom;
     plan.buffs.preserve_active = working_buffs.preserve_active;
     plan.buffs.player_buffs = {};
-    for k, v in pairs(plan.buffs.player_buffs) do
+    for k, v in pairs(working_buffs.player_buffs) do
         plan.buffs.player_buffs[k] = v;
     end
     plan.buffs.target_buffs = {};
-    for k, v in pairs(plan.buffs.target_buffs) do
+    for k, v in pairs(working_buffs.target_buffs) do
         plan.buffs.target_buffs[k] = v;
     end
 
@@ -3966,7 +3969,7 @@ local function create_calculator_items_subframe(pframe)
     f:Hide();
     pframe.items.plan_rename_editbox = f;
 
-    rhs_y_offset = rhs_y_offset - 40;
+    rhs_y_offset = rhs_y_offset - 80;
 
     f = CreateFrame("Button", nil, pframe.items, "UIPanelButtonTemplate");
     f:SetPoint("TOPRIGHT", 5, rhs_y_offset+5);
@@ -3986,6 +3989,7 @@ local function create_calculator_items_subframe(pframe)
             pframe.items.plan_rename_editbox:SetText(plan_name);
             pframe.items.plan_rename_editbox:Show();
             pframe.items.plan_rename_fstr:Show();
+            pframe.save_plan_btn:Enable();
         end
     end);
     pframe.items.save_plan_as_btn = f;
@@ -4026,7 +4030,7 @@ local function create_calculator_items_subframe(pframe)
         if working_name ~= "" then
 
             __sc_p_char.calculator_saves[working_name] = nil;
-            pframe.save_plan_btn:Disable("");
+            pframe.save_plan_btn:Disable();
 
             pframe.items.plan_rename_fstr:Hide();
             pframe.items.plan_rename_editbox:Hide();
@@ -6255,9 +6259,9 @@ end
 local function load_sw_ui()
 
     local tab_display_names = {
-        spells_frame = L["Spells"],
-        calculator_frame = L["Calculator"],
-        loadout_frame = L["Loadout"],
+        spells_frame = "     "..L["Spells"],
+        calculator_frame = "    "..L["Calculator"],
+        loadout_frame = "     "..L["Loadout"],
         tooltip_frame = L["Tooltip"],
         overlay_frame = L["Overlay"],
         settings_frame = "|TInterface\\Buttons\\UI-OptionsButton:0:0:0:-3|t",
@@ -6284,6 +6288,31 @@ local function load_sw_ui()
         v:SetID(k);
     end
     PanelTemplates_SetNumTabs(__sc_frame, #__sc_frame.tabs);
+
+    local spell_book_texture = __sc_frame.tabs[1]:CreateTexture(nil, "ARTWORK");
+    spell_book_texture:SetSize(12, 12);
+    spell_book_texture:SetTexture("Interface\\Icons\\INV_Misc_Book_09");
+    spell_book_texture:SetPoint("LEFT", 8, -7);
+    spell_book_texture:SetTexCoord(0.08, 0.92, 0.08, 0.92);
+
+
+    local calc_tab =  __sc_frame.tabs[2];
+    local character_portrait = calc_tab:CreateTexture(nil, "ARTWORK");
+    character_portrait:SetSize(16, 16);
+    character_portrait:SetPoint("LEFT", 6, -6);
+    SetPortraitTexture(character_portrait, "player");
+    calc_tab:RegisterEvent("UNIT_PORTRAIT_UPDATE");
+    calc_tab:SetScript("OnEvent", function(self, event, unit)
+        if unit == "player" then
+            SetPortraitTexture(character_portrait, "player");
+        end
+    end);
+
+    local loadout_texture = __sc_frame.tabs[3]:CreateTexture(nil, "ARTWORK");
+    loadout_texture:SetSize(12, 12);
+    loadout_texture:SetTexture("Interface\\Icons\\Ability_Warrior_OffensiveStance");
+    loadout_texture:SetPoint("LEFT", 8, -7);
+    loadout_texture:SetTexCoord(0.08, 0.92, 0.08, 0.92);
 
     create_sw_spell_id_viewer();
     create_sw_item_id_viewer();

@@ -1008,6 +1008,7 @@ local function update_overlay_frame(frame, loadout, effects, id, eval_flags)
     end
 end
 
+
 local ccf_parent = CreateFrame("Frame", nil, UIParent);
 ccf_parent:RegisterForDrag("LeftButton");
 ccf_parent:SetSize(250, 100);
@@ -1124,6 +1125,152 @@ local function cc_demo_dummy_fill(info, stats)
     stats.target_avg_resi = 0.2;
     stats.target_avg_resi_ot = 0.2;
 end
+
+local cc_spell_id           = 0;
+local cc_noexpire           = false;
+local cc_channel            = true;
+local cc_expire_timer       = 0;
+local cc_waiting_on_anim    = false;
+local cc_enqueued_spell_id  = 0;
+
+local function cc_enqueue(spell_id)
+
+    if sc.overlay.cc_f1.icon_frame.animating and not config.settings.overlay_cc_transition_nocd then
+        cc_waiting_on_anim = true;
+        cc_enqueued_spell_id = spell_id;
+    else
+        cc_spell_id = spell_id;
+        cc_new_spell(spell_id);
+        cc_waiting_on_anim = false;
+        cc_enqueued_spell_id = 0;
+    end
+end
+
+local function set_cc_spell(spell_id)
+
+    if spells[spell_id] and
+        (not config.settings.overlay_cc_only_eval or
+        bit.band(spells[spell_id].flags, spell_flags.eval) ~= 0) then
+
+        cc_expire_timer = config.settings.overlay_cc_hanging_time;
+        if cc_spell_id ~= spell_id then
+            cc_enqueue(spell_id);
+        end
+    end
+end
+
+local auto_repeat_spells_tracking = {};
+for _, v in pairs({"attack", "shoot", "auto_shot"}) do
+    if sc.spids[v] then
+        table.insert(auto_repeat_spells_tracking, sc.spids[v]);
+    end
+end
+
+local function spell_tracking(dt)
+    cc_expire_timer = cc_expire_timer - dt;
+    if cc_noexpire then
+        return;
+    end
+    if cc_expire_timer < 0.0 then
+
+        -- degrade to autorepeat or 0
+        local is_repeating = false;
+        for _, id in pairs(auto_repeat_spells_tracking) do
+            if IsCurrentSpell(id) then
+                is_repeating = true;
+                set_cc_spell(id);
+                break;
+            end
+        end
+
+        if not is_repeating then
+
+            if cc_spell_id ~= 0 then
+                cc_enqueue(0);
+            end
+            cc_spell_id = 0;
+        end
+    end
+
+    if cc_waiting_on_anim then
+        cc_enqueue(cc_enqueued_spell_id);
+    end
+end
+
+local cc_event_dispatch = {
+    ["UNIT_SPELLCAST_SUCCEEDED"] = function(self, caster, _, spell_id)
+        if caster == "player" then
+            set_cc_spell(spell_id);
+            if not cc_channel then
+                cc_noexpire = false;
+            end
+        end
+    end,
+    ["UNIT_SPELLCAST_CHANNEL_START"] = function(_, caster, _, spell_id)
+        if caster == "player" then
+            set_cc_spell(spell_id);
+            cc_noexpire = true;
+            cc_channel = true;
+        end
+    end,
+    ["UNIT_SPELLCAST_CHANNEL_STOP"] = function(_, caster, _, spell_id)
+        if caster == "player" then
+            cc_noexpire = false;
+            cc_channel = false;
+            cc_expire_timer = config.settings.overlay_cc_hanging_time;
+        end
+    end,
+    ["UNIT_SPELLCAST_START"] = function(self, caster, _, spell_id)
+        if caster == "player" then
+            set_cc_spell(spell_id);
+            cc_noexpire = true;
+        end
+    end,
+    ["UNIT_SPELLCAST_STOP"] = function(self, caster, _, spell_id)
+        if caster == "player" then
+            cc_noexpire = false;
+            cc_expire_timer = config.settings.overlay_cc_hanging_time;
+        end
+    end,
+    ["UNIT_SPELLCAST_FAILED"] = function(self, caster, _, spell_id)
+        if caster == "player" then
+            cc_noexpire = false;
+            cc_expire_timer = config.settings.overlay_cc_hanging_time;
+        end
+    end,
+    ["START_AUTOREPEAT_SPELL"] = function(self, arg1, arg2, arg4)
+        cc_noexpire = false;
+        for _, id in pairs(auto_repeat_spells_tracking) do
+            if IsCurrentSpell(id) then
+                set_cc_spell(id);
+                return;
+            end
+        end
+    end,
+};
+
+
+ccf_parent:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
+    cc_event_dispatch[event](self, arg1, arg2, arg3);
+end);
+
+local function ccf_hook_events(should_hook)
+    if should_hook then
+        for k, v in pairs(cc_event_dispatch) do
+            ccf_parent:RegisterEvent(k);
+        end
+    else
+        for k, v in pairs(cc_event_dispatch) do
+            ccf_parent:UnregisterEvent(k);
+        end
+        cc_noexpire = false;
+        cc_expire_timer = 0;
+        overlay.cc_f1.icon_frame:Hide();
+        overlay.cc_f2.icon_frame:Hide();
+    end
+end
+
+ccf_hook_events(true);
 
 
 local active_ccf_labels = {};
@@ -1685,6 +1832,8 @@ overlay.overlay_reconfig                            = overlay_reconfig;
 overlay.init_ccfs                                   = init_ccfs;
 overlay.cc_new_spell                                = cc_new_spell;
 overlay.ccf_parent                                  = ccf_parent;
+overlay.spell_tracking                              = spell_tracking;
+overlay.ccf_hook_events                             = ccf_hook_events;
 overlay.cc_demo                                     = cc_demo;
 overlay.ccf_label_reconfig                          = ccf_label_reconfig;
 overlay.ccf_anim_reconfig                           = ccf_anim_reconfig;
