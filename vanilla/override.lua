@@ -280,7 +280,6 @@ elseif sc.class == sc.classes.rogue then
         bit.band(spells[spids.between_the_eyes].flags, bit.bnot(spell_flags.eval));
 
 elseif sc.class == sc.classes.paladin then
-    sc.friendly_buffs[407613] = {}; -- beacon of light, dummy value - handled manually
 
     -- Blessing of light needs special handling. Added here and 
     -- adjusted later for downranked holy lights
@@ -333,7 +332,7 @@ elseif sc.class == sc.classes.warrior then
     -- THREAT
     add_threat_mod_all_ranks({
         {spids.execute, 0.25},
-        {spids.thunderclap, 1.5},
+        {spids.thunder_clap, 1.5},
     });
 
     add_threat_flat_by_rank({

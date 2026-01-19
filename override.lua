@@ -7,6 +7,7 @@ local lookups                       = sc.lookups;
 local class                         = sc.class;
 local classes                       = sc.classes;
 local spids                         = sc.spids;
+local spell_flags                   = sc.spell_flags;
 ---------------------------------------------------------------------------------------------------
 
 if class == classes.paladin then

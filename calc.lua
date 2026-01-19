@@ -1751,10 +1751,6 @@ local function calc_expectation(info, spell, stats, loadout, num_unbounded_targe
 
     info.threat_st = info.threat_direct_st + info.threat_ot_st
     info.threat = info.threat_direct + info.threat_ot
-
-    if loadout.beacon and bit.band(spell.flags, spell_flags.heal) ~= 0 then
-        add_expectation_direct_st(info, 0.75);
-    end
 end
 
 local function direct_info(info, spell, loadout, stats, effects, eval_flags)

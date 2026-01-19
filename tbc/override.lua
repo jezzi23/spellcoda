@@ -216,7 +216,6 @@ elseif sc.class == sc.classes.rogue then
     end
 
 elseif sc.class == sc.classes.paladin then
-    sc.friendly_buffs[407613] = {}; -- beacon of light, dummy value - handled manually
 
     -- Blessing of light needs special handling. Added here and 
     -- adjusted later for downranked holy lights

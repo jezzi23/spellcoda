@@ -165,24 +165,12 @@ local function apply_buffs(loadout, effects, forced, undo)
         end
     end
 
-    local beacon_duration = 60;
-    if class == classes.paladin and has_enchant(effects, 407613) and
-        sc.core.beacon_snapshot_time + beacon_duration >= sc.core.addon_running_time then
-        loadout.beacon = true;
-    else
-        loadout.beacon = nil
-    end
-
     -- some shapeshifts like stances cannot be detected as buff
     -- assigned from data override
     if sc.shapeshift_id_to_effects and sc.shapeshift_id_to_effects[loadout.shapeshift] then
         for _, k in pairs(sc.shapeshift_id_to_effects[loadout.shapeshift]) do
             apply_effect(effects, k, sc.shapeshift_passives[k], forced, 1, undo);
         end
-    end
-
-    if class == classes.paladin and config.loadout.target_buffs[407613] then
-        loadout.beacon = true;
     end
 
     if __spellcoda_test_all_data__ then

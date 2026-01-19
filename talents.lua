@@ -122,13 +122,8 @@ local function apply_talents(loadout, effects, wowhead_code, forced, undo)
 
         -- Testing all talents
         local applied = 0;
-        for k, _ in pairs(loadout.talents.pts) do
-            if sc.talent_ranks[k] then
-                loadout.talents.pts[k] = #sc.talent_ranks[k];
-            else
-                loadout.talents.pts[k] = 1;
-            end
-
+        for k, _  in pairs(sc.talent_ranks) do
+            effects.talent_pts[k] = #sc.talent_ranks[k];
         end
 
         for _, v in pairs(sc.talent_ranks) do
