@@ -1,8 +1,8 @@
 -- THIS FILE IS GENERATED
 local _, sc = ...;
-sc.addon_build_id = 1876;
-sc.client_name_src = "wow_classic_era_ptr";
-sc.client_version_src = "2.5.5.65000";
+sc.addon_build_id = 1877;
+sc.client_name_src = "wow_anniversary";
+sc.client_version_src = "2.5.5.65417";
 _, sc.class = UnitClass("player");
 _, _, sc.race = UnitRace("player");
 sc.faction = UnitFactionGroup("player");
@@ -132,13 +132,18 @@ sc.comp_flags = {
 	applies_mh = bit.lshift(1, 6),
 	applies_oh = bit.lshift(1, 7),
 	applies_ranged = bit.lshift(1, 8),
-	full_oh = bit.lshift(1, 9),
-	normalized_weapon = bit.lshift(1, 10),
-	heal_to_full = bit.lshift(1, 11),
-	no_active_defense = bit.lshift(1, 12),
-	no_attack = bit.lshift(1, 13),
-	native_jumps = bit.lshift(1, 14),
-	jump_amp_as_per_extra_power = bit.lshift(1, 15),
+	magic_scaling_as_ap = bit.lshift(1, 9),
+	full_oh = bit.lshift(1, 10),
+	normalized_weapon = bit.lshift(1, 11),
+	base_weapon_dmg = bit.lshift(1, 12),
+	heal_to_full = bit.lshift(1, 13),
+	no_active_defense = bit.lshift(1, 14),
+	no_attack = bit.lshift(1, 15),
+	native_jumps = bit.lshift(1, 16),
+	jump_amp_as_per_extra_power = bit.lshift(1, 17),
+	bleed = bit.lshift(1, 18),
+	weapon_pct = bit.lshift(1, 19),
+	coef_applied_to_avg_weapon_dmg = bit.lshift(1, 20),
 };
 sc.aura_flags = {
 	mul = bit.lshift(1, 0),
@@ -169,3 +174,16 @@ sc.wep_subclass_to_normalized_speed = {
 	[8] = 3.3,
 	[7] = 2.4,
 };
+sc.two_handed_wep_subclasses = {
+	[1] = 1,
+	[6] = 1,
+	[10] = 1,
+	[5] = 1,
+	[8] = 1,
+};
+sc.gem_type_flags = {
+	meta =  1,
+	red =  2,
+	yellow =  4,
+	blue =  8,
+}
