@@ -4580,8 +4580,8 @@ sc.spells = {
 	},
 	[1120] = {
 		periodic = {
-			min = 0.11,
-			max = 0.11,
+			min = 11,
+			max = 11,
 			tick_time = 3.0000002,
 			dur = 15.000001,
 			school1 = schools.shadow,
@@ -5077,8 +5077,8 @@ sc.spells = {
 	},
 	[11675] = {
 		periodic = {
-			min = 0.90999997,
-			max = 0.90999997,
+			min = 91,
+			max = 91,
 			tick_time = 3.0000002,
 			dur = 15.000001,
 			school1 = schools.shadow,
@@ -5144,8 +5144,8 @@ sc.spells = {
 	},
 	[8288] = {
 		periodic = {
-			min = 0.31,
-			max = 0.31,
+			min = 31,
+			max = 31,
 			tick_time = 3.0000002,
 			dur = 15.000001,
 			school1 = schools.shadow,
@@ -5339,8 +5339,8 @@ sc.spells = {
 	},
 	[8289] = {
 		periodic = {
-			min = 0.59,
-			max = 0.59,
+			min = 59,
+			max = 59,
 			tick_time = 3.0000002,
 			dur = 15.000001,
 			school1 = schools.shadow,

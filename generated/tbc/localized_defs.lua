@@ -4,6 +4,22 @@ sc.locale = GetLocale();
 if false then
 elseif sc.locale == "enUS" then
 	sc.wpn_skill_lname_to_subclass = {
+		["Swords"] = 7,
+		["Axes"] = 0,
+		["Bows"] = 2,
+		["Guns"] = 3,
+		["Maces"] = 4,
+		["Two-Handed Swords"] = 8,
+		["Feral Combat"] = 28,
+		["Staves"] = 10,
+		["Two-Handed Maces"] = 5,
+		["Unarmed"] = 13,
+		["Two-Handed Axes"] = 1,
+		["Daggers"] = 15,
+		["Thrown"] = 16,
+		["Crossbows"] = 18,
+		["Wands"] = 19,
+		["Polearms"] = 6,
 	};
 	sc.creature_lname_to_id = {
 		["Beast"] = 1,
@@ -2068,6 +2084,22 @@ elseif sc.locale == "enUS" then
 	};
 elseif sc.locale == "enGB" then
 	sc.wpn_skill_lname_to_subclass = {
+		["Swords"] = 7,
+		["Axes"] = 0,
+		["Bows"] = 2,
+		["Guns"] = 3,
+		["Maces"] = 4,
+		["Two-Handed Swords"] = 8,
+		["Feral Combat"] = 28,
+		["Staves"] = 10,
+		["Two-Handed Maces"] = 5,
+		["Unarmed"] = 13,
+		["Two-Handed Axes"] = 1,
+		["Daggers"] = 15,
+		["Thrown"] = 16,
+		["Crossbows"] = 18,
+		["Wands"] = 19,
+		["Polearms"] = 6,
 	};
 	sc.creature_lname_to_id = {
 		["Beast"] = 1,
@@ -4132,6 +4164,22 @@ elseif sc.locale == "enGB" then
 	};
 elseif sc.locale == "frFR" then
 	sc.wpn_skill_lname_to_subclass = {
+		["Epées"] = 7,
+		["Haches"] = 0,
+		["Arcs"] = 2,
+		["Armes à feu"] = 3,
+		["Masse"] = 4,
+		["Epées à deux mains"] = 8,
+		["Combat farouche"] = 28,
+		["Bâtons"] = 10,
+		["Masses à deux mains"] = 5,
+		["Mains nues"] = 13,
+		["Haches à deux mains"] = 1,
+		["Dagues"] = 15,
+		["Armes de jet"] = 16,
+		["Arbalètes"] = 18,
+		["Baguettes"] = 19,
+		["Armes d'hast"] = 6,
 	};
 	sc.creature_lname_to_id = {
 		["Bête"] = 1,
@@ -6196,6 +6244,22 @@ elseif sc.locale == "frFR" then
 	};
 elseif sc.locale == "deDE" then
 	sc.wpn_skill_lname_to_subclass = {
+		["Schwerter"] = 7,
+		["Äxte"] = 0,
+		["Bögen"] = 2,
+		["Schusswaffen"] = 3,
+		["Streitkolben"] = 4,
+		["Zweihandschwerter"] = 8,
+		["Wilder Kampf"] = 28,
+		["Stäbe"] = 10,
+		["Zweihandstreitkolben"] = 5,
+		["Unbewaffnet"] = 13,
+		["Zweihandäxte"] = 1,
+		["Dolche"] = 15,
+		["Wurfwaffen"] = 16,
+		["Armbrüste"] = 18,
+		["Zauberstäbe"] = 19,
+		["Stangenwaffen"] = 6,
 	};
 	sc.creature_lname_to_id = {
 		["Wildtier"] = 1,
@@ -8260,6 +8324,22 @@ elseif sc.locale == "deDE" then
 	};
 elseif sc.locale == "itIT" then
 	sc.wpn_skill_lname_to_subclass = {
+		["Swords"] = 7,
+		["Axes"] = 0,
+		["Bows"] = 2,
+		["Guns"] = 3,
+		["Maces"] = 4,
+		["Two-Handed Swords"] = 8,
+		["Feral Combat"] = 28,
+		["Staves"] = 10,
+		["Two-Handed Maces"] = 5,
+		["Unarmed"] = 13,
+		["Two-Handed Axes"] = 1,
+		["Daggers"] = 15,
+		["Thrown"] = 16,
+		["Crossbows"] = 18,
+		["Wands"] = 19,
+		["Polearms"] = 6,
 	};
 	sc.creature_lname_to_id = {
 		["Beast"] = 1,
@@ -10324,6 +10404,22 @@ elseif sc.locale == "itIT" then
 	};
 elseif sc.locale == "koKR" then
 	sc.wpn_skill_lname_to_subclass = {
+		["도검류"] = 7,
+		["도끼류"] = 0,
+		["활류"] = 2,
+		["총기류"] = 3,
+		["둔기류"] = 4,
+		["양손 도검류"] = 8,
+		["야성"] = 28,
+		["지팡이류"] = 10,
+		["양손 둔기류"] = 5,
+		["맨손 전투"] = 13,
+		["양손 도끼류"] = 1,
+		["단검류"] = 15,
+		["투척 무기류"] = 16,
+		["석궁류"] = 18,
+		["마법봉류"] = 19,
+		["장창류"] = 6,
 	};
 	sc.creature_lname_to_id = {
 		["야수"] = 1,
@@ -12388,6 +12484,22 @@ elseif sc.locale == "koKR" then
 	};
 elseif sc.locale == "zhCN" then
 	sc.wpn_skill_lname_to_subclass = {
+		["单手剑"] = 7,
+		["单手斧"] = 0,
+		["弓"] = 2,
+		["枪械"] = 3,
+		["单手锤"] = 4,
+		["双手剑"] = 8,
+		["野性战斗"] = 28,
+		["法杖"] = 10,
+		["双手锤"] = 5,
+		["徒手战斗"] = 13,
+		["双手斧"] = 1,
+		["匕首"] = 15,
+		["投掷武器"] = 16,
+		["弩"] = 18,
+		["魔杖"] = 19,
+		["长柄武器"] = 6,
 	};
 	sc.creature_lname_to_id = {
 		["野兽"] = 1,
@@ -14452,6 +14564,22 @@ elseif sc.locale == "zhCN" then
 	};
 elseif sc.locale == "zhTW" then
 	sc.wpn_skill_lname_to_subclass = {
+		["劍"] = 7,
+		["斧"] = 0,
+		["弓"] = 2,
+		["槍械"] = 3,
+		["錘"] = 4,
+		["雙手劍"] = 8,
+		["野性戰鬥"] = 28,
+		["法杖"] = 10,
+		["雙手錘"] = 5,
+		["徒手戰鬥"] = 13,
+		["雙手斧"] = 1,
+		["匕首"] = 15,
+		["投擲武器"] = 16,
+		["弩"] = 18,
+		["魔杖"] = 19,
+		["長柄武器"] = 6,
 	};
 	sc.creature_lname_to_id = {
 		["野獸"] = 1,
@@ -16516,6 +16644,22 @@ elseif sc.locale == "zhTW" then
 	};
 elseif sc.locale == "ruRU" then
 	sc.wpn_skill_lname_to_subclass = {
+		["Мечи"] = 7,
+		["Топоры"] = 0,
+		["Луки"] = 2,
+		["Ружья"] = 3,
+		["Дробящее оружие"] = 4,
+		["Двуручные мечи"] = 8,
+		["Сила зверя"] = 28,
+		["Посохи"] = 10,
+		["Двуручное ударное оружие"] = 5,
+		["Рукопашный бой"] = 13,
+		["Двуручные топоры"] = 1,
+		["Кинжалы"] = 15,
+		["Метательное оружие"] = 16,
+		["Арбалеты"] = 18,
+		["Жезлы"] = 19,
+		["Древковое оружие"] = 6,
 	};
 	sc.creature_lname_to_id = {
 		["Животное"] = 1,
@@ -18580,6 +18724,22 @@ elseif sc.locale == "ruRU" then
 	};
 elseif sc.locale == "esES" then
 	sc.wpn_skill_lname_to_subclass = {
+		["Espadas"] = 7,
+		["Hachas"] = 0,
+		["Arcos"] = 2,
+		["Armas de fuego"] = 3,
+		["Mazas"] = 4,
+		["Espadas de dos manos"] = 8,
+		["Combate feral"] = 28,
+		["Bastones"] = 10,
+		["Mazas de dos manos"] = 5,
+		["Sin armas"] = 13,
+		["Hachas de dos manos"] = 1,
+		["Dagas"] = 15,
+		["Armas arrojadizas"] = 16,
+		["Ballestas"] = 18,
+		["Varitas"] = 19,
+		["Armas de asta"] = 6,
 	};
 	sc.creature_lname_to_id = {
 		["Bestia"] = 1,
@@ -20644,6 +20804,22 @@ elseif sc.locale == "esES" then
 	};
 elseif sc.locale == "esMX" then
 	sc.wpn_skill_lname_to_subclass = {
+		["Espadas"] = 7,
+		["Hachas"] = 0,
+		["Arcos"] = 2,
+		["Armas de fuego"] = 3,
+		["Mazas"] = 4,
+		["Espadas de dos manos"] = 8,
+		["Combate feral"] = 28,
+		["Bastones"] = 10,
+		["Mazas de dos manos"] = 5,
+		["Sin armas"] = 13,
+		["Hachas de dos manos"] = 1,
+		["Dagas"] = 15,
+		["Armas arrojadizas"] = 16,
+		["Ballestas"] = 18,
+		["Varitas"] = 19,
+		["Armas de asta"] = 6,
 	};
 	sc.creature_lname_to_id = {
 		["Bestia"] = 1,
@@ -22708,6 +22884,22 @@ elseif sc.locale == "esMX" then
 	};
 elseif sc.locale == "ptBR" then
 	sc.wpn_skill_lname_to_subclass = {
+		["Espadas"] = 7,
+		["Machados"] = 0,
+		["Arcos"] = 2,
+		["Armas de Fogo"] = 3,
+		["Maças"] = 4,
+		["Espadas de Duas Mãos"] = 8,
+		["Combate Feral"] = 28,
+		["Báculos"] = 10,
+		["Maças de Duas Mãos"] = 5,
+		["Combate desarmado"] = 13,
+		["Machados de Duas Mãos"] = 1,
+		["Adagas"] = 15,
+		["Arremesso"] = 16,
+		["Bestas"] = 18,
+		["Varinhas"] = 19,
+		["Armas de Haste"] = 6,
 	};
 	sc.creature_lname_to_id = {
 		["Fera"] = 1,
