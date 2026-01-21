@@ -571,7 +571,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                     loadout.target_lvl,
                     stats.armor,
                     L["Armor"],
-                    stats.target_resi,
+                    (spell.direct and stats.target_resi) or stats.target_resi_ot,
                     L["Res"],
                     en_hp
                 ),
@@ -2323,7 +2323,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     if config.settings.tooltip_item_weapon_skill then
         if should_fix_wpn_skill then
             wpn_skill_change = string.format(" %s: %d",
-                L["Skill"],
+                L["Skill as"],
                 loadout.lvl * 5
             );
         elseif tt.new_item.wpn_skill ~= tt.old_item1.wpn_skill then
@@ -2378,7 +2378,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             if config.settings.tooltip_item_weapon_skill then
                 if should_fix_wpn_skill then
                     wpn_skill_change = string.format(" %s: %d",
-                        L["Skill"],
+                        L["Skill as"],
                         loadout.lvl * 5
                     );
                 elseif tt.new_item.wpn_skill ~= tt.old_item2.wpn_skill then

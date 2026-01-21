@@ -8,6 +8,7 @@ local spell_filter_options = {
     spells_filter_unavailable                = true,
     spells_filter_learned_from_item          = true,
     spells_filter_pet                        = true,
+    spells_filter_talent                     = true,
     spells_filter_ignored_spells             = false,
     spells_filter_other_spells               = false,
     spells_filter_only_highest_learned_ranks = false

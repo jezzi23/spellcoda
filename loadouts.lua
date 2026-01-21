@@ -645,7 +645,7 @@ local function init_lnames()
 
     lnames = {
         schools =
-            {L["Physical"], L["Holy"], L["Fire"], L["Nature"], L["Frost"], L["Nature"], L["Shadow"], L["Arcane"]},
+            {L["Physical"], L["Holy"], L["Fire"], L["Nature"], L["Frost"], L["Shadow"], L["Arcane"]},
         attributes =
             {L["Strength"], L["Agility"], L["Stamina"], L["Intellect"], L["Spirit"]},
             -- some selected ability fields to show

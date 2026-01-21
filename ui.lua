@@ -401,6 +401,10 @@ local function filtered_spell_view(spell_ids, name_filter, loadout, effects, eva
             bit.band(spells[id].flags, spell_flags.pet) ~= 0 then
             filtered[i] = nil;
         end
+        if not config.settings.spells_filter_talent and
+            bit.band(spells[id].flags, spell_flags.talent) ~= 0 then
+            filtered[i] = nil;
+        end
         if not config.settings.spells_filter_ignored_spells and
             config.settings.spells_ignore_list[id] then
             filtered[i] = nil;
@@ -580,6 +584,9 @@ local function populate_scrollable_spell_view(view, starting_idx)
                 end
             else
                 if v.trigger == spell_filters.spells_filter_already_known or v.is_dual then
+                elseif bit.band(spells[v.spell_id].flags, spell_flags.talent) ~= 0 then
+                    line.cost_str:SetText(L["Talent"]);
+                    line.cost_str:Show();
                 else
                     line.cost_str:SetText(L["Unknown"]);
                     line.cost_str:Show();
@@ -1042,6 +1049,10 @@ local function create_sw_ui_spells_frame(pframe)
         {
             id = "spells_filter_learned_from_item",
             disp = L["Learned from item"],
+        },
+        {
+            id = "spells_filter_talent",
+            disp = L["Talent spells"],
         },
         {
             id = "spells_filter_pet",
