@@ -1,8 +1,8 @@
 -- THIS FILE IS GENERATED
 local _, sc = ...;
-sc.addon_build_id = 1878;
+sc.addon_build_id = 1879;
 sc.client_name_src = "wow_anniversary";
-sc.client_version_src = "2.5.5.65417";
+sc.client_version_src = "2.5.5.65534";
 _, sc.class = UnitClass("player");
 _, _, sc.race = UnitRace("player");
 sc.faction = UnitFactionGroup("player");
@@ -113,14 +113,16 @@ sc.spell_flags = {
 	finishing_move_dmg = bit.lshift(1, 14),
 	finishing_move_dur = bit.lshift(1, 15),
 	pet = bit.lshift(1, 16),
-	refund_on_miss = bit.lshift(1, 17),
-	only_threat = bit.lshift(1, 18),
-	no_threat = bit.lshift(1, 19),
-	behind_target = bit.lshift(1, 20),
-	uses_all_power = bit.lshift(1, 21),
-	alias = bit.lshift(1, 22),
-	requires_ranged_slot = bit.lshift(1, 23),
-	ot_haste_improved = bit.lshift(1, 24),
+	talent = bit.lshift(1, 17),
+	refund_on_miss = bit.lshift(1, 18),
+	only_threat = bit.lshift(1, 19),
+	no_threat = bit.lshift(1, 20),
+	behind_target = bit.lshift(1, 21),
+	uses_all_power = bit.lshift(1, 22),
+	alias = bit.lshift(1, 23),
+	requires_ranged_slot = bit.lshift(1, 24),
+	ot_haste_improved = bit.lshift(1, 25),
+	ehp = bit.lshift(1, 26),
 };
 sc.comp_flags = {
 	cant_crit = bit.lshift(1, 0),
@@ -154,6 +156,7 @@ sc.aura_flags = {
 	forced_separated = bit.lshift(1, 5),
 	stacks_as_charges = bit.lshift(1, 6),
 	weapon_slot_dependent = bit.lshift(1, 7),
+	requires_feral_shapeshift = bit.lshift(1, 8),
 };
 sc.feral_skill_as_wpn_subclass_hack = 28;
 sc.wep_subclass_to_normalized_speed = {

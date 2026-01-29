@@ -43,7 +43,7 @@ sc.spells = {
 		base_id = 17877,
 		gcd = 1.5000001,
 		train = 350,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.talent),
 	},
 	[6229] = {
 		direct = {
@@ -347,6 +347,20 @@ sc.spells = {
 		train = 15000,
 		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.binary, spell_flags.eval),
 	},
+	[81] = {
+		cast_time = 0,
+		cost = 0,
+		power_type = powers.mana,
+		rank = 0,
+		lvl_req = 1,
+		lvl_max = 70,
+		lvl_outdated = 70,
+		base_id = 81,
+		gcd = 0,
+		train = 0,
+		anyschool = schools.physical,
+		flags = bit.bor(0, spell_flags.ehp),
+	},
 	[7801] = {
 		direct = {
 			min = 33,
@@ -417,7 +431,7 @@ sc.spells = {
 		base_id = 17877,
 		gcd = 1.5000001,
 		train = 700,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.talent),
 	},
 	[18869] = {
 		direct = {
@@ -440,7 +454,7 @@ sc.spells = {
 		base_id = 17877,
 		gcd = 1.5000001,
 		train = 550,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.talent),
 	},
 	[11694] = {
 		periodic = {
@@ -724,7 +738,7 @@ sc.spells = {
 		base_id = 17962,
 		gcd = 1.5000001,
 		train = 700,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.talent),
 	},
 	[1456] = {
 		direct = {
@@ -916,7 +930,7 @@ sc.spells = {
 		base_id = 18265,
 		gcd = 1.5000001,
 		train = 2500,
-		flags = bit.bor(0, spell_flags.instant, spell_flags.binary, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.instant, spell_flags.binary, spell_flags.eval, spell_flags.talent),
 	},
 	[11688] = {
 		direct = {
@@ -1216,8 +1230,8 @@ sc.spells = {
 		lvl_outdated = 59,
 		base_id = 30108,
 		gcd = 1.5000001,
-		train = 0,
-		flags = bit.bor(0, spell_flags.eval),
+		train = -1,
+		flags = bit.bor(0, spell_flags.eval, spell_flags.talent),
 	},
 	[3716] = {
 		direct = {
@@ -1841,8 +1855,8 @@ sc.spells = {
 		lvl_outdated = 23,
 		base_id = 17877,
 		gcd = 1.5000001,
-		train = 0,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		train = -1,
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.talent),
 	},
 	[7659] = {
 		cast_time = 0,
@@ -1941,7 +1955,7 @@ sc.spells = {
 		base_id = 17877,
 		gcd = 1.5000001,
 		train = 1100,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.talent),
 	},
 	[17920] = {
 		direct = {
@@ -2124,7 +2138,7 @@ sc.spells = {
 		gcd = 0,
 		train = 0,
 		anyschool = schools.shadow,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.talent),
 	},
 	[27263] = {
 		direct = {
@@ -2147,7 +2161,7 @@ sc.spells = {
 		base_id = 17877,
 		gcd = 1.5000001,
 		train = 1300,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.talent),
 	},
 	[17727] = {
 		cast_time = 5,
@@ -2225,7 +2239,7 @@ sc.spells = {
 		base_id = 18265,
 		gcd = 1.5000001,
 		train = 700,
-		flags = bit.bor(0, spell_flags.instant, spell_flags.binary, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.instant, spell_flags.binary, spell_flags.eval, spell_flags.talent),
 	},
 	[18288] = {
 		cast_time = 0,
@@ -2239,7 +2253,7 @@ sc.spells = {
 		gcd = 0,
 		train = 0,
 		anyschool = schools.shadow,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.talent),
 	},
 	[11668] = {
 		direct = {
@@ -2414,8 +2428,8 @@ sc.spells = {
 		lvl_outdated = 37,
 		base_id = 18265,
 		gcd = 1.5000001,
-		train = 0,
-		flags = bit.bor(0, spell_flags.instant, spell_flags.binary, spell_flags.eval),
+		train = -1,
+		flags = bit.bor(0, spell_flags.instant, spell_flags.binary, spell_flags.eval, spell_flags.talent),
 	},
 	[30146] = {
 		cast_time = 10,
@@ -2429,7 +2443,7 @@ sc.spells = {
 		gcd = 1.5000001,
 		train = 0,
 		anyschool = schools.shadow,
-		flags = bit.bor(0, spell_flags.base_mana_cost),
+		flags = bit.bor(0, spell_flags.base_mana_cost, spell_flags.talent),
 	},
 	[17751] = {
 		direct = {
@@ -3515,7 +3529,7 @@ sc.spells = {
 		base_id = 17877,
 		gcd = 1.5000001,
 		train = 150,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.talent),
 	},
 	[11713] = {
 		periodic = {
@@ -3625,7 +3639,7 @@ sc.spells = {
 		base_id = 30283,
 		gcd = 0.5,
 		train = 2500,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.binary, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.binary, spell_flags.eval, spell_flags.talent),
 	},
 	[11671] = {
 		periodic = {
@@ -4052,7 +4066,7 @@ sc.spells = {
 		base_id = 17962,
 		gcd = 1.5000001,
 		train = 2300,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.talent),
 	},
 	[11672] = {
 		periodic = {
@@ -4185,7 +4199,7 @@ sc.spells = {
 		base_id = 18265,
 		gcd = 1.5000001,
 		train = 500,
-		flags = bit.bor(0, spell_flags.instant, spell_flags.binary, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.instant, spell_flags.binary, spell_flags.eval, spell_flags.talent),
 	},
 	[19244] = {
 		cast_time = 0,
@@ -4305,7 +4319,7 @@ sc.spells = {
 		base_id = 17877,
 		gcd = 1.5000001,
 		train = 3900,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.talent),
 	},
 	[30414] = {
 		direct = {
@@ -4328,7 +4342,7 @@ sc.spells = {
 		base_id = 30283,
 		gcd = 0.5,
 		train = 2500,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.binary, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.binary, spell_flags.eval, spell_flags.talent),
 	},
 	[7658] = {
 		cast_time = 0,
@@ -4379,7 +4393,7 @@ sc.spells = {
 		base_id = 17962,
 		gcd = 1.5000001,
 		train = 1300,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.talent),
 	},
 	[17854] = {
 		periodic = {
@@ -4453,7 +4467,7 @@ sc.spells = {
 		base_id = 18265,
 		gcd = 1.5000001,
 		train = 1200,
-		flags = bit.bor(0, spell_flags.instant, spell_flags.binary, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.instant, spell_flags.binary, spell_flags.eval, spell_flags.talent),
 	},
 	[27211] = {
 		direct = {
@@ -4538,7 +4552,7 @@ sc.spells = {
 		gcd = 1.5000001,
 		train = 0,
 		anyschool = schools.shadow,
-		flags = bit.bor(0, spell_flags.base_mana_cost, spell_flags.instant, spell_flags.binary),
+		flags = bit.bor(0, spell_flags.base_mana_cost, spell_flags.instant, spell_flags.binary, spell_flags.talent),
 	},
 	[17962] = {
 		direct = {
@@ -4560,8 +4574,8 @@ sc.spells = {
 		lvl_outdated = 47,
 		base_id = 17962,
 		gcd = 1.5000001,
-		train = 0,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		train = -1,
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.talent),
 	},
 	[20752] = {
 		cast_time = 3.0000002,
@@ -4823,7 +4837,7 @@ sc.spells = {
 		base_id = 30108,
 		gcd = 1.5000001,
 		train = 2500,
-		flags = bit.bor(0, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.eval, spell_flags.talent),
 	},
 	[11784] = {
 		direct = {
@@ -4904,7 +4918,7 @@ sc.spells = {
 		base_id = 17962,
 		gcd = 1.5000001,
 		train = 1000,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.talent),
 	},
 	[27221] = {
 		cast_time = 0,
@@ -5055,8 +5069,8 @@ sc.spells = {
 		lvl_outdated = 59,
 		base_id = 30283,
 		gcd = 0.5,
-		train = 0,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.binary, spell_flags.eval),
+		train = -1,
+		flags = bit.bor(0, spell_flags.cd, spell_flags.binary, spell_flags.eval, spell_flags.talent),
 	},
 	[33700] = {
 		direct = {
@@ -5509,7 +5523,7 @@ sc.spells = {
 		base_id = 18265,
 		gcd = 1.5000001,
 		train = 2500,
-		flags = bit.bor(0, spell_flags.instant, spell_flags.binary, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.instant, spell_flags.binary, spell_flags.eval, spell_flags.talent),
 	},
 	[19647] = {
 		cast_time = 0,
@@ -5571,7 +5585,7 @@ sc.spells = {
 		base_id = 30108,
 		gcd = 1.5000001,
 		train = 2500,
-		flags = bit.bor(0, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.eval, spell_flags.talent),
 	},
 	[689] = {
 		periodic = {
@@ -5663,7 +5677,7 @@ sc.spells = {
 		base_id = 17962,
 		gcd = 1.5000001,
 		train = 3900,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.talent),
 	},
 	[8289] = {
 		periodic = {
@@ -5694,8 +5708,10 @@ sc.spells = {
 sc.base_mana_by_lvl = {90, 98, 107, 102, 113, 126, 144, 162, 180, 198, 200, 218, 237, 257, 278, 300, 308, 332, 357, 383, 395, 423, 452, 467, 498, 530, 548, 582, 602, 638, 674, 695, 731, 752, 788, 809, 830, 866, 887, 923, 944, 965, 1001, 1022, 1043, 1064, 1100, 1121, 1142, 1163, 1184, 1205, 1226, 1247, 1268, 1289, 1310, 1331, 1352, 1373, 1497, 1621, 1745, 1870, 1994, 2118, 2242, 2366, 2490, 2615, };
 sc.spell_crit_to_int = {0.15, 0.1435, 0.1375, 0.132, 0.1269, 0.12219999, 0.11790001, 0.11379999, 0.11, 0.1065, 0.0971, 0.0892, 0.0825, 0.0767, 0.0717, 0.0688, 0.0635, 0.059999995, 0.056899995, 0.0541, 0.0516, 0.0493, 0.0471, 0.0446, 0.0429, 0.0418, 0.0398, 0.0384, 0.0367, 0.0355, 0.0347, 0.0333, 0.0324, 0.031099997, 0.0303, 0.0295, 0.028400002, 0.027700001, 0.0268, 0.0262, 0.0256, 0.0248, 0.0243, 0.0236, 0.0229, 0.0224, 0.022, 0.0214, 0.0209, 0.0204, 0.02, 0.0195, 0.0191, 0.0186, 0.0182, 0.0179, 0.0176, 0.0172, 0.0168, 0.0165, 0.0159, 0.0154, 0.0148, 0.0143, 0.0138, 0.0135, 0.013, 0.0127, 0.0125, 0.0122, };
 sc.physical_crit_to_agi = {0.15, 0.15, 0.1429, 0.1429, 0.1429, 0.1364, 0.1364, 0.1364, 0.1304, 0.1304, 0.125, 0.125, 0.125, 0.11999999, 0.1154, 0.111099996, 0.111099996, 0.111099996, 0.10710001, 0.1034, 0.1, 0.1, 0.0968, 0.0968, 0.0909, 0.0909, 0.0909, 0.0882, 0.0882, 0.0833, 0.0833, 0.0811, 0.0811, 0.0789, 0.0769, 0.075, 0.0732, 0.0732, 0.0714, 0.0698, 0.0682, 0.0682, 0.0667, 0.0667, 0.0638, 0.0625, 0.0625, 0.061200004, 0.059999995, 0.058800004, 0.0577, 0.0577, 0.0566, 0.055599995, 0.054499995, 0.0536, 0.052600004, 0.0517, 0.0517, 0.05, 0.0484, 0.0481, 0.047, 0.0455, 0.0448, 0.0435, 0.0436, 0.0424, 0.0414, 0.0405, };
+sc.dodge_to_agi = {0.1482, 0.1482, 0.1411852, 0.1411852, 0.1411852, 0.1347632, 0.1347632, 0.1347632, 0.1288352, 0.1288352, 0.1235, 0.1235, 0.1235, 0.11855999, 0.1140152, 0.109766796, 0.109766796, 0.109766796, 0.10581481, 0.1021592, 0.098799996, 0.098799996, 0.095638394, 0.095638394, 0.089809194, 0.089809194, 0.089809194, 0.0871416, 0.0871416, 0.0823004, 0.0823004, 0.0801268, 0.0801268, 0.077953205, 0.0759772, 0.0741, 0.0723216, 0.0723216, 0.0705432, 0.068962395, 0.0673816, 0.0673816, 0.065899596, 0.065899596, 0.06303439, 0.06175, 0.06175, 0.0604656, 0.059279993, 0.0580944, 0.0570076, 0.0570076, 0.0559208, 0.054932795, 0.053845994, 0.052956797, 0.0519688, 0.0510796, 0.0510796, 0.049399998, 0.047819197, 0.047522794, 0.046435997, 0.044954, 0.044262394, 0.042977996, 0.0430768, 0.0418912, 0.0409032, 0.040014, };
 sc.spids = {
 	summon_felsteed = 5784,
+	dodge = 81,
 	detect_invisibility = 132,
 	lash_of_pain = 7814,
 	summon_imp = 688,
@@ -5774,6 +5790,7 @@ sc.spids = {
 };
 sc.rank_seqs = {
 	[5784] = {5784,},
+	[81] = {81,},
 	[132] = {132,},
 	[7814] = {7814,7815,7816,11778,11779,11780,27274,},
 	[688] = {688,},
@@ -5851,7 +5868,7 @@ sc.rank_seqs = {
 	[126] = {126,},
 };
 sc.spells_lvl_ordered = {
-6603, 20554, 28730, 18708, 18288, 18223, 686, 3110, 687, 688, 348, 33702, 5019, 172, 702, 1454, 695, 5782, 7799, 980, 3716, 696, 6201, 697, 707, 1120, 755, 1108, 705, 704, 2947, 6222, 689, 5697, 1455, 693, 5676, 1014, 7800, 17767, 5740, 1094, 706, 7809, 17877, 7814, 698, 3698, 1088, 712, 713, 699, 6205, 6202, 126, 6360, 5138, 6223, 17735, 8316, 5500, 18867, 8288, 17850, 1456, 6358, 132, 1714, 17919, 7801, 3699, 7815, 710, 6366, 7658, 1106, 6217, 1098, 19505, 2941, 1949, 709, 1086, 18265, 5784, 7810, 20752, 691, 18868, 6229, 1490, 6213, 7870, 7646, 17851, 6219, 8317, 7648, 17920, 6226, 7813, 5699, 11687, 17750, 17951, 7641, 3700, 19244, 7816, 2362, 19731, 7651, 11711, 7802, 18879, 8289, 5484, 18869, 11665, 7811, 20755, 17962, 11733, 11707, 11683, 11739, 17852, 7659, 17921, 6789, 11725, 11693, 11770, 11703, 11671, 11778, 11659, 11688, 11721, 11729, 11699, 19734, 17952, 11784, 11677, 18870, 18930, 17727, 18880, 17751, 6353, 18647, 11762, 11712, 17925, 17853, 17922, 11667, 30108, 11719, 1122, 30146, 20756, 33698, 11774, 30283, 11734, 11694, 11779, 30151, 11660, 11708, 11740, 11675, 19647, 17928, 11684, 11771, 19736, 11672, 11704, 18931, 11700, 18871, 11717, 11689, 17924, 17953, 6215, 17926, 11726, 17923, 11730, 11713, 11785, 17854, 18881, 11678, 11763, 11695, 28610, 18540, 603, 11668, 20757, 25309, 17728, 11775, 11735, 11780, 30413, 33699, 18932, 11661, 11722, 25311, 17752, 25307, 23161, 30404, 27224, 30194, 27219, 28176, 27276, 27263, 27271, 27221, 27264, 29722, 27269, 27211, 27210, 27216, 27266, 28172, 27250, 27272, 29858, 27259, 27217, 27218, 27213, 27230, 27222, 27267, 27223, 29893, 27274, 30909, 27209, 30198, 27226, 27220, 27228, 27212, 28189, 27215, 33700, 33701, 27238, 30459, 30911, 27260, 27277, 30545, 27270, 32231, 27275, 27243, 30908, 30910, 30546, 30414, 30405, 30912, };
+6603, 20554, 28730, 18708, 18288, 18223, 686, 81, 3110, 687, 688, 348, 33702, 5019, 172, 702, 1454, 695, 5782, 7799, 980, 3716, 696, 6201, 697, 707, 1120, 755, 1108, 705, 704, 2947, 6222, 689, 5697, 1455, 693, 5676, 1014, 7800, 17767, 5740, 1094, 706, 7809, 17877, 7814, 698, 3698, 1088, 712, 713, 699, 6205, 6202, 126, 6360, 5138, 6223, 17735, 8316, 5500, 18867, 8288, 17850, 1456, 6358, 132, 1714, 17919, 7801, 3699, 7815, 710, 6366, 7658, 1106, 6217, 1098, 19505, 2941, 1949, 709, 1086, 18265, 5784, 7810, 20752, 691, 18868, 6229, 1490, 6213, 7870, 7646, 17851, 6219, 8317, 7648, 17920, 6226, 7813, 5699, 11687, 17750, 17951, 7641, 3700, 19244, 7816, 2362, 19731, 7651, 11711, 7802, 18879, 8289, 5484, 18869, 11665, 7811, 20755, 17962, 11733, 11707, 11683, 11739, 17852, 7659, 17921, 6789, 11725, 11693, 11770, 11703, 11671, 11778, 11659, 11688, 11721, 11729, 11699, 19734, 17952, 11784, 11677, 18870, 18930, 17727, 18880, 17751, 6353, 18647, 11762, 11712, 17925, 17853, 17922, 11667, 30108, 11719, 1122, 30146, 20756, 33698, 11774, 30283, 11734, 11694, 11779, 30151, 11660, 11708, 11740, 11675, 19647, 17928, 11684, 11771, 19736, 11672, 11704, 18931, 11700, 18871, 11717, 11689, 17924, 17953, 6215, 17926, 11726, 17923, 11730, 11713, 11785, 17854, 18881, 11678, 11763, 11695, 28610, 18540, 603, 11668, 20757, 25309, 17728, 11775, 11735, 11780, 30413, 33699, 18932, 11661, 11722, 25311, 17752, 25307, 23161, 30404, 27224, 30194, 27219, 28176, 27276, 27263, 27271, 27221, 27264, 29722, 27269, 27211, 27210, 27216, 27266, 28172, 27250, 27272, 29858, 27259, 27217, 27218, 27213, 27230, 27222, 27267, 27223, 29893, 27274, 30909, 27209, 30198, 27226, 27220, 27228, 27212, 28189, 27215, 33700, 33701, 27238, 30459, 30911, 27260, 27277, 30545, 27270, 32231, 27275, 27243, 30908, 30910, 30546, 30414, 30405, 30912, };
 sc.talent_order = {
 	[2] = {1,2,3,4,5,9,10,6,8,18,7,13,17,15,12,22,11,21,16,14,20,19,},
 	[3] = {3,1,2,12,13,14,11,5,15,6,7,16,4,9,20,8,21,10,19,18,17,},
@@ -6127,6 +6144,8 @@ sc.talent_effects = {
 			{"ability", "base_mod_ot", 0.19999999, {17767,33698,17735,3716,}, 0, 0},
 	},
 	[30320] = {
+			{"raw", "attacker_melee_crit", -0.02, nil, 0, 0},
+			{"aura_pts_flat", -1, -0.099999994, {35697,}, 0, 1},
 			{"by_school", "crit_forced", -0.02, {2,3,4,5,6,7,}, 0, 2},
 	},
 	[18707] = {
@@ -6236,6 +6255,8 @@ sc.talent_effects = {
 			{"raw", "hp_mod", 0.02, nil, 32, 1},
 	},
 	[30319] = {
+			{"raw", "attacker_melee_crit", -0.01, nil, 0, 0},
+			{"aura_pts_flat", -1, -0.049999997, {35697,}, 0, 1},
 			{"by_school", "crit_forced", -0.01, {2,3,4,5,6,7,}, 0, 2},
 	},
 	[30327] = {
@@ -6251,6 +6272,8 @@ sc.talent_effects = {
 			{"ability", "crit", 0.03, {348,17962,30283,5676,29722,6353,17877,686,}, 0, 0},
 	},
 	[30321] = {
+			{"raw", "attacker_melee_crit", -0.03, nil, 0, 0},
+			{"aura_pts_flat", -1, -0.14999999, {35697,}, 0, 1},
 			{"by_school", "crit_forced", -0.03, {2,3,4,5,6,7,}, 0, 2},
 	},
 	[18755] = {
@@ -6292,39 +6315,61 @@ sc.talent_effects = {
 };
 sc.talent_ranks = {
 	[209] = {18748,18749,18750,},
+	[211] = {18709,18710,},
 	[104] = {18213,18372,},
+	[312] = {18096,18073,},
+	[121] = {30108,},
 	[213] = {18821,18822,},
+	[318] = {17962,},
 	[217] = {23785,23822,23823,23824,23825,},
 	[215] = {18767,18768,},
 	[105] = {18182,18183,},
 	[311] = {17927,17929,17930,},
 	[204] = {18703,18704,},
+	[214] = {18788,},
 	[117] = {30060,30061,30062,30063,30064,},
 	[205] = {18705,18706,18707,},
+	[208] = {18708,},
 	[216] = {30326,30327,30328,},
 	[319] = {30293,30295,30296,},
 	[221] = {30242,30245,30246,30247,30248,},
+	[113] = {32385,32387,32392,32393,32394,},
+	[114] = {18265,},
 	[103] = {18179,18180,},
 	[310] = {17917,17918,},
 	[314] = {17959,},
 	[203] = {18697,18698,18699,18700,18701,},
+	[110] = {18218,18219,},
 	[316] = {17954,17955,17956,17957,17958,},
 	[102] = {17810,17811,17812,17813,17814,},
 	[220] = {35691,35692,35693,},
 	[112] = {32381,32382,32383,},
+	[222] = {30146,},
+	[219] = {19028,},
+	[309] = {18135,18136,},
 	[116] = {18271,18272,18273,18274,18275,},
 	[302] = {17778,17779,17780,17781,17782,},
+	[304] = {18119,18120,18121,18122,18123,},
 	[305] = {18126,18127,},
 	[212] = {18769,18770,18771,18772,18773,},
 	[313] = {17815,17833,17834,17835,17836,},
+	[308] = {17877,},
 	[120] = {32477,32483,32484,},
+	[118] = {18220,},
+	[315] = {30299,30301,30302,},
 	[307] = {18130,18131,18132,18133,18134,},
 	[303] = {17788,17789,17790,17791,17792,},
+	[306] = {18128,18129,},
 	[106] = {17804,17805,},
+	[321] = {30283,},
 	[107] = {18827,18829,},
+	[115] = {18223,},
 	[201] = {18692,18693,},
+	[119] = {30054,30057,},
+	[108] = {17783,17784,17785,17786,17787,},
 	[320] = {30288,30289,30290,30291,30292,},
 	[101] = {18174,18175,18176,18177,18178,},
+	[109] = {18288,},
 	[202] = {18694,18695,18696,},
 	[210] = {30143,30144,30145,},
 	[218] = {30319,30320,30321,},
@@ -6332,8 +6377,12 @@ sc.talent_ranks = {
 	[111] = {18094,18095,},
 	[206] = {18731,18743,18744,},
 	[317] = {34935,34938,34939,},
+	[301] = {17793,17796,17801,17802,17803,},
 };
 sc.class_buffs = {
+	[35697] = {
+			{"raw", "player_vuln_phys", 0, nil, 1, 0},
+	},
 	[20882] = {
 			{"raw", "melee_haste", -0.42999998, nil, 33, 1},
 			{"raw", "cast_haste", -0.29999998, nil, 1, 2},
@@ -6349,9 +6398,13 @@ sc.class_buffs = {
 	},
 	[7658] = {
 			{"raw", "ap_flat", 45, nil, 2, 0},
+			{"by_school", "res_flat", -290, {1,}, 0, 1},
 	},
 	[32386] = {
 			{"raw", "phys_mod", -0.01, nil, 1, 0},
+	},
+	[27228] = {
+			{"by_school", "res_flat", -88, {3,5,6,7,}, 0, 0},
 	},
 	[33702] = {
 			{"by_school", "sp_dmg_flat", 5, {1,2,3,4,5,6,7,}, 2, 1},
@@ -6382,6 +6435,9 @@ sc.class_buffs = {
 			{"ability", "base_mod", 0.5, {603,980,}, 64, 0},
 			{"ability", "base_mod_ot", 0.5, {603,980,}, 64, 0},
 	},
+	[44332] = {
+			{"by_school", "res_flat", -50, {3,5,}, 0, 0},
+	},
 	[6307] = {
 			{"by_attr", "stat_flat", 2, {3,}, 2, 0},
 	},
@@ -6390,12 +6446,18 @@ sc.class_buffs = {
 	},
 	[7659] = {
 			{"raw", "ap_flat", 65, nil, 2, 0},
+			{"by_school", "res_flat", -465, {1,}, 0, 1},
+	},
+	[11721] = {
+			{"by_school", "res_flat", -60, {3,5,6,7,}, 0, 0},
 	},
 	[704] = {
 			{"raw", "ap_flat", 20, nil, 2, 0},
+			{"by_school", "res_flat", -140, {1,}, 0, 1},
 	},
 	[11717] = {
 			{"raw", "ap_flat", 90, nil, 2, 0},
+			{"by_school", "res_flat", -640, {1,}, 0, 1},
 	},
 	[1098] = {
 			{"raw", "melee_haste", -0.39999998, nil, 33, 1},
@@ -6414,6 +6476,7 @@ sc.class_buffs = {
 			{"raw", "ap_flat", -350, nil, 2, 0},
 	},
 	[41230] = {
+			{"raw", "player_vuln_phys", 0.5, nil, 1, 0},
 			{"by_school", "dmg_mod", 0.19999999, {1,2,3,4,5,6,7,}, 1, 1},
 			{"raw", "phys_mod", 0.19999999, nil, 1, 1},
 	},
@@ -6431,6 +6494,9 @@ sc.class_buffs = {
 			{"by_school", "dmg_mod", 2, {1,2,3,4,5,6,7,}, 1, 0},
 			{"raw", "phys_mod", 2, nil, 1, 0},
 			{"raw", "hp_mod", 3, nil, 32, 2},
+	},
+	[1490] = {
+			{"by_school", "res_flat", -45, {3,5,6,7,}, 0, 0},
 	},
 	[18791] = {
 			{"by_school", "dmg_mod", 0.14999999, {6,}, 1, 0},
@@ -6453,6 +6519,7 @@ sc.class_buffs = {
 			{"raw", "ap_flat", 200, nil, 2, 0},
 	},
 	[38027] = {
+			{"raw", "player_vuln_phys", 0.19999999, nil, 1, 0},
 			{"by_school", "dmg_mod", 0.099999994, {1,2,3,4,5,6,7,}, 1, 1},
 			{"raw", "phys_mod", 0.099999994, nil, 1, 1},
 	},
@@ -6463,9 +6530,15 @@ sc.class_buffs = {
 			{"raw", "melee_haste", -0.39999998, nil, 33, 1},
 			{"raw", "cast_haste", -0.29999998, nil, 1, 2},
 	},
+	[17862] = {
+			{"by_school", "res_flat", -60, {6,7,}, 0, 0},
+	},
 	[35695] = {
 			{"by_school", "crit", 0, {1,2,3,4,5,6,7,}, 32, 0},
 			{"raw", "phys_crit", 0, nil, 32, 1},
+	},
+	[17937] = {
+			{"by_school", "res_flat", -75, {6,7,}, 0, 0},
 	},
 	[44977] = {
 			{"by_school", "sp_dmg_flat", 5, {1,2,3,4,5,6,7,}, 2, 2},
@@ -6475,8 +6548,13 @@ sc.class_buffs = {
 	},
 	[27226] = {
 			{"raw", "ap_flat", 135, nil, 2, 0},
+			{"by_school", "res_flat", -800, {1,}, 0, 1},
+	},
+	[27229] = {
+			{"by_school", "res_flat", -88, {6,7,}, 0, 0},
 	},
 	[41231] = {
+			{"raw", "player_vuln_phys", 0.19999999, nil, 1, 0},
 			{"raw", "phys_mod", 0.049999997, nil, 1, 1},
 	},
 	[7805] = {
@@ -6484,6 +6562,9 @@ sc.class_buffs = {
 	},
 	[27224] = {
 			{"raw", "ap_flat", -257, nil, 2, 0},
+	},
+	[36831] = {
+			{"by_school", "res_flat", -90, {3,5,}, 0, 0},
 	},
 	[7804] = {
 			{"by_attr", "stat_flat", 7, {3,}, 2, 0},
@@ -6507,8 +6588,15 @@ sc.class_buffs = {
 	[11767] = {
 			{"by_attr", "stat_flat", 38, {3,}, 2, 0},
 	},
+	[11722] = {
+			{"by_school", "res_flat", -75, {3,5,6,7,}, 0, 0},
+	},
 };
 local class_hostile_buffs = {
+	[35697] = {
+			{"by_school", "vuln_mod", 0, {1,2,3,4,5,6,7,}, 1, 0},
+			{"raw", "vuln_phys", 0, nil, 1, 0},
+	},
 	[7658] = {
 			{"by_school", "target_res_flat", -290, {1,}, 0, 1},
 	},
