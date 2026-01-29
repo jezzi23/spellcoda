@@ -8,6 +8,7 @@ local spell_filter_options = {
     spells_filter_unavailable                = true,
     spells_filter_learned_from_item          = true,
     spells_filter_pet                        = true,
+    spells_filter_talent                     = true,
     spells_filter_ignored_spells             = false,
     spells_filter_other_spells               = false,
     spells_filter_only_highest_learned_ranks = false
@@ -38,10 +39,10 @@ local default_settings     = {
     tooltip_display_cast_and_tap                                = false,
     tooltip_display_sp_effect_calc                              = true,
     tooltip_display_sp_effect_ratio                             = false,
-    --tooltip_display_base_mod                                    = false,
     tooltip_display_spell_id                                    = false,
     tooltip_display_eval_options                                = true,
     tooltip_display_resource_regen                              = true,
+    tooltip_display_ehp                                         = true,
 
     tooltip_disable                                             = false,
     tooltip_shift_to_show                                       = false,
@@ -53,6 +54,7 @@ local default_settings     = {
     tooltip_item_leveling_skill_normalize                       = true,
     tooltip_item_weapon_skill                                   = true,
     tooltip_item_smart                                          = true,
+    tooltip_item_quality_threshold                              = 2,
 
     tooltip_item_apply_set_bonuses                              = false,
     tooltip_item_apply_gems                                     = false,
@@ -93,6 +95,8 @@ local default_settings     = {
     overlay_no_decimals                                         = false,
     overlay_resource_regen                                      = true,
     overlay_resource_regen_display_idx                          = 3,
+    overlay_ehp                                                 = true,
+    overlay_ehp_display_idx                                     = 3,
 
     overlay_update_freq                                         = 3,
     overlay_font                                                = {"Interface\\AddOns\\SpellCoda\\font\\Oswald-Bold.ttf", "THICKOUTLINE"},
@@ -210,7 +214,9 @@ local default_settings     = {
     -- calculator
     spell_calc_list                                             = {
         -- a few basic spells for each class
-        [6603] = 6603,
+        [6603] = 6603, -- Attack
+        [81] = 81, -- Dodge for EHP
+
         -- warrior
         [78] = 78, -- heroic strik
         [23881] = 23881, -- bloodthirst
@@ -404,7 +410,29 @@ local function default_p_char()
     return data;
 end
 
+local function misc_modify_existing()
+
+    -- Force in some specific things into existing profiles for some very specific things
+    -- for specific version transitions.
+    -- Can be removed at some point in the future
+
+    if __sc_p_acc and
+        __sc_p_acc.version_saved and
+        __sc_p_acc.version_saved < 800000 and
+        __sc_p_acc.profiles then
+
+        for k, v in pairs(__sc_p_acc.profiles) do
+            if v.settings and v.settings.spell_calc_list then
+                v.settings.spell_calc_list[81] = 81; -- dodge passive as EHP
+            end
+        end
+    end
+end
+
 local function load_config()
+
+    misc_modify_existing();
+
     if not __sc_p_acc then
         --sc.core.use_acc_defaults = true;
         __sc_p_acc = {};
@@ -479,7 +507,7 @@ local function activate_config(config_type, prefix)
 end
 
 local function activate_settings()
-    
+
     activate_config("settings", "__sc_frame_setting_");
 
     sc.overlay.ccf_parent:ClearAllPoints();
@@ -489,15 +517,6 @@ local function activate_settings()
         config.settings.overlay_cc_info_y
     );
 end
-
---local function set_active_loadout(idx)
---    __sc_p_char.active_loadout = idx;
---    config.loadout = __sc_p_char.loadouts[idx];
---end
---
---local function activate_loadout_config()
---    activate_config("loadout", "__sc_frame_loadout_");
---end
 
 local function save_config()
 

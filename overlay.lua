@@ -1,6 +1,6 @@
 local _, sc = ...;
 
-local L                                         = sc.L;
+local L                                             = sc.L;
 
 local spell_cost                                    = sc.utils.spell_cost;
 local spell_cast_time                               = sc.utils.spell_cast_time;
@@ -9,7 +9,9 @@ local format_number                                 = sc.utils.format_number;
 local format_dur                                    = sc.utils.format_dur;
 
 local spells                                        = sc.spells;
+local spids                                         = sc.spids;
 local spell_flags                                   = sc.spell_flags;
+
 local highest_learned_rank                          = sc.utils.highest_learned_rank;
 
 local update_loadout_and_effects                    = sc.loadouts.update_loadout_and_effects;
@@ -20,6 +22,7 @@ local cast_until_oom                                = sc.calc.cast_until_oom;
 local calc_spell_eval                               = sc.calc.calc_spell_eval;
 local calc_spell_threat                             = sc.calc.calc_spell_threat;
 local calc_spell_resource_regen                     = sc.calc.calc_spell_resource_regen;
+local calc_effective_hp                             = sc.calc.calc_effective_hp;
 local calc_spell_dummy_cast_until_oom               = sc.calc.calc_spell_dummy_cast_until_oom;
 
 local config                                        = sc.config;
@@ -31,30 +34,32 @@ local active_overlays = {};
 local action_bar_frame_names = {};
 local spell_book_frames = {};
 local action_bar_addon_name = "Default";
-local externally_registered_spells = {};
-local external_overlay_frames = {};
 local num_overlay_components_toggled = 0;
 local action_id_frames = {};
 local num_actions = 120;
 
+local external_overlay_frames = {};
+local external_ccf_callbacks = {};
+
 overlay.decimals_cap = 3;
 
-local anyspell_overlay, anyspell_cast_until_oom_overlay, mana_restoration_overlay, only_threat_overlay;
+local anyspell_overlay, anyspell_cast_until_oom_overlay, mana_restoration_overlay, only_threat_overlay, effective_hp_overlay;
 
-sc.ext.register_spell = function(spell_id)
-    if spells[spell_id] and bit.band(spell.flags, spell_flags.eval) ~= 0 then
-        if not externally_registered_spells[spell_id] then
-            externally_registered_spells[spell_id] = 0;
-        end
-        externally_registered_spells[spell_id] = externally_registered_spells[spell_id] + 1;
-    end
-end
-
-sc.ext.unregister_spell = function(spell_id)
-    if spells[spell_id] and externally_registered_spells[spell_id] then
-        externally_registered_spells[spell_id] = math.max(0, externally_registered_spells[spell_id] - 1);
-    end
-end
+--local externally_registered_spells = {};
+--sc.ext.register_spell = function(spell_id)
+--    if spells[spell_id] and bit.band(spell.flags, spell_flags.eval) ~= 0 then
+--        if not externally_registered_spells[spell_id] then
+--            externally_registered_spells[spell_id] = 0;
+--        end
+--        externally_registered_spells[spell_id] = externally_registered_spells[spell_id] + 1;
+--    end
+--end
+--
+--sc.ext.unregister_spell = function(spell_id)
+--    if spells[spell_id] and externally_registered_spells[spell_id] then
+--        externally_registered_spells[spell_id] = math.max(0, externally_registered_spells[spell_id] - 1);
+--    end
+--end
 
 local function overlay_frames_config(overlay_frames)
 
@@ -82,6 +87,7 @@ local function init_frame_overlay(frame_info)
     end
 end
 
+--  sc.ext scope should be deleted at some point but remains for now
 sc.ext.register_overlay_frame = function(frame, spell_id)
 
     sc.loadouts.force_update = true;
@@ -106,6 +112,22 @@ sc.ext.unregister_overlay_frame = function(frame)
         end
     end
     external_overlay_frames[frame] = nil;
+end
+
+local function register_cc_on_update(callback_fn, info_schema, stats_schema)
+    local ccf_data = {};
+    external_ccf_callbacks[callback_fn] = {
+        data = ccf_data,
+        info = {},
+        stats = {},
+        info_schema = info_schema,
+        stats_schema = stats_schema,
+    };
+    return ccf_data;
+end
+
+local function unregister_cc_on_update(callback_fn)
+    external_ccf_callbacks[callback_fn] = nil;
 end
 
 local function check_old_rank(frame_info, spell_id, clvl)
@@ -241,6 +263,7 @@ local function spell_id_of_action(action_id)
         spell_id = 0;
     elseif (bit.band(spells[spell_id].flags, spell_flags.eval) == 0) and
         (mana_restoration_overlay and bit.band(spells[spell_id].flags, spell_flags.resource_regen) == 0) and
+        (effective_hp_overlay and bit.band(spells[spell_id].flags, spell_flags.ehp) == 0) and
         (only_threat_overlay and bit.band(spells[spell_id].flags, spell_flags.only_threat) == 0) and
         (anyspell_overlay and not spell_cost(spell_id) and not spell_cast_time(spell_id)) then
         spell_id = 0;
@@ -517,8 +540,8 @@ local non_eval_label_types = {
 
 local function update_icon_overlay_settings()
 
-    anyspell_overlay, anyspell_cast_until_oom_overlay, mana_restoration_overlay, only_threat_overlay =
-        false, false, false, false;
+    anyspell_overlay, anyspell_cast_until_oom_overlay, mana_restoration_overlay, only_threat_overlay, effective_hp_overlay =
+        false, false, false, false, false;
 
     num_overlay_components_toggled = 0;
     if config.settings.overlay_top_enabled then
@@ -560,6 +583,7 @@ local function update_icon_overlay_settings()
     end
 
     mana_restoration_overlay = config.settings.overlay_resource_regen;
+    effective_hp_overlay = config.settings.overlay_ehp;
 
     -- hide existing overlay frames that should no longer exist
     clear_overlays();
@@ -907,13 +931,13 @@ local function init_label_handler()
                 local mit;
                 if spell.direct then
                     if spell.direct.school1 == sc.schools.physical then
-                        mit = stats.armor_dr;
+                        mit = stats.target_armor_dr;
                     else
                         mit = stats.target_avg_resi;
                     end
                 else
                     if spell.periodic.school1 == sc.schools.physical then
-                        mit = stats.armor_dr_ot;
+                        mit = stats.target_armor_dr_ot;
                     else
                         mit = stats.target_avg_resi_ot;
                     end
@@ -933,13 +957,23 @@ local function init_label_handler()
         },
         overlay_display_resource_regen = {
             func = function(frame_overlay, info)
-                frame_overlay:SetText(string.format("%.0f", math.ceil(info.total_restored)));
+                frame_overlay:SetText(format_number(info.total_restored, math.min(1, overlay.decimals_cap)));
             end,
             desc = L["Resource regeneration"],
             color_tag = "cost",
             requires_spell_flags = spell_flags.resource_regen,
             non_standard = true,
             tooltip = L["Shows resource gained from spells like Evocation, Mana tide totem, etc."],
+        },
+        overlay_display_ehp = {
+            func = function(frame_overlay, info)
+                frame_overlay:SetText(format_number(info.ehp, math.min(1, overlay.decimals_cap)));
+            end,
+            desc = L["Effective health"],
+            color_tag = "expectation",
+            requires_spell_flags = spell_flags.ehp,
+            non_standard = true,
+            tooltip = L["Puts effective health calculation into passive spell "]..select(1, GetSpellInfo(spids.dodge)),
         },
     };
     sc.overlay.label_handler = overlay_label_handler;
@@ -960,6 +994,19 @@ local function update_spell_icon_frame(frame_info, spell, spell_id, loadout, eff
 
         frame_info.overlay_frames[resource_restore_disp_index]:SetTextColor(effect_color(handler.color_tag));
         frame_info.overlay_frames[resource_restore_disp_index]:Show();
+
+    elseif bit.band(spell.flags, spell_flags.ehp) ~= 0 and
+        config.settings.overlay_ehp then
+
+        spell_effect = calc_effective_hp(loadout, effects, eval_flags);
+
+        local handler = overlay_label_handler.overlay_display_ehp;
+
+        local ehp_disp_index = config.settings.overlay_ehp_display_idx;
+        handler.func(frame_info.overlay_frames[ehp_disp_index], spell_effect);
+
+        frame_info.overlay_frames[ehp_disp_index]:SetTextColor(effect_color(handler.color_tag));
+        frame_info.overlay_frames[ehp_disp_index]:Show();
 
     elseif num_overlay_components_toggled > 0 then
 
@@ -1120,8 +1167,8 @@ local function cc_demo_dummy_fill(info, stats)
     info.ot_hit_normal1 = 1/3;
     info.crit1 = 1/3;
     info.ot_crit1 = 1/3;
-    stats.armor_dr = 0.2;
-    stats.armor_dr_ot = 0.2;
+    stats.target_armor_dr = 0.2;
+    stats.target_armor_dr_ot = 0.2;
     stats.target_avg_resi = 0.2;
     stats.target_avg_resi_ot = 0.2;
 end
@@ -1346,26 +1393,65 @@ end
 local function update_cc()
 
     for _, v in pairs(ccfs) do
-        local k = v.spell_id;
-        if spells[k] and overlay.cc_active == v then
+        if overlay.cc_active == v then
 
+            local k = v.spell_id;
             local spell = spells[k];
             local info, stats;
-            if bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
+            if spells[k] then
+                if bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
 
-                if spells[k].healing_version and config.settings.general_prio_heal then
-                    spell = spells[k].healing_version;
+                    if spells[k].healing_version and config.settings.general_prio_heal then
+                        spell = spells[k].healing_version;
+                    end
+
+                    info, stats = calc_spell_eval(spell, loadout, effects, eval_flags, k);
+                    cast_until_oom(info, spell, stats, loadout, effects, false, 0);
+                elseif bit.band(spells[k].flags, spell_flags.only_threat) ~= 0 then
+                    info, stats = calc_spell_threat(spell, loadout, effects, eval_flags);
+                    info, stats = calc_spell_dummy_cast_until_oom(k, loadout, effects);
+                else
+                    info, stats = calc_spell_dummy_cast_until_oom(k, loadout, effects);
+                end
+                update_ccf(v, spell, info, stats, k);
+            end
+
+            for fn, cc in pairs(external_ccf_callbacks) do
+
+                cc.data.spell_id = k;
+                cc.data.spell = spells[k];
+
+                if info then
+                    if cc.info_schema then
+                        for _, key in ipairs(cc.info_schema) do
+                            cc.info[key] = info[key];
+                        end
+                    else
+                        for kk, vv in pairs(info) do
+                            cc.info[kk] = vv;
+                        end
+                    end
+                    cc.data.info = cc.info;
+                else
+                    cc.data.info = nil;
+                end
+                if stats then
+                    if cc.stats_schema then
+                        for _, key in ipairs(cc.stats_schema) do
+                            cc.stats[key] = stats[key];
+                        end
+                    else
+                        for kk, vv in pairs(stats) do
+                            cc.stats[kk] = vv;
+                        end
+                    end
+                    cc.data.stats = cc.stats;
+                else
+                    cc.data.stats = nil;
                 end
 
-                info, stats = calc_spell_eval(spell, loadout, effects, eval_flags, k);
-                cast_until_oom(info, spell, stats, loadout, effects, false, 0);
-            elseif bit.band(spells[k].flags, spell_flags.only_threat) ~= 0 then
-                info, stats = calc_spell_threat(spell, loadout, effects, eval_flags);
-                info, stats = calc_spell_dummy_cast_until_oom(k, loadout, effects);
-            else
-                info, stats = calc_spell_dummy_cast_until_oom(k, loadout, effects);
+                fn(cc.data.spell_id, cc.data.spell, cc.data.info, cc.data.stats);
             end
-            update_ccf(v, spell, info, stats, k);
         end
     end
 end
@@ -1754,35 +1840,32 @@ local function update_overlay()
 
     --local loadout, effects_before, effects, update_id;
     local effects_before, update_id;
-    local updated = true;
+    local updated = false;
     local eval_flags = overlay_eval_flags();
 
     local spells_frame_open = __sc_frame:IsShown() and __sc_frame.spells_frame:IsShown();
     local calc_frame_open = __sc_frame:IsShown() and __sc_frame.calculator_frame:IsShown();
 
     if not config.settings.overlay_disable and not sc.core.mute_overlay then
-        if not calc_frame_open then
+        if not calc_frame_open and not config.settings.general_calc_global_compare then
 
             loadout, _, effects, update_id = update_loadout_and_effects();
-            updated = update_id > overlay_effects_update_id;
-            overlay_effects_update_id = update_id;
+
         else
-            loadout, effects_before, effects =
+            loadout, _, _, effects_before, effects, update_id =
                 update_loadout_and_effects_diffed_from_ui();
         end
+        updated = update_id > overlay_effects_update_id;
+        overlay_effects_update_id = update_id;
     end
 
     if updated then
         if calc_frame_open then
-            if config.settings.overlay_disable or sc.core.mute_overlay then
-                sc.ui.update_calc_list(nil, nil, nil, eval_flags);
-            else
-                sc.ui.update_calc_list(loadout, effects_before, effects, eval_flags);
+            if not config.settings.overlay_disable and not sc.core.mute_overlay then
+                sc.ui.update_calc_list(false, loadout, effects_before, effects, eval_flags);
             end
         elseif spells_frame_open then
-            if config.settings.overlay_disable or sc.core.mute_overlay then
-                sc.ui.update_spells_frame(nil, nil, eval_flags);
-            else
+            if not config.settings.overlay_disable and not sc.core.mute_overlay then
                 sc.ui.update_spells_frame(loadout, effects, eval_flags);
             end
         end
@@ -1801,7 +1884,6 @@ local function update_overlay()
     --        end
     --    end
     --end
-
 
     if not config.settings.overlay_disable_cc_info and not sc.core.mute_overlay then
 
@@ -1838,6 +1920,8 @@ overlay.cc_demo                                     = cc_demo;
 overlay.ccf_label_reconfig                          = ccf_label_reconfig;
 overlay.ccf_anim_reconfig                           = ccf_anim_reconfig;
 overlay.init_label_handler                          = init_label_handler;
+overlay.register_ccf_on_update                      = register_ccf_on_update
+overlay.unregister_ccf_on_update                    = unregister_ccf_on_update
 
 sc.overlay = overlay;
 sc.ext.spell_cache = spell_cache;

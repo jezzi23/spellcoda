@@ -37,6 +37,7 @@ local effects_finalize_forced                   = sc.loadouts.effects_finalize_f
 local empty_effects                             = sc.loadouts.empty_effects;
 
 local spell_diff                                = sc.calc.spell_diff;
+local ehp_diff                                  = sc.calc.ehp_diff;
 local calc_spell_eval                           = sc.calc.calc_spell_eval;
 
 local buff_category                             = sc.buffs.buff_category;
@@ -184,7 +185,7 @@ local function display_spell_diff(i, calc_list, diff, frame)
             for k, v in pairs(calc_list[frame.num_spells]) do
                 v:Hide();
             end
-            ui.update_calc_list();
+            ui.update_calc_list(true);
         end);
 
         calc_list[i].cancel_button:SetPoint("TOPRIGHT", -10, frame.y_offset + 4);
@@ -210,16 +211,19 @@ local function display_spell_diff(i, calc_list, diff, frame)
 
     v.name_str:SetTextColor(222/255, 192/255, 40/255);
 
+    v.first:SetText(colored_diff_str(diff.effect, diff.effect_changed_perc, 2));
+    v.second:SetText(colored_diff_str(diff.effect_timed, diff.effect_timed_changed_perc, 2));
+
     if diff.heal_like then
         v.role_icon.tex:SetTexCoord(0.25, 0.5, 0.0, 0.25);
+    elseif diff.tank_like then
+        v.role_icon.tex:SetTexCoord(0.0, 0.25, 0.25, 0.5);
+        v.second:SetText(" ");
     else
         v.role_icon.tex:SetTexCoord(0.25, 0.5, 0.25, 0.5);
     end
     v.role_icon.tex:SetAllPoints(v.role_icon);
 
-    v.first:SetText(colored_diff_str(diff.effect, diff.effect_changed_perc, 2));
-
-    v.second:SetText(colored_diff_str(diff.effect_timed, diff.effect_timed_changed_perc, 2));
 
     for _, f in pairs(v) do
         f:Show();
@@ -231,18 +235,30 @@ end
 
 local cached_spells_cmp_diffs = {};
 
-local function update_calc_list(loadout, effects, effects_diffed, eval_flags)
+local calc_list_update_id = 0;
+
+local function update_calc_list(was_rearranged, loadout, effects, effects_diffed, eval_flags)
 
     local frame = __sc_frame.calculator_frame;
+
+    local update_id;
+    if not loadout then
+        loadout, _, _, effects, effects_diffed, update_id = update_loadout_and_effects_diffed_from_ui();
+
+        local updated = update_id > calc_list_update_id;
+        calc_list_update_id = update_id;
+
+        if not updated and not was_rearranged then
+            return;
+        end
+
+        eval_flags = sc.overlay.overlay_eval_flags();
+    end
 
     for _, v in pairs(frame.calc_list) do
         for _, f in pairs(v) do
             f:Hide();
         end
-    end
-    if not loadout then
-        loadout, effects, effects_diffed = update_loadout_and_effects_diffed_from_ui();
-        eval_flags = sc.overlay.overlay_eval_flags();
     end
 
     eval_flags = bit.bor(eval_flags, evaluation_flags.expectation_of_self);
@@ -265,37 +281,52 @@ local function update_calc_list(loadout, effects, effects_diffed, eval_flags)
         if config.settings.calc_list_use_highest_rank and spells[k] then
             k = highest_learned_rank(spells[k].base_id);
         end
-        if k and spells[k] and bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
-
-            i = i + 1;
-            cached_spells_cmp_diffs[i] = cached_spells_cmp_diffs[i] or {};
-
-            spell_diff(cached_spells_cmp_diffs[i],
-                       config.settings.calc_fight_type,
-                       spells[k],
-                       k,
-                       loadout,
-                       effects,
-                       effects_diffed,
-                       eval_flags);
-
-            cached_spells_cmp_diffs[i].is_dual_spell = spells[k].healing_version ~= nil;
-            cached_spells_cmp_diffs[i].original_id = original_k;
-
-            -- for spells with both heal and dmg
-            if spells[k].healing_version then
+        if k and spells[k] then
+            if bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
 
                 i = i + 1;
                 cached_spells_cmp_diffs[i] = cached_spells_cmp_diffs[i] or {};
 
                 spell_diff(cached_spells_cmp_diffs[i],
                            config.settings.calc_fight_type,
-                           spells[k].healing_version,
+                           spells[k],
                            k,
                            loadout,
                            effects,
                            effects_diffed,
                            eval_flags);
+
+                cached_spells_cmp_diffs[i].is_dual_spell = spells[k].healing_version ~= nil;
+                cached_spells_cmp_diffs[i].original_id = original_k;
+
+                -- for spells with both heal and dmg
+                if spells[k].healing_version then
+
+                    i = i + 1;
+                    cached_spells_cmp_diffs[i] = cached_spells_cmp_diffs[i] or {};
+
+                    spell_diff(cached_spells_cmp_diffs[i],
+                               config.settings.calc_fight_type,
+                               spells[k].healing_version,
+                               k,
+                               loadout,
+                               effects,
+                               effects_diffed,
+                               eval_flags);
+                    cached_spells_cmp_diffs[i].is_dual_spell = false;
+                    cached_spells_cmp_diffs[i].original_id = original_k;
+                end
+            elseif bit.band(spells[k].flags, spell_flags.ehp) ~= 0 then
+
+                i = i + 1;
+                cached_spells_cmp_diffs[i] = cached_spells_cmp_diffs[i] or {};
+
+                ehp_diff(cached_spells_cmp_diffs[i],
+                         loadout,
+                         effects,
+                         effects_diffed,
+                         eval_flags);
+
                 cached_spells_cmp_diffs[i].is_dual_spell = false;
                 cached_spells_cmp_diffs[i].original_id = original_k;
             end
@@ -399,6 +430,10 @@ local function filtered_spell_view(spell_ids, name_filter, loadout, effects, eva
         end
         if not config.settings.spells_filter_pet and
             bit.band(spells[id].flags, spell_flags.pet) ~= 0 then
+            filtered[i] = nil;
+        end
+        if not config.settings.spells_filter_talent and
+            bit.band(spells[id].flags, spell_flags.talent) ~= 0 then
             filtered[i] = nil;
         end
         if not config.settings.spells_filter_ignored_spells and
@@ -514,6 +549,7 @@ local function filtered_spell_view(spell_ids, name_filter, loadout, effects, eva
     return filtered;
 end
 
+local ehp_tex = "Interface\\Icons\\Spell_Nature_Reincarnation";
 
 local function populate_scrollable_spell_view(view, starting_idx)
     local cnt = 1;
@@ -580,6 +616,9 @@ local function populate_scrollable_spell_view(view, starting_idx)
                 end
             else
                 if v.trigger == spell_filters.spells_filter_already_known or v.is_dual then
+                elseif bit.band(spells[v.spell_id].flags, spell_flags.talent) ~= 0 then
+                    line.cost_str:SetText(L["Talent"]);
+                    line.cost_str:Show();
                 else
                     line.cost_str:SetText(L["Unknown"]);
                     line.cost_str:Show();
@@ -599,6 +638,13 @@ local function populate_scrollable_spell_view(view, starting_idx)
                 line.type_str:Show();
                 line.per_sec_str:Show();
                 line.per_cost_str:Show();
+            elseif bit.band(spells[v.spell_id].flags, spell_flags.ehp) ~= 0 then
+                line.spell_name:SetText(L["Effective Health"]);
+                line.spell_tex:SetTexture(ehp_tex);
+                line.effect_type_tex:SetTexCoord(0.0, 0.25, 0.25, 0.5);
+                line.effect_type_tex:SetAllPoints(line.effect_type_icon);
+                line.effect_type_tex:Show();
+                line.effect_type_icon:Show();
             end
             if config.settings.spells_ignore_list[v.spell_id] then
                 line.ignore_line:Show();
@@ -618,10 +664,18 @@ local spell_view_update_id = 0;
 
 local function update_spells_frame(loadout, effects, eval_flags, force_refresh)
 
+
     if not loadout then
+        local calc_mode = __sc_frame:IsShown() and __sc_frame.calculator_frame:IsShown() or
+            config.settings.general_calc_global_compare;
+
         local update_id;
         eval_flags = sc.overlay.overlay_eval_flags();
-        loadout, _, effects, update_id = update_loadout_and_effects();
+        if calc_mode then
+            loadout, _, _, _, effects, update_id = update_loadout_and_effects_diffed_from_ui();
+        else
+            loadout, _, effects, update_id = update_loadout_and_effects();
+        end
 
         if update_id > spell_view_update_id then
             spell_view_update_id = update_id;
@@ -684,7 +738,7 @@ local function sw_activate_tab(tab_window)
     if tab_window.frame_to_open == __sc_frame.spells_frame then
         update_spells_frame(nil, nil, nil, true);
     elseif tab_window.frame_to_open == __sc_frame.calculator_frame then
-        update_calc_list();
+        update_calc_list(true);
     end
 
     tab_window.frame_to_open:Show();
@@ -1044,6 +1098,10 @@ local function create_sw_ui_spells_frame(pframe)
             disp = L["Learned from item"],
         },
         {
+            id = "spells_filter_talent",
+            disp = L["Talent spells"],
+        },
+        {
             id = "spells_filter_pet",
             disp = L["Pet spells"],
         },
@@ -1335,10 +1393,10 @@ local function create_sw_ui_spells_frame(pframe)
                         func = function()
 
                             local id = spell_options.__spid;
-                            if spells[id] and bit.band(spells[id].flags, spell_flags.eval) ~= 0 then
+                            if spells[id] and bit.band(spells[id].flags, bit.bor(spell_flags.eval, spell_flags.ehp)) ~= 0 then
 
                                 config.settings.spell_calc_list[spell_options.__spid] = 1;
-                                update_calc_list();
+                                update_calc_list(true);
                             end
 
                         end,
@@ -1643,6 +1701,12 @@ local function create_sw_ui_tooltip_frame(pframe)
             tooltip = sc.overlay.label_handler.overlay_display_resource_regen.tooltip,
             color_tag = "cost",
         },
+        {
+            id = "tooltip_display_ehp",
+            txt = L["Effective health"],
+            color_tag = "expectation",
+            tooltip = sc.overlay.label_handler.overlay_display_ehp.tooltip,
+        },
     };
 
     pframe.y_offset = pframe.y_offset - 10;
@@ -1662,6 +1726,7 @@ local function create_sw_ui_tooltip_frame(pframe)
         getglobal("__sc_frame_setting_tooltip_display_effect_per_cost"):Click();
         getglobal("__sc_frame_setting_tooltip_display_eval_options"):Click();
         getglobal("__sc_frame_setting_tooltip_display_resource_regen"):Click();
+        getglobal("__sc_frame_setting_tooltip_display_ehp"):Click();
 
     end);
 
@@ -1717,6 +1782,7 @@ local function create_sw_ui_tooltip_frame(pframe)
         getglobal("__sc_frame_setting_tooltip_display_stat_weights_effect_until_oom"):Click();
         getglobal("__sc_frame_setting_tooltip_display_eval_options"):Click();
         getglobal("__sc_frame_setting_tooltip_display_resource_regen"):Click();
+        getglobal("__sc_frame_setting_tooltip_display_ehp"):Click();
     end);
     pframe.preset_detailed_button:SetPoint("TOPLEFT", 320, pframe.y_offset+16);
     pframe.preset_detailed_button:SetText(L["Detailed"]);
@@ -1831,12 +1897,64 @@ local function create_sw_ui_tooltip_frame(pframe)
         tifs[#tifs + 1] = v;
     end
 
+    pframe.quality_dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_tooltip_item_quality_threshold", pframe);
+    pframe.quality_dd._type = "DropDownMenu";
+    pframe.quality_dd:SetPoint("TOPLEFT", 225, pframe.y_offset+2);
+    local qualities = {
+        [0] = L["Poor"],
+        [1] = L["Common"],
+        [2] = L["Uncommon"],
+        [3] = L["Rare"],
+        [4] = L["Epic"],
+        [5] = L["Legendary"],
+    };
+    pframe.quality_dd.init_func = function()
+        libDD:UIDropDownMenu_Initialize(pframe.quality_dd, function()
+
+            if config.settings.tooltip_item_quality_threshold < 0 or
+                config.settings.tooltip_item_quality_threshold > 5 then
+                config.settings.tooltip_item_quality_threshold = 2;
+            end
+            local idx = config.settings.tooltip_item_quality_threshold;
+            libDD:UIDropDownMenu_SetText(
+                pframe.quality_dd,
+                ITEM_QUALITY_COLORS[idx].color:WrapTextInColorCode(L["Quality threshold"])
+            );
+            libDD:UIDropDownMenu_SetWidth(
+                pframe.quality_dd,
+                180
+            );
+
+            for i = 0, 5 do
+
+                libDD:UIDropDownMenu_AddButton({
+                    text = ITEM_QUALITY_COLORS[i].color:WrapTextInColorCode(qualities[i]),
+                    checked = config.settings.tooltip_item_quality_threshold == i,
+                    func = function()
+
+                        config.settings.tooltip_item_quality_threshold = i;
+                        pframe.quality_dd.init_func();
+                    end
+                })
+            end
+        end);
+    end;
+    tifs[#tifs + 1] = pframe.quality_dd;
+
     for _, v in ipairs(multi_row_checkbutton({
         {
             id = "tooltip_item_stat_diff",
             txt = L["Show stat changes"],
             tooltip = "Intended for debugging, not human friendly. Shows all changes detected by calculator, including resolved indirect changes, e.g. spell power from % of spirit talent etc.",
         },
+    }, pframe, 2, nil)) do
+        tifs[#tifs + 1] = v;
+    end
+
+    pframe.y_offset = pframe.y_offset - 25;
+
+
+    for _, v in ipairs(multi_row_checkbutton({
         {
             id = "tooltip_item_apply_enchant",
             txt = L["Apply enchant changes"],
@@ -1882,6 +2000,7 @@ local function create_sw_ui_tooltip_frame(pframe)
 
     make_frame_scrollable(pframe);
 end
+
 
 local fonts = {
     "Fonts\\FRIZQT__.TTF",
@@ -2380,7 +2499,7 @@ local function create_sw_ui_overlay_frame(pframe)
         pframe.y_offset = pframe.y_offset - 20;
     end
 
-    pframe.y_offset = pframe.y_offset - 10;
+    pframe.y_offset = pframe.y_offset - 7;
 
     do
         local option_key = "overlay_resource_regen";
@@ -2394,6 +2513,7 @@ local function create_sw_ui_overlay_frame(pframe)
             sc.loadouts.force_update = true;
         end);
         local handler = sc.overlay.label_handler.overlay_display_resource_regen;
+        f.tooltip = handler.tooltip;
         local text_frame = getglobal(f:GetName()..'Text');
         text_frame:SetText(handler.desc);
         register_text_frame_color(text_frame, handler.color_tag);
@@ -2436,7 +2556,64 @@ local function create_sw_ui_overlay_frame(pframe)
         end;
         ofs[#ofs + 1] = dd;
     end
-    pframe.y_offset = pframe.y_offset - 30;
+    pframe.y_offset = pframe.y_offset - 26;
+
+    do
+        local option_key = "overlay_ehp";
+        f = CreateFrame("CheckButton", "__sc_frame_setting_"..option_key, pframe, "ChatConfigCheckButtonTemplate");
+        f._type = "CheckButton";
+        f._settings_id = option_key;
+        f:SetPoint("TOPLEFT", 10, pframe.y_offset);
+        f:SetScript("OnClick", function(self)
+            config.settings[self._settings_id] = self:GetChecked();
+            sc.core.update_action_bar_needed = true;
+            sc.loadouts.force_update = true;
+        end);
+        local handler = sc.overlay.label_handler.overlay_display_ehp;
+        f.tooltip = handler.tooltip;
+        local text_frame = getglobal(f:GetName()..'Text');
+        text_frame:SetText(handler.desc);
+        register_text_frame_color(text_frame, handler.color_tag);
+        ofs[#ofs + 1] = f;
+    end
+    do
+        local option_key = "overlay_ehp_display_idx";
+        local dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_"..option_key, pframe);
+
+        dd._type = "DropDownMenu";
+        dd._settings_id = option_key;
+        dd:SetPoint("TOPLEFT", 165, pframe.y_offset+3);
+        local selections =  {L["Top label"], L["Center label"], L["Bottom label"]};
+        dd.init_func = function()
+            libDD:UIDropDownMenu_Initialize(dd, function(self)
+
+                sc.core.update_action_bar_needed = true;
+                sc.loadouts.force_update = true;
+
+                libDD:UIDropDownMenu_SetWidth(self, 120);
+
+                for i, disp in ipairs(selections) do
+                    if config.settings[self._settings_id] == i then
+                        libDD:UIDropDownMenu_SetText(self, disp);
+                    end
+                    libDD:UIDropDownMenu_AddButton(
+                        {
+                            text = disp,
+                            checked = i == config.settings[self._settings_id],
+                            func = function()
+                                config.settings[self._settings_id] = i;
+                                sc.core.update_action_bar_needed = true;
+                                sc.loadouts.force_update = true;
+                                libDD:UIDropDownMenu_SetText(self, disp);
+                            end,
+                        }
+                    );
+                end
+            end);
+        end;
+        ofs[#ofs + 1] = dd;
+    end
+    pframe.y_offset = pframe.y_offset - 26;
 
     local cfs = {}
 
@@ -3860,20 +4037,39 @@ local function create_calculator_items_subframe(pframe)
         end;
     end
 
-    -- ChatEdit_InsertLink only works on era client
-    --hooksecurefunc("ChatEdit_InsertLink", function(link)
-    --    if link then
-    --        handle_player_links(link);
-    --    end
-    --end);
+    --
 
-    -- HandleModifiedItemClick seems to work on all clients
-    hooksecurefunc("HandleModifiedItemClick", function(link)
+    -- ChatEdit_InsertLink only works on era client
+    -- HandleModifiedItemClick seems to work on all clients,
+    -- but other addon's shift clickables might only call ChatEdit_InsertLink
+    --
+    -- Workaround to use both without duplicate links
+    local handle_modified_item_click_link;
+    local chatedit_insertlink_link;
+
+    hooksecurefunc("ChatEdit_InsertLink", function(link)
         if link then
-            handle_player_links(link);
+            if link ~= handle_modified_item_click_link then
+
+                handle_player_links(link);
+                chatedit_insertlink_link = link;
+            else
+                handle_modified_item_click_link = nil;
+            end
         end
     end);
 
+    hooksecurefunc("HandleModifiedItemClick", function(link)
+        if link then
+            if link ~= chatedit_insertlink_link then
+
+                handle_player_links(link);
+                handle_modified_item_click_link = link;
+            else
+                chatedit_insertlink_link = nil;
+            end
+        end
+    end);
 
     f_txt = pframe.items:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
@@ -4129,6 +4325,18 @@ local function create_calculator_stats_subframe(pframe)
         stam = {
             label_str = L["Stamina"]
         },
+        armor = {
+            label_str = L["Armor"]
+        },
+        dodge_rating = {
+            label_str = L["Dodge"]
+        },
+        parry_rating = {
+            label_str = L["Parry"]
+        },
+        defense_skill_rating = {
+            label_str = L["Defense"]
+        },
         sp = {
             label_str = L["Spell Power"]
         },
@@ -4171,11 +4379,11 @@ local function create_calculator_stats_subframe(pframe)
     };
 
     local comparison_stats_listing_order = {
-        "str", "agi", "stam", "int", "spirit", "mp5", "crit_rating", "hit_rating", "haste_rating", "expertise_rating",
-        "ap", "rap", "weapon_skill", "sp", "sd", "hp", "pen", "extra_mana",
+        "str", "agi", "stam", "int", "spirit", "mp5", "extra_mana", "armor", "defense_skill_rating", "dodge_rating", "parry_rating",
+        "crit_rating", "hit_rating", "haste_rating", "expertise_rating", "ap", "rap", "weapon_skill", "sp", "sd", "hp", "pen",
     };
 
-    local new_column_breakpoint = "ap";
+    local new_column_breakpoint = "crit_rating";
 
     local num_stats = #comparison_stats_listing_order;
 
@@ -4217,7 +4425,7 @@ local function create_calculator_stats_subframe(pframe)
                 self:SetText("");
                 self:SetFocus();
             else 
-                update_calc_list();
+                --update_calc_list(true);
             end
 
             pframe.calculator_plan_changed = true;
@@ -4255,7 +4463,7 @@ local function create_calculator_stats_subframe(pframe)
         for _, v in pairs(pframe.stats.stat_fields) do
             v.editbox:SetText("");
         end
-        update_calc_list();
+        --update_calc_list(true);
     end);
 
     f:SetPoint("TOPRIGHT", 5, max_y_offset_stats);
@@ -5003,7 +5211,7 @@ local function create_sw_ui_calculator_frame(pframe)
         2,
         function()
             if __sc_frame:IsShown() and pframe:IsShown() then
-                update_calc_list();
+                update_calc_list(true);
             end
         end,
         5);
@@ -5037,7 +5245,7 @@ local function create_sw_ui_calculator_frame(pframe)
                         libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Repeated casts"]);
                         pframe.spell_diff_header_center:SetText(L["Effect"]);
                         pframe.spell_diff_header_right:SetText(L["Per sec"]);
-                        update_calc_list();
+                        update_calc_list(true);
                     end
                 }
             );
@@ -5051,7 +5259,7 @@ local function create_sw_ui_calculator_frame(pframe)
                         libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Cast until OOM"]);
                         pframe.spell_diff_header_center:SetText(L["Effect"]);
                         pframe.spell_diff_header_right:SetText(L["Duration (sec)"]);
-                        update_calc_list();
+                        update_calc_list(true);
                     end
                 }
             );
@@ -6516,6 +6724,7 @@ ui.locale_warning_popup                 = locale_warning_popup;
 ui.update_calculator_character_items    = update_calculator_character_items;
 ui.effects_from_ui_stats_diff           = effects_from_ui_stats_diff;
 ui.update_talents_frame                 = update_talents_frame;
+ui.ehp_tex                              = ehp_tex;
 
 sc.ui = ui;
 

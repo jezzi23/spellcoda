@@ -39,10 +39,10 @@ sc.core                         = core;
 core.addon_name                 = "SpellCoda";
 
 local version_major             = 0;
-local version_minor             = 7;
+local version_minor             = 8;
 local version_build             = sc.addon_build_id;
 
-core.version_id                 = version_build + version_minor*1000 + version_major*1000000;
+core.version_id                 = version_build + version_minor*100000 + version_major*100000000;
 core.version                    = tostring(version_major) .. "." ..
                                   tostring(version_minor) .. "." ..
                                   tostring(version_build);
@@ -60,11 +60,8 @@ core.equipment_update_needed    = true;
 core.special_action_bar_changed = true;
 core.setup_action_bar_needed    = true;
 core.update_action_bar_needed   = false;
-core.addon_message_on_update    = false;
 core.old_ranks_checks_needed    = true;
 core.rescan_action_bar_needed   = false;
-
-local addon_msg_sc_id = "__SpellCoda";
 
 local function generated_data_is_outdated(loaded_version, gen_version)
     local loaded = string.gmatch(loaded_version, "[^.]+");
@@ -134,9 +131,6 @@ local function main_update()
     spell_tracking(t_elapsed);
 
     update_overlay();
-    if core.addon_message_on_update then
-        C_ChatInfo.SendAddonMessage(addon_msg_sc_id, "UPDATE_TRIGGER", "WHISPER", pname);
-    end
 
     sc.sequence_counter = sc.sequence_counter + 1;
     timestamp = t;
@@ -173,6 +167,26 @@ local tooltip_time = 1.0/2.0;
 
 local function refresh_tooltip()
     local dt = 0.1;
+
+    local spells_frame_open = false;
+    local calc_frame_open = false;
+    if __sc_frame:IsShown() then
+        spells_frame_open = __sc_frame.spells_frame:IsShown();
+        calc_frame_open = __sc_frame.calculator_frame:IsShown();
+    end
+
+    if config.settings.overlay_disable or sc.core.mute_overlay then
+        -- overlay is off, trigger updates which may exit early if nothing changed
+        if calc_frame_open then
+            sc.ui.update_calc_list(false);
+        elseif spells_frame_open then
+            sc.ui.update_spells_frame();
+        end
+    elseif calc_frame_open and __sc_frame.calculator_frame.calculator_plan_changed then
+        -- lower response time of calc updates when plan changed
+        sc.ui.update_calc_list(false);
+    end
+
     if config.settings.tooltip_disable then
 
         C_Timer.After(dt, refresh_tooltip);
@@ -239,7 +253,7 @@ local event_dispatch = {
             end
         end
         sc.ui.post_login_load();
-        C_ChatInfo.RegisterAddonMessagePrefix(addon_msg_sc_id);
+        sc.buffs.post_login_load();
         if __spellcoda_debug__ or __spellcoda_test_all_data__ or __spellcoda_test_all_spells__ then
             print("WARNING: SC DEBUG TOOLS ARE ON!!!");
             for _ = 1, 10 do
@@ -351,19 +365,13 @@ local event_dispatch = {
         sc.loadouts.force_update = true;
     end,
     ["GLYPH_ADDED"] = function()
-        if not config.loadout.use_custom_talents then
-            core.talents_update_needed = true;
-        end
+        core.talents_update_needed = true;
     end,
     ["GLYPH_REMOVED"] = function()
-        if not config.loadout.use_custom_talents then
-            core.talents_update_needed = true;
-        end
+        core.talents_update_needed = true;
     end,
     ["GLYPH_UPDATED"] = function()
-        if not config.loadout.use_custom_talents then
-            core.talents_update_needed = true;
-        end
+        core.talents_update_needed = true;
     end,
     ["CHAT_MSG_SKILL"] = function()
         core.talents_update_needed = true;
@@ -448,8 +456,6 @@ local function command(arg)
         sw_activate_frame("profile_frame");
     elseif arg == "loadout" or arg == "loadouts" then
         sw_activate_frame("loadout_frame");
-    elseif arg == "buffs" or arg == "auras" then
-        sw_activate_frame("buffs_frame");
     elseif arg == "settings" or arg == "opt" or arg == "options" or arg == "conf" or arg == "config" or arg == "configure" then
         sw_activate_frame("settings_frame");
     elseif arg == "reset" then
@@ -467,14 +473,10 @@ SLASH_SPELL_CODA2 = "/spellcoda"
 SLASH_SPELL_CODA3 = "/SpellCoda"
 SlashCmdList["SPELL_CODA"] = command
 
-sc.ext.enable_addon_message_on_update = function()
-    core.addon_message_on_update = true;
-end
-sc.ext.disable_addon_message_on_update = function()
-    core.addon_message_on_update = false;
-end
 sc.ext.version_id = core.version_id;
 
+-- __SC and sc.ext should be deleted in favor of new public API at some point
+-- but remains due to external things relying on it
 __SC = sc.ext;
 
 --__spellcoda_debug__ = 1;

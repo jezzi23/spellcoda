@@ -11,6 +11,7 @@ local scaling = {};
 local dps_per_ap = 1/14;
 local mana_per_int = 15;
 local hp_per_stam = 10;
+local armor_per_agi = 2;
 
 local function spirit_mana_regen(spirit)
     -- src: https://wowwiki-archive.fandom.com/wiki/Spirit
@@ -91,6 +92,7 @@ scaling.hp_per_stam                      = hp_per_stam;
 scaling.ap_per_str                       = ap_per_str;
 scaling.ap_per_agi                       = ap_per_agi;
 scaling.rap_per_agi                      = rap_per_agi;
+scaling.armor_per_agi                    = armor_per_agi;
 scaling.cr_weights                       = cr_weights;
 
 sc.scaling = scaling;

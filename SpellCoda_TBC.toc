@@ -73,4 +73,5 @@ overlay.lua
 tooltip.lua
 ui.lua
 core.lua
+public.lua
 

@@ -111,6 +111,57 @@ elseif sc.class == sc.classes.druid then
         spells[v].periodic.coef_ap_min = 0.04;
     end
 
+    do
+        -- Heart of the wild shapeshift specials hacked in by blizzard instead of being
+        -- added to shapeshift passive effects so needs to be hacked in here too
+        -- (without this stat weights would be inaccurate for shapeshifts)
+
+        local cat_passive = sc.shapeshift_passives[3025];
+        local new_cat_effect_iid = cat_passive[#cat_passive][sc.aura_idx_iid] + 1;
+        cat_passive[#cat_passive + 1] = {"by_attr", "stat_mod", 0.0, {attr.strength,}, 32, new_cat_effect_iid};
+
+        local bear_passive = sc.shapeshift_passives[1178];
+        local new_bear_effect_iid = bear_passive[#bear_passive][sc.aura_idx_iid] + 1;
+        bear_passive[#bear_passive + 1] = {"by_attr", "stat_mod", 0.0, {attr.stamina,}, 32, new_bear_effect_iid};
+
+        local dire_bear_passive = sc.shapeshift_passives[9635];
+        local new_dire_bear_effect_iid = dire_bear_passive[#dire_bear_passive][sc.aura_idx_iid] + 1;
+        dire_bear_passive[#dire_bear_passive + 1] = {"by_attr", "stat_mod", 0.0, {attr.stamina,}, 32, new_dire_bear_effect_iid};
+
+        for rank, talent_id in pairs(talent_ranks[215]) do
+
+            local effects = sc.talent_effects[talent_id];
+            -- add to aura points to our fake new effects
+            local iid_next = effects[#effects][sc.aura_idx_iid] + 1;
+
+            effects[#effects + 1] = {"aura_pts_flat", new_cat_effect_iid, 0.04*rank, {3025}, 0, iid_next};
+            iid_next = iid_next + 1;
+
+            effects[#effects + 1] = {"aura_pts_flat", new_bear_effect_iid, 0.04*rank, {1178}, 0, iid_next};
+            iid_next = iid_next + 1;
+
+            effects[#effects + 1] = {"aura_pts_flat", new_dire_bear_effect_iid, 0.04*rank, {9635}, 0, iid_next};
+            iid_next = iid_next + 1;
+        end
+    end
+
+    do
+        -- use class_misc to track forms required for special feral attack power effects
+        for _, v in ipairs({
+            {spids.moonkin_form,    5}, -- shapeshift idx 5
+            {spids.cat_form,        3},
+            {spids.bear_form,       1},
+            {spids.dire_bear_form,  1},
+        }) do
+
+            local spid = v[1];
+            local idx = v[2];
+
+            local effects = sc.class_buffs[spid];
+            effects[#effects + 1] = {"raw", "class_misc", idx, nil, 0, -1};
+        end
+    end
+
     -- THREAT
     add_threat_flat_by_rank({
         { spids.demoralizing_roar, {9, 15, 20, 30, 39, 49} },
@@ -121,14 +172,6 @@ elseif sc.class == sc.classes.druid then
         {spids.maul, 0.75},
         {spids.swipe, 0.75},
     });
-    -- "Dire Bear Form" has a problem with applying "Bear Form" threat passive so add it
-    local bear_threat_passive = 21178;
-    for _, v in pairs(sc.class_buffs[spids.dire_bear_form]) do
-        if v[sc.aura_idx_category] == "applies_aura" and v[sc.aura_idx_effect] == "shapeshift_passives" then
-            table.insert(v[sc.aura_idx_subject], bear_threat_passive);
-            break;
-        end
-    end
 
 elseif sc.class == sc.classes.priest then
 
@@ -165,8 +208,6 @@ elseif sc.class == sc.classes.shaman then
 
     lookups.averaged_procs = {
     };
-
-
 
     -- THREAT
     add_threat_mod_all_ranks({

@@ -51,7 +51,7 @@ end
 -- in spells list without requiring "Other spells filter"
 -- Do this for special spells like auto attack and shoot
 local normal_spell_train_hack = -1;
-for k, v in pairs({"attack", "shoot", "auto_shot"}) do
+for k, v in pairs({"attack", "shoot", "auto_shot", "dodge"}) do
     if spids[v] then
         spells[spids[v]].train = normal_spell_train_hack;
     end
