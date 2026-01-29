@@ -60,11 +60,8 @@ core.equipment_update_needed    = true;
 core.special_action_bar_changed = true;
 core.setup_action_bar_needed    = true;
 core.update_action_bar_needed   = false;
-core.addon_message_on_update    = false;
 core.old_ranks_checks_needed    = true;
 core.rescan_action_bar_needed   = false;
-
-local addon_msg_sc_id = "__SpellCoda";
 
 local function generated_data_is_outdated(loaded_version, gen_version)
     local loaded = string.gmatch(loaded_version, "[^.]+");
@@ -134,9 +131,6 @@ local function main_update()
     spell_tracking(t_elapsed);
 
     update_overlay();
-    if core.addon_message_on_update then
-        C_ChatInfo.SendAddonMessage(addon_msg_sc_id, "UPDATE_TRIGGER", "WHISPER", pname);
-    end
 
     sc.sequence_counter = sc.sequence_counter + 1;
     timestamp = t;
@@ -239,7 +233,7 @@ local event_dispatch = {
             end
         end
         sc.ui.post_login_load();
-        C_ChatInfo.RegisterAddonMessagePrefix(addon_msg_sc_id);
+        sc.buffs.post_login_load();
         if __spellcoda_debug__ or __spellcoda_test_all_data__ or __spellcoda_test_all_spells__ then
             print("WARNING: SC DEBUG TOOLS ARE ON!!!");
             for _ = 1, 10 do
@@ -467,14 +461,10 @@ SLASH_SPELL_CODA2 = "/spellcoda"
 SLASH_SPELL_CODA3 = "/SpellCoda"
 SlashCmdList["SPELL_CODA"] = command
 
-sc.ext.enable_addon_message_on_update = function()
-    core.addon_message_on_update = true;
-end
-sc.ext.disable_addon_message_on_update = function()
-    core.addon_message_on_update = false;
-end
 sc.ext.version_id = core.version_id;
 
+-- __SC and sc.ext should be deleted in favor of new public API at some point
+-- but remains due to external things relying on it
 __SC = sc.ext;
 
 --__spellcoda_debug__ = 1;

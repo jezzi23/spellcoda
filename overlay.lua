@@ -1,6 +1,6 @@
 local _, sc = ...;
 
-local L                                         = sc.L;
+local L                                             = sc.L;
 
 local spell_cost                                    = sc.utils.spell_cost;
 local spell_cast_time                               = sc.utils.spell_cast_time;
@@ -9,7 +9,9 @@ local format_number                                 = sc.utils.format_number;
 local format_dur                                    = sc.utils.format_dur;
 
 local spells                                        = sc.spells;
+local spids                                         = sc.spids;
 local spell_flags                                   = sc.spell_flags;
+
 local highest_learned_rank                          = sc.utils.highest_learned_rank;
 
 local update_loadout_and_effects                    = sc.loadouts.update_loadout_and_effects;
@@ -31,30 +33,32 @@ local active_overlays = {};
 local action_bar_frame_names = {};
 local spell_book_frames = {};
 local action_bar_addon_name = "Default";
-local externally_registered_spells = {};
-local external_overlay_frames = {};
 local num_overlay_components_toggled = 0;
 local action_id_frames = {};
 local num_actions = 120;
 
+local external_overlay_frames = {};
+local external_ccf_callbacks = {};
+
 overlay.decimals_cap = 3;
 
-local anyspell_overlay, anyspell_cast_until_oom_overlay, mana_restoration_overlay, only_threat_overlay;
+local anyspell_overlay, anyspell_cast_until_oom_overlay, mana_restoration_overlay, only_threat_overlay, effective_hp_overlay;
 
-sc.ext.register_spell = function(spell_id)
-    if spells[spell_id] and bit.band(spell.flags, spell_flags.eval) ~= 0 then
-        if not externally_registered_spells[spell_id] then
-            externally_registered_spells[spell_id] = 0;
-        end
-        externally_registered_spells[spell_id] = externally_registered_spells[spell_id] + 1;
-    end
-end
-
-sc.ext.unregister_spell = function(spell_id)
-    if spells[spell_id] and externally_registered_spells[spell_id] then
-        externally_registered_spells[spell_id] = math.max(0, externally_registered_spells[spell_id] - 1);
-    end
-end
+--local externally_registered_spells = {};
+--sc.ext.register_spell = function(spell_id)
+--    if spells[spell_id] and bit.band(spell.flags, spell_flags.eval) ~= 0 then
+--        if not externally_registered_spells[spell_id] then
+--            externally_registered_spells[spell_id] = 0;
+--        end
+--        externally_registered_spells[spell_id] = externally_registered_spells[spell_id] + 1;
+--    end
+--end
+--
+--sc.ext.unregister_spell = function(spell_id)
+--    if spells[spell_id] and externally_registered_spells[spell_id] then
+--        externally_registered_spells[spell_id] = math.max(0, externally_registered_spells[spell_id] - 1);
+--    end
+--end
 
 local function overlay_frames_config(overlay_frames)
 
@@ -82,6 +86,7 @@ local function init_frame_overlay(frame_info)
     end
 end
 
+--  sc.ext scope should be deleted at some point but remains for now
 sc.ext.register_overlay_frame = function(frame, spell_id)
 
     sc.loadouts.force_update = true;
@@ -106,6 +111,22 @@ sc.ext.unregister_overlay_frame = function(frame)
         end
     end
     external_overlay_frames[frame] = nil;
+end
+
+local function register_cc_on_update(callback_fn, info_schema, stats_schema)
+    local ccf_data = {};
+    external_ccf_callbacks[callback_fn] = {
+        data = ccf_data,
+        info = {},
+        stats = {},
+        info_schema = info_schema,
+        stats_schema = stats_schema,
+    };
+    return ccf_data;
+end
+
+local function unregister_cc_on_update(callback_fn)
+    external_ccf_callbacks[callback_fn] = nil;
 end
 
 local function check_old_rank(frame_info, spell_id, clvl)
@@ -241,6 +262,7 @@ local function spell_id_of_action(action_id)
         spell_id = 0;
     elseif (bit.band(spells[spell_id].flags, spell_flags.eval) == 0) and
         (mana_restoration_overlay and bit.band(spells[spell_id].flags, spell_flags.resource_regen) == 0) and
+        (effective_hp_overlay and bit.band(spells[spell_id].flags, spell_flags.ehp) == 0) and
         (only_threat_overlay and bit.band(spells[spell_id].flags, spell_flags.only_threat) == 0) and
         (anyspell_overlay and not spell_cost(spell_id) and not spell_cast_time(spell_id)) then
         spell_id = 0;
@@ -1346,26 +1368,65 @@ end
 local function update_cc()
 
     for _, v in pairs(ccfs) do
-        local k = v.spell_id;
-        if spells[k] and overlay.cc_active == v then
+        if overlay.cc_active == v then
 
+            local k = v.spell_id;
             local spell = spells[k];
             local info, stats;
-            if bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
+            if spells[k] then
+                if bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
 
-                if spells[k].healing_version and config.settings.general_prio_heal then
-                    spell = spells[k].healing_version;
+                    if spells[k].healing_version and config.settings.general_prio_heal then
+                        spell = spells[k].healing_version;
+                    end
+
+                    info, stats = calc_spell_eval(spell, loadout, effects, eval_flags, k);
+                    cast_until_oom(info, spell, stats, loadout, effects, false, 0);
+                elseif bit.band(spells[k].flags, spell_flags.only_threat) ~= 0 then
+                    info, stats = calc_spell_threat(spell, loadout, effects, eval_flags);
+                    info, stats = calc_spell_dummy_cast_until_oom(k, loadout, effects);
+                else
+                    info, stats = calc_spell_dummy_cast_until_oom(k, loadout, effects);
+                end
+                update_ccf(v, spell, info, stats, k);
+            end
+
+            for fn, cc in pairs(external_ccf_callbacks) do
+
+                cc.data.spell_id = k;
+                cc.data.spell = spells[k];
+
+                if info then
+                    if cc.info_schema then
+                        for _, key in ipairs(cc.info_schema) do
+                            cc.info[key] = info[key];
+                        end
+                    else
+                        for kk, vv in pairs(info) do
+                            cc.info[kk] = vv;
+                        end
+                    end
+                    cc.data.info = cc.info;
+                else
+                    cc.data.info = nil;
+                end
+                if stats then
+                    if cc.stats_schema then
+                        for _, key in ipairs(cc.stats_schema) do
+                            cc.stats[key] = stats[key];
+                        end
+                    else
+                        for kk, vv in pairs(stats) do
+                            cc.stats[kk] = vv;
+                        end
+                    end
+                    cc.data.stats = cc.stats;
+                else
+                    cc.data.stats = nil;
                 end
 
-                info, stats = calc_spell_eval(spell, loadout, effects, eval_flags, k);
-                cast_until_oom(info, spell, stats, loadout, effects, false, 0);
-            elseif bit.band(spells[k].flags, spell_flags.only_threat) ~= 0 then
-                info, stats = calc_spell_threat(spell, loadout, effects, eval_flags);
-                info, stats = calc_spell_dummy_cast_until_oom(k, loadout, effects);
-            else
-                info, stats = calc_spell_dummy_cast_until_oom(k, loadout, effects);
+                fn(cc.data.spell_id, cc.data.spell, cc.data.info, cc.data.stats);
             end
-            update_ccf(v, spell, info, stats, k);
         end
     end
 end
@@ -1838,6 +1899,8 @@ overlay.cc_demo                                     = cc_demo;
 overlay.ccf_label_reconfig                          = ccf_label_reconfig;
 overlay.ccf_anim_reconfig                           = ccf_anim_reconfig;
 overlay.init_label_handler                          = init_label_handler;
+overlay.register_ccf_on_update                      = register_ccf_on_update
+overlay.unregister_ccf_on_update                    = unregister_ccf_on_update
 
 sc.overlay = overlay;
 sc.ext.spell_cache = spell_cache;
