@@ -9,7 +9,7 @@ local has_enchant         = sc.equipment.has_enchant;
 
 local config              = sc.config;
 
--------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
 local buffs_export        = {};
 local buff_category       = {
     class    = 1,
@@ -229,18 +229,27 @@ local function apply_fake_buffs(loadout, effects, buffs_cfg)
     end
 end
 
+local sandbox_buffs_cfg;
+local function post_login_load()
+    sandbox_buffs_cfg = __sc_frame.calculator_frame.buffs.working;
+end
+
 local function get_buff_by_lname(loadout, unit, lname, only_self_buff, require_ownership)
-    if unit ~= "" then
+    if unit ~= "" and
+        (not loadout.calculator_mode or not sandbox_buffs_cfg.use_custom or sandbox_buffs_cfg.preserve_active) then
+
         local buff = loadout.dynamic_buffs_lname[unit][lname];
         if buff and (not require_ownership or buff.player_owned) then
             return buff.id;
         end
     else
-        if config.loadout.force_apply_buffs and sc.ui.forced_buffs_lname_to_id[lname] then
+        if loadout.calculator_mode and sandbox_buffs_cfg.use_custom and
+            sc.ui.forced_buffs_lname_to_id[lname] then
+
             if only_self_buff and
-                config.loadout.buffs[sc.ui.forced_buffs_lname_to_id[lname]] then
+                sandbox_buffs_cfg.player_buffs[sc.ui.forced_buffs_lname_to_id[lname]] then
                 return sc.ui.forced_buffs_lname_to_id[lname]
-            elseif config.loadout.target_buffs[sc.ui.forced_buffs_lname_to_id[lname]] then
+            elseif sandbox_buffs_cfg.target_buffs[sc.ui.forced_buffs_lname_to_id[lname]] then
                 return sc.ui.forced_buffs_lname_to_id[lname]
             end
         end
@@ -249,16 +258,17 @@ local function get_buff_by_lname(loadout, unit, lname, only_self_buff, require_o
 end
 
 local function get_buff(loadout, unit, id, only_self_buff, require_ownership)
-    if unit ~= "" then
+    if unit ~= "" and
+        (not loadout.calculator_mode or not sandbox_buffs_cfg.use_custom or sandbox_buffs_cfg.preserve_active) then
         local buff = loadout.dynamic_buffs[unit][id];
         if buff and (not require_ownership or buff.player_owned) then
             return buff.id;
         end
     else
-        if config.loadout.force_apply_buffs then
-            if only_self_buff and config.loadout.buffs[id] then
+        if loadout.calculator_mode and sandbox_buffs_cfg.use_custom then
+            if only_self_buff and sandbox_buffs_cfg.player_buffs[id] then
                 return id;
-            elseif config.loadout.target_buffs[id] then
+            elseif sandbox_buffs_cfg.target_buffs[id] then
                 return id;
             end
         end
@@ -267,16 +277,15 @@ local function get_buff(loadout, unit, id, only_self_buff, require_ownership)
     return nil;
 end
 
-buffs_export.buff_filters = buff_filters;
-buffs_export.filter_flags_active = filter_flags_active;
-buffs_export.buff_category = buff_category;
-buffs_export.buffs = buffs;
-buffs_export.target_buffs = target_buffs;
-buffs_export.detect_buffs = detect_buffs;
-buffs_export.apply_buffs = apply_buffs;
-buffs_export.apply_fake_buffs = apply_fake_buffs;
-buffs_export.non_stackable_effects = non_stackable_effects;
-buffs_export.get_buff = get_buff;
-buffs_export.get_buff_by_lname = get_buff_by_lname;
+----------------------------------------------------------------------------------------------------
+buffs_export.buff_category                      = buff_category;
+buffs_export.buffs                              = buffs;
+buffs_export.target_buffs                       = target_buffs;
+buffs_export.detect_buffs                       = detect_buffs;
+buffs_export.apply_buffs                        = apply_buffs;
+buffs_export.apply_fake_buffs                   = apply_fake_buffs;
+buffs_export.get_buff                           = get_buff;
+buffs_export.get_buff_by_lname                  = get_buff_by_lname;
+buffs_export.post_login_load                    = post_login_load;
 
 sc.buffs = buffs_export;
