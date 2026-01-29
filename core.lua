@@ -39,10 +39,10 @@ sc.core                         = core;
 core.addon_name                 = "SpellCoda";
 
 local version_major             = 0;
-local version_minor             = 7;
+local version_minor             = 8;
 local version_build             = sc.addon_build_id;
 
-core.version_id                 = version_build + version_minor*1000 + version_major*1000000;
+core.version_id                 = version_build + version_minor*100000 + version_major*100000000;
 core.version                    = tostring(version_major) .. "." ..
                                   tostring(version_minor) .. "." ..
                                   tostring(version_build);
