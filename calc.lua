@@ -97,6 +97,7 @@ local evaluation_flags = {
 
     fix_weapon_skill_to_level               = bit.lshift(1, 8),
     at_max_mana                             = bit.lshift(1, 9),
+    at_max_hp                               = bit.lshift(1, 10), -- player hp
 
     -- combo points value shifted, reserve 3 bits for max 5 points
     num_combo_points_bit_start              = 20,
@@ -669,6 +670,12 @@ local function stats_coef(stats, bid, comp, spell, loadout, effects, eval_flags)
     return coef, coef_max or coef;
 end
 
+local function armor_dr_calc(armor, attacker_lvl)
+    return math.max(0, math.min(0.75,
+        armor/(armor + 400 + 85 * (attacker_lvl + 4.5*(math.max(0, attacker_lvl-59))))
+    ));
+end
+
 local function stats_armor_dr(armor, comp, loadout)
 
     local dr = 0.0;
@@ -676,7 +683,7 @@ local function stats_armor_dr(armor, comp, loadout)
         return dr;
 
     elseif bit.band(comp.flags, bit.bor(comp_flags.ignores_mitigation, comp_flags.bleed)) == 0 then
-        dr = armor/(armor + 400 + 85 * (loadout.lvl + 4.5*(math.max(0, loadout.lvl-59))));
+        dr = armor_dr_calc(armor, loadout.lvl);
     end
     return dr;
 end
@@ -1084,8 +1091,8 @@ local function spell_stats_periodic(stats, spell, loadout, effects, eval_flags)
     stats.dodge_ot, stats.parry_ot, stats.block_ot, stats.block_amount_ot = stats_avoidances(stats.attack_skill_ot, periodic, spell, loadout, effects);
     stats.spell_power_ot = stats_sp(benefit_id, periodic, spell, loadout, effects);
     stats.coef_ot, stats.coef_ot_max = stats_coef(stats, benefit_id, periodic, spell, loadout, effects, eval_flags);
-    stats.armor_dr_ot = stats_armor_dr(stats.armor, periodic, loadout);
-    stats.spell_mod_ot = stats_spell_mod(stats.armor_dr_ot, stats.attack_subclass_ot, bid, periodic, spell, effects, stats);
+    stats.target_armor_dr_ot = stats_armor_dr(stats.target_armor, periodic, loadout);
+    stats.spell_mod_ot = stats_spell_mod(stats.target_armor_dr_ot, stats.attack_subclass_ot, bid, periodic, spell, effects, stats);
 
     write_attack_table(stats, false);
     -- hit used as probability to do any kind of damage, allowing procs of attack
@@ -1146,7 +1153,7 @@ local stats_needing_both_components = {
     "target_avg_resi",
     "threat_mod",
     "threat_mod_flat",
-    "armor_dr",
+    "target_armor_dr",
 };
 
 local spell_stats_info;
@@ -1416,7 +1423,7 @@ local function stats_for_spell(stats, spell, loadout, effects, eval_flags)
 
     stats.extra_crit = 0.0;
 
-    stats.armor = math.max(0, (loadout.armor + effects.by_school.target_res_flat[schools.physical]) * (1.0 + effects.by_school.target_res[schools.physical]));
+    stats.target_armor = math.max(0, (loadout.target_armor + effects.by_school.target_res_flat[schools.physical]) * (1.0 + effects.by_school.target_res[schools.physical]));
 
     stats.cost_actual, stats.original_base_cost = stats_cost(bid, spell, loadout, effects);
 
@@ -2453,7 +2460,7 @@ local function only_threat_info(info, stats, spell, loadout, effects, eval_flags
         stats.block = 0;
         stats.crit = 0;
         stats.block_amount = 0;
-        stats.armor_dr = 0;
+        stats.target_armor_dr = 0;
         stats.dodge, stats.parry = stats_avoidances(stats.attack_skill, direct, spell, loadout, effects);
         stats.hit = 1.0 - stats.miss - stats.dodge - stats.parry;
         -- TODO: avoidances
@@ -2522,6 +2529,141 @@ local function only_threat_info(info, stats, spell, loadout, effects, eval_flags
         info.threat_per_sec = math.huge;
     else
         info.threat_per_sec = info.threat/stats.cast_time;
+    end
+end
+
+-- PvE target attacking player
+local pve_attack_table_player_hit = {
+    "player_miss",
+    "player_dodge",
+    "player_parry",
+    "player_block",
+    "player_crush",
+    "player_crit",
+};
+
+local function effective_hp_info(info, loadout, effects, eval_flags)
+
+    if not effects.finalized and __spellcoda_debug__ then
+        print("CALLING SPELL INFO FOR SPELL WITHOUT FINALIZED EFFECTS");
+    end
+
+    eval_flags = eval_flags or 0;
+
+    local clvl = loadout.lvl;
+    local tlvl = loadout.target_lvl;
+
+     -- attack skill of target
+    local attack_skill = 5*tlvl;
+    -- defense skill of player
+    info.player_defense = loadout.defense +
+        effects.raw.defense_skill_rating_flat/(loadout.cr_scaling * cr_weights[combat_ratings.CR_DEFENSE_SKILL]);
+
+    local skill_diff = info.player_defense - attack_skill;
+
+    info.player_miss = math.min(1, math.max(0,
+        0.05
+        +
+        0.0004*skill_diff
+    ));
+
+    local per_def = 0.0004;
+
+    -- sheet uses active defense skill and attacker skill as clvl*5
+    local sheet_skill_diff = loadout.defense - clvl*5;
+
+    info.player_dodge = math.min(1, math.max(0,
+        loadout.dodge - per_def * (loadout.defense - clvl*5) -- use sheet dodge as base but remove defense factor
+        +
+        effects.raw.dodge
+        +
+        0.01*effects.raw.dodge_rating_flat/(loadout.cr_scaling * cr_weights[combat_ratings.CR_DODGE])
+        +
+        per_def*skill_diff
+    ));
+
+    -- if parry is not learned, sheet parry seem to consistently 0
+    if loadout.parry ~= 0 then
+        info.player_parry = math.min(1, math.max(0,
+            loadout.parry - per_def * (loadout.defense - clvl*5)
+            +
+            effects.raw.parry
+            +
+            0.01*effects.raw.parry_rating_flat/(loadout.cr_scaling * cr_weights[combat_ratings.CR_PARRY])
+            +
+            per_def*skill_diff
+        ));
+    else
+        info.player_parry = 0;
+    end
+
+    if effects.raw.can_block > 0 then
+        info.player_block = math.min(1, math.max(0,
+            loadout.block - per_def * (loadout.defense - clvl*5)
+            +
+            effects.raw.block
+            +
+            0.01*effects.raw.block_rating_flat/(loadout.cr_scaling * cr_weights[combat_ratings.CR_BLOCK])
+            +
+            per_def*skill_diff
+        ));
+    else
+        info.player_block = 0;
+    end
+
+    if skill_diff <= -15 then
+        info.player_crush = math.min(1, math.max(0,
+            -skill_diff*0.02 - 0.15
+        ));
+    else
+        info.player_crush = 0;
+    end
+
+    info.player_crit = math.min(1, math.max(0,
+        0.05 + effects.raw.attacker_melee_crit - per_def*skill_diff
+    ));
+
+    local crit = info.player_crit;
+    local crush = info.player_crush;
+    local p_sum = 0.0;
+
+    for _, v in ipairs(pve_attack_table_player_hit) do
+        info[v] = math.min(info[v], 1.0 - p_sum);
+        p_sum = p_sum + info[v];
+    end
+    -- normal hit becomes remainder
+    info.player_hit = 1.0 - p_sum;
+    info.player_crit_excess = crit - info.player_crit; -- crit pushed off attack table
+    info.player_crush_excess = crush - info.player_crush; -- crush pushed off attack table
+
+    -- the sum of the attack table probabilities is now 1.0 and we do weighted multipliers
+    local avg_multiplier =
+        info.player_miss    * 0.0 +
+        info.player_dodge   * 0.0 +
+        info.player_parry   * 0.0 +
+        info.player_block   * 1.0 + -- block value ignored, we generalize for any incoming damage number
+        info.player_crush   * 1.5 +
+        info.player_crit    * 2.0 +
+        info.player_hit     * 1.0;
+
+    info.player_armor = loadout.armor + effects.by_school.res_flat[schools.physical];
+    info.player_armor_dr = armor_dr_calc(info.player_armor, tlvl);
+
+    info.player_vuln_phys = effects.mul.raw.player_vuln_phys;
+
+    local avg_dmg_taken_multiplier = avg_multiplier * (1.0 - info.player_armor_dr) * info.player_vuln_phys;
+
+    if bit.band(eval_flags, evaluation_flags.at_max_hp) ~= 0 then
+        info.player_hp = loadout.player_hp_max;
+    else
+        info.player_hp = loadout.player_hp;
+    end
+    info.player_hp = info.player_hp + effects.raw.hp_flat;
+
+    if avg_dmg_taken_multiplier == 0 then
+        info.ehp = math.huge;
+    else
+        info.ehp = info.player_hp/avg_dmg_taken_multiplier;
     end
 end
 
@@ -2816,6 +2958,11 @@ local function calc_spell_resource_regen(spell, spell_id, loadout, effects, eval
    return info_buffer;
 end
 
+local function calc_effective_hp(loadout, effects, eval_flags)
+   effective_hp_info(info_buffer, loadout, effects, eval_flags)
+   return info_buffer;
+end
+
 local function calc_spell_dummy_cast_until_oom(spell_id, loadout, effects)
     dummy_cast_until_oom_info(info_buffer, stats_buffer, spell_id, loadout, effects);
     return info_buffer, stats_buffer;
@@ -2826,10 +2973,14 @@ local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_fin
     out.name = GetSpellInfo(spell_id);
 
     if bit.band(spell.flags, bit.bor(spell_flags.finishing_move_dmg, spell_flags.finishing_move_dur)) ~= 0 then
+
+        -- always use max combo pts for spell these diffs
+        local combo_pts = 5;
+        eval_flags = bit.bor(eval_flags, bit.lshift(combo_pts, evaluation_flags.num_combo_points_bit_start));
         if spell.rank == 0 then
-            out.extra = string.format("|cFFA9A9A9 CP: %d|r", loadout.resources[powers.combopoints]);
+            out.extra = string.format("|cFFA9A9A9 CP: %d|r", combo_pts);
         else
-            out.extra = string.format("|cFFA9A9A9 R%d | CP: %d|r", spell.rank, loadout.resources[powers.combopoints]);
+            out.extra = string.format("|cFFA9A9A9 R%d | CP: %d|r", spell.rank, combo_pts);
         end
     else
         if spell.rank == 0 then
@@ -2844,6 +2995,7 @@ local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_fin
     out.tex = GetSpellTexture(spell_id);
 
     out.heal_like = bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) ~= 0;
+    out.tank_like = false;
 
     if fight_types.repeated_casts == fight_type then
 
@@ -2897,6 +3049,39 @@ local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_fin
     end
 end
 
+local function ehp_diff(out, loadout, effects_finalized, effects_d, eval_flags)
+
+    out.name = L["Effective Health"];
+
+    out.extra = string.format(" "..L["EHP"]);
+
+    out.disp = out.name;
+    out.id = spids.dodge;
+    out.tex = sc.ui.ehp_tex;
+
+    out.heal_like = false;
+    out.tank_like = true;
+
+    eval_flags = bit.bor(eval_flags, evaluation_flags.at_max_hp);
+    local info = calc_effective_hp(loadout, effects_finalized, eval_flags);
+
+    local normal_ehp = info.ehp;
+
+    effects_finalize_forced(loadout, effects_d);
+    info = calc_effective_hp(loadout, effects_d, eval_flags);
+
+    out.effect_timed = nil;
+    out.effect_timed_changed_perc = nil;
+
+    if normal_ehp == math.huge then
+        out.effect_changed_perc = nil
+        out.effect = nil;
+    else
+        out.effect_changed_perc = 100 * (info.ehp / normal_ehp - 1);
+        out.effect = info.ehp - normal_ehp;
+    end
+end
+
 --------------------------------------------------------------------------------
 calc.fight_types                        = fight_types;
 calc.evaluation_flags                   = evaluation_flags;
@@ -2905,12 +3090,14 @@ calc.spell_info                         = spell_info;
 calc.cast_until_oom                     = cast_until_oom;
 calc.stat_weights                       = stat_weights;
 calc.spell_diff                         = spell_diff;
+calc.ehp_diff                           = ehp_diff;
 calc.resource_regen_info                = resource_regen_info;
 calc.only_threat_info                   = only_threat_info;
 calc.calc_spell_eval                    = calc_spell_eval;
 calc.calc_spell_threat                  = calc_spell_threat;
 calc.calc_spell_resource_regen          = calc_spell_resource_regen;
+calc.calc_effective_hp                  = calc_effective_hp;
 calc.calc_spell_dummy_cast_until_oom    = calc_spell_dummy_cast_until_oom;
 
-sc.calc                      = calc;
+sc.calc                                 = calc;
 

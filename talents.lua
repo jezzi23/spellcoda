@@ -114,7 +114,7 @@ local function apply_talents(loadout, effects, wowhead_code, forced, undo)
         -- Testing all special passives
         local passives_applied = 0;
         for id, e in pairs(sc.passives) do
-            apply_effect( effects, id, e, true, 1);
+            apply_effect(effects, id, e, true, 1, false, true, true);
             passives_applied = passives_applied + 1;
         end
 
@@ -128,7 +128,7 @@ local function apply_talents(loadout, effects, wowhead_code, forced, undo)
 
         for _, v in pairs(sc.talent_ranks) do
             for _, i in pairs(v) do
-                apply_effect(effects, i, sc.talent_effects[i], true, 1);
+                apply_effect(effects, i, sc.talent_effects[i], true, 1, false, true, true);
                 applied = applied + 1;
             end
         end

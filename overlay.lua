@@ -22,6 +22,7 @@ local cast_until_oom                                = sc.calc.cast_until_oom;
 local calc_spell_eval                               = sc.calc.calc_spell_eval;
 local calc_spell_threat                             = sc.calc.calc_spell_threat;
 local calc_spell_resource_regen                     = sc.calc.calc_spell_resource_regen;
+local calc_effective_hp                             = sc.calc.calc_effective_hp;
 local calc_spell_dummy_cast_until_oom               = sc.calc.calc_spell_dummy_cast_until_oom;
 
 local config                                        = sc.config;
@@ -539,8 +540,8 @@ local non_eval_label_types = {
 
 local function update_icon_overlay_settings()
 
-    anyspell_overlay, anyspell_cast_until_oom_overlay, mana_restoration_overlay, only_threat_overlay =
-        false, false, false, false;
+    anyspell_overlay, anyspell_cast_until_oom_overlay, mana_restoration_overlay, only_threat_overlay, effective_hp_overlay =
+        false, false, false, false, false;
 
     num_overlay_components_toggled = 0;
     if config.settings.overlay_top_enabled then
@@ -582,6 +583,7 @@ local function update_icon_overlay_settings()
     end
 
     mana_restoration_overlay = config.settings.overlay_resource_regen;
+    effective_hp_overlay = config.settings.overlay_ehp;
 
     -- hide existing overlay frames that should no longer exist
     clear_overlays();
@@ -929,13 +931,13 @@ local function init_label_handler()
                 local mit;
                 if spell.direct then
                     if spell.direct.school1 == sc.schools.physical then
-                        mit = stats.armor_dr;
+                        mit = stats.target_armor_dr;
                     else
                         mit = stats.target_avg_resi;
                     end
                 else
                     if spell.periodic.school1 == sc.schools.physical then
-                        mit = stats.armor_dr_ot;
+                        mit = stats.target_armor_dr_ot;
                     else
                         mit = stats.target_avg_resi_ot;
                     end
@@ -955,13 +957,23 @@ local function init_label_handler()
         },
         overlay_display_resource_regen = {
             func = function(frame_overlay, info)
-                frame_overlay:SetText(string.format("%.0f", math.ceil(info.total_restored)));
+                frame_overlay:SetText(format_number(info.total_restored, math.min(1, overlay.decimals_cap)));
             end,
             desc = L["Resource regeneration"],
             color_tag = "cost",
             requires_spell_flags = spell_flags.resource_regen,
             non_standard = true,
             tooltip = L["Shows resource gained from spells like Evocation, Mana tide totem, etc."],
+        },
+        overlay_display_ehp = {
+            func = function(frame_overlay, info)
+                frame_overlay:SetText(format_number(info.ehp, math.min(1, overlay.decimals_cap)));
+            end,
+            desc = L["Effective health"],
+            color_tag = "expectation",
+            requires_spell_flags = spell_flags.ehp,
+            non_standard = true,
+            tooltip = L["Puts effective health calculation into passive spell "]..select(1, GetSpellInfo(spids.dodge)),
         },
     };
     sc.overlay.label_handler = overlay_label_handler;
@@ -982,6 +994,19 @@ local function update_spell_icon_frame(frame_info, spell, spell_id, loadout, eff
 
         frame_info.overlay_frames[resource_restore_disp_index]:SetTextColor(effect_color(handler.color_tag));
         frame_info.overlay_frames[resource_restore_disp_index]:Show();
+
+    elseif bit.band(spell.flags, spell_flags.ehp) ~= 0 and
+        config.settings.overlay_ehp then
+
+        spell_effect = calc_effective_hp(loadout, effects, eval_flags);
+
+        local handler = overlay_label_handler.overlay_display_ehp;
+
+        local ehp_disp_index = config.settings.overlay_ehp_display_idx;
+        handler.func(frame_info.overlay_frames[ehp_disp_index], spell_effect);
+
+        frame_info.overlay_frames[ehp_disp_index]:SetTextColor(effect_color(handler.color_tag));
+        frame_info.overlay_frames[ehp_disp_index]:Show();
 
     elseif num_overlay_components_toggled > 0 then
 
@@ -1142,8 +1167,8 @@ local function cc_demo_dummy_fill(info, stats)
     info.ot_hit_normal1 = 1/3;
     info.crit1 = 1/3;
     info.ot_crit1 = 1/3;
-    stats.armor_dr = 0.2;
-    stats.armor_dr_ot = 0.2;
+    stats.target_armor_dr = 0.2;
+    stats.target_armor_dr_ot = 0.2;
     stats.target_avg_resi = 0.2;
     stats.target_avg_resi_ot = 0.2;
 end

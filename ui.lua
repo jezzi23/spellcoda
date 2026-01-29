@@ -37,6 +37,7 @@ local effects_finalize_forced                   = sc.loadouts.effects_finalize_f
 local empty_effects                             = sc.loadouts.empty_effects;
 
 local spell_diff                                = sc.calc.spell_diff;
+local ehp_diff                                  = sc.calc.ehp_diff;
 local calc_spell_eval                           = sc.calc.calc_spell_eval;
 
 local buff_category                             = sc.buffs.buff_category;
@@ -210,16 +211,19 @@ local function display_spell_diff(i, calc_list, diff, frame)
 
     v.name_str:SetTextColor(222/255, 192/255, 40/255);
 
+    v.first:SetText(colored_diff_str(diff.effect, diff.effect_changed_perc, 2));
+    v.second:SetText(colored_diff_str(diff.effect_timed, diff.effect_timed_changed_perc, 2));
+
     if diff.heal_like then
         v.role_icon.tex:SetTexCoord(0.25, 0.5, 0.0, 0.25);
+    elseif diff.tank_like then
+        v.role_icon.tex:SetTexCoord(0.0, 0.25, 0.25, 0.5);
+        v.second:SetText(" ");
     else
         v.role_icon.tex:SetTexCoord(0.25, 0.5, 0.25, 0.5);
     end
     v.role_icon.tex:SetAllPoints(v.role_icon);
 
-    v.first:SetText(colored_diff_str(diff.effect, diff.effect_changed_perc, 2));
-
-    v.second:SetText(colored_diff_str(diff.effect_timed, diff.effect_timed_changed_perc, 2));
 
     for _, f in pairs(v) do
         f:Show();
@@ -606,6 +610,13 @@ local function populate_scrollable_spell_view(view, starting_idx)
                 line.type_str:Show();
                 line.per_sec_str:Show();
                 line.per_cost_str:Show();
+            elseif bit.band(spells[v.spell_id].flags, spell_flags.ehp) ~= 0 then
+                line.spell_name:SetText(L["Effective Health"]);
+                line.spell_tex:SetTexture(ehp_tex);
+                line.effect_type_tex:SetTexCoord(0.0, 0.25, 0.25, 0.5);
+                line.effect_type_tex:SetAllPoints(line.effect_type_icon);
+                line.effect_type_tex:Show();
+                line.effect_type_icon:Show();
             end
             if config.settings.spells_ignore_list[v.spell_id] then
                 line.ignore_line:Show();
@@ -1654,6 +1665,12 @@ local function create_sw_ui_tooltip_frame(pframe)
             tooltip = sc.overlay.label_handler.overlay_display_resource_regen.tooltip,
             color_tag = "cost",
         },
+        {
+            id = "tooltip_display_ehp",
+            txt = L["Effective health"],
+            color_tag = "expectation",
+            tooltip = sc.overlay.label_handler.overlay_display_ehp.tooltip,
+        },
     };
 
     pframe.y_offset = pframe.y_offset - 10;
@@ -1673,6 +1690,7 @@ local function create_sw_ui_tooltip_frame(pframe)
         getglobal("__sc_frame_setting_tooltip_display_effect_per_cost"):Click();
         getglobal("__sc_frame_setting_tooltip_display_eval_options"):Click();
         getglobal("__sc_frame_setting_tooltip_display_resource_regen"):Click();
+        getglobal("__sc_frame_setting_tooltip_display_ehp"):Click();
 
     end);
 
@@ -1728,6 +1746,7 @@ local function create_sw_ui_tooltip_frame(pframe)
         getglobal("__sc_frame_setting_tooltip_display_stat_weights_effect_until_oom"):Click();
         getglobal("__sc_frame_setting_tooltip_display_eval_options"):Click();
         getglobal("__sc_frame_setting_tooltip_display_resource_regen"):Click();
+        getglobal("__sc_frame_setting_tooltip_display_ehp"):Click();
     end);
     pframe.preset_detailed_button:SetPoint("TOPLEFT", 320, pframe.y_offset+16);
     pframe.preset_detailed_button:SetText(L["Detailed"]);
@@ -2391,7 +2410,7 @@ local function create_sw_ui_overlay_frame(pframe)
         pframe.y_offset = pframe.y_offset - 20;
     end
 
-    pframe.y_offset = pframe.y_offset - 10;
+    pframe.y_offset = pframe.y_offset - 7;
 
     do
         local option_key = "overlay_resource_regen";
@@ -2405,6 +2424,7 @@ local function create_sw_ui_overlay_frame(pframe)
             sc.loadouts.force_update = true;
         end);
         local handler = sc.overlay.label_handler.overlay_display_resource_regen;
+        f.tooltip = handler.tooltip;
         local text_frame = getglobal(f:GetName()..'Text');
         text_frame:SetText(handler.desc);
         register_text_frame_color(text_frame, handler.color_tag);
@@ -2447,7 +2467,64 @@ local function create_sw_ui_overlay_frame(pframe)
         end;
         ofs[#ofs + 1] = dd;
     end
-    pframe.y_offset = pframe.y_offset - 30;
+    pframe.y_offset = pframe.y_offset - 26;
+
+    do
+        local option_key = "overlay_ehp";
+        f = CreateFrame("CheckButton", "__sc_frame_setting_"..option_key, pframe, "ChatConfigCheckButtonTemplate");
+        f._type = "CheckButton";
+        f._settings_id = option_key;
+        f:SetPoint("TOPLEFT", 10, pframe.y_offset);
+        f:SetScript("OnClick", function(self)
+            config.settings[self._settings_id] = self:GetChecked();
+            sc.core.update_action_bar_needed = true;
+            sc.loadouts.force_update = true;
+        end);
+        local handler = sc.overlay.label_handler.overlay_display_ehp;
+        f.tooltip = handler.tooltip;
+        local text_frame = getglobal(f:GetName()..'Text');
+        text_frame:SetText(handler.desc);
+        register_text_frame_color(text_frame, handler.color_tag);
+        ofs[#ofs + 1] = f;
+    end
+    do
+        local option_key = "overlay_ehp_display_idx";
+        local dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_"..option_key, pframe);
+
+        dd._type = "DropDownMenu";
+        dd._settings_id = option_key;
+        dd:SetPoint("TOPLEFT", 165, pframe.y_offset+3);
+        local selections =  {L["Top label"], L["Center label"], L["Bottom label"]};
+        dd.init_func = function()
+            libDD:UIDropDownMenu_Initialize(dd, function(self)
+
+                sc.core.update_action_bar_needed = true;
+                sc.loadouts.force_update = true;
+
+                libDD:UIDropDownMenu_SetWidth(self, 120);
+
+                for i, disp in ipairs(selections) do
+                    if config.settings[self._settings_id] == i then
+                        libDD:UIDropDownMenu_SetText(self, disp);
+                    end
+                    libDD:UIDropDownMenu_AddButton(
+                        {
+                            text = disp,
+                            checked = i == config.settings[self._settings_id],
+                            func = function()
+                                config.settings[self._settings_id] = i;
+                                sc.core.update_action_bar_needed = true;
+                                sc.loadouts.force_update = true;
+                                libDD:UIDropDownMenu_SetText(self, disp);
+                            end,
+                        }
+                    );
+                end
+            end);
+        end;
+        ofs[#ofs + 1] = dd;
+    end
+    pframe.y_offset = pframe.y_offset - 26;
 
     local cfs = {}
 
@@ -3871,20 +3948,39 @@ local function create_calculator_items_subframe(pframe)
         end;
     end
 
-    -- ChatEdit_InsertLink only works on era client
-    --hooksecurefunc("ChatEdit_InsertLink", function(link)
-    --    if link then
-    --        handle_player_links(link);
-    --    end
-    --end);
+    --
 
-    -- HandleModifiedItemClick seems to work on all clients
-    hooksecurefunc("HandleModifiedItemClick", function(link)
+    -- ChatEdit_InsertLink only works on era client
+    -- HandleModifiedItemClick seems to work on all clients,
+    -- but other addon's shift clickables might only call ChatEdit_InsertLink
+    --
+    -- Workaround to use both without duplicate links
+    local handle_modified_item_click_link;
+    local chatedit_insertlink_link;
+
+    hooksecurefunc("ChatEdit_InsertLink", function(link)
         if link then
-            handle_player_links(link);
+            if link ~= handle_modified_item_click_link then
+
+                handle_player_links(link);
+                chatedit_insertlink_link = link;
+            else
+                handle_modified_item_click_link = nil;
+            end
         end
     end);
 
+    hooksecurefunc("HandleModifiedItemClick", function(link)
+        if link then
+            if link ~= chatedit_insertlink_link then
+
+                handle_player_links(link);
+                handle_modified_item_click_link = link;
+            else
+                chatedit_insertlink_link = nil;
+            end
+        end
+    end);
 
     f_txt = pframe.items:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
@@ -4140,6 +4236,18 @@ local function create_calculator_stats_subframe(pframe)
         stam = {
             label_str = L["Stamina"]
         },
+        armor = {
+            label_str = L["Armor"]
+        },
+        dodge_rating = {
+            label_str = L["Dodge"]
+        },
+        parry_rating = {
+            label_str = L["Parry"]
+        },
+        defense_skill_rating = {
+            label_str = L["Defense"]
+        },
         sp = {
             label_str = L["Spell Power"]
         },
@@ -4182,11 +4290,11 @@ local function create_calculator_stats_subframe(pframe)
     };
 
     local comparison_stats_listing_order = {
-        "str", "agi", "stam", "int", "spirit", "mp5", "crit_rating", "hit_rating", "haste_rating", "expertise_rating",
-        "ap", "rap", "weapon_skill", "sp", "sd", "hp", "pen", "extra_mana",
+        "str", "agi", "stam", "int", "spirit", "mp5", "extra_mana", "armor", "defense_skill_rating", "dodge_rating", "parry_rating",
+        "crit_rating", "hit_rating", "haste_rating", "expertise_rating", "ap", "rap", "weapon_skill", "sp", "sd", "hp", "pen",
     };
 
-    local new_column_breakpoint = "ap";
+    local new_column_breakpoint = "crit_rating";
 
     local num_stats = #comparison_stats_listing_order;
 
@@ -4228,7 +4336,7 @@ local function create_calculator_stats_subframe(pframe)
                 self:SetText("");
                 self:SetFocus();
             else 
-                update_calc_list();
+                --update_calc_list(true);
             end
 
             pframe.calculator_plan_changed = true;
@@ -6527,6 +6635,7 @@ ui.locale_warning_popup                 = locale_warning_popup;
 ui.update_calculator_character_items    = update_calculator_character_items;
 ui.effects_from_ui_stats_diff           = effects_from_ui_stats_diff;
 ui.update_talents_frame                 = update_talents_frame;
+ui.ehp_tex                              = ehp_tex;
 
 sc.ui = ui;
 

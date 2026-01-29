@@ -201,6 +201,20 @@ local function apply_ammo(effects, ammo_effect, undo)
     effects.raw.ammo_dps = effects.raw.ammo_dps + mod*ammo_effect[1];
 end
 
+local function apply_armor(effects, item_id, undo)
+    local armor = sc.armor[item_id];
+    if not armor then
+        return;
+    end
+    local mod
+    if undo then
+        mod = -1;
+    else
+        mod = 1;
+    end
+    effects.raw.base_res_phys_flat = effects.raw.base_res_phys_flat + mod*armor;
+end
+
 local function apply_item_stats(effects, item_info, forced, undo)
 
     if not item_info.link then
@@ -312,7 +326,7 @@ local function wpn_skill_for_slot(loadout, effects, slot, weapon_subclass_id)
     return wpn_skill;
 end
 
-local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems, should_apply_enchant)
+local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems, should_apply_enchant, shapeshift)
 
     item_info.wpn_skill = 0;
 
@@ -325,11 +339,28 @@ local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems,
         return;
     end
 
+    if item_info.class_id == 4 and item_info.subclass_id == 6 then
+        -- shields
+        if undo then
+            effects.raw.can_block = effects.raw.can_block - 1;
+        else
+            effects.raw.can_block = effects.raw.can_block + 1;
+        end
+    end
 
     if sc.items[item_info.id] then
         for _, id in pairs(sc.items[item_info.id]) do
             if sc.item_effects[id] then
-                apply_effect(effects, id, sc.item_effects[id], true, 1, undo, false)
+                apply_effect(
+                    effects,
+                    id,
+                    sc.item_effects[id],
+                    true,
+                    1,
+                    undo,
+                    false,
+                    shapeshift
+                );
             end
         end
     end
@@ -353,6 +384,7 @@ local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems,
             end
         end
     end
+    apply_armor(effects, item_info.id, undo);
 
     if slot == slots.AmmoSlot then
         -- ammo
@@ -360,7 +392,7 @@ local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems,
     end
 end
 
-local function apply_set_bonuses(effects, force, undo)
+local function apply_set_bonuses(effects, force, undo, shapeshift)
 
     for set_id, num in pairs(effects.num_set_pieces) do
         if num > 1 then
@@ -372,7 +404,17 @@ local function apply_set_bonuses(effects, force, undo)
                     if num < threshold then
                         break;
                     end
-                    apply_effect(effects, effect_id, sc.set_effects[effect_id], force, 1.0, undo);
+
+                    apply_effect(
+                        effects,
+                        effect_id,
+                        sc.set_effects[effect_id],
+                        force,
+                        1.0,
+                        undo,
+                        nil,
+                        shapeshift
+                    );
                 end
             end
         end
@@ -382,6 +424,9 @@ end
 local function apply_items_cmp(loadout, effects, new_items, old_items,
                                should_apply_gems, should_apply_enchant, should_apply_set_bonuses)
 
+
+    local shapeshift = sc.class == sc.classes.druid and effects.raw.class_misc ~= 0;
+
     for slot, new_info in pairs(new_items) do
 
         local old_info = old_items[slot];
@@ -389,19 +434,19 @@ local function apply_items_cmp(loadout, effects, new_items, old_items,
         --if old_info and old_info.id then
         if old_info then
             -- Force undo on old item
-            apply_item_cmp(effects, old_info, slot, true, should_apply_gems, should_apply_enchant)
+            apply_item_cmp(effects, old_info, slot, true, should_apply_gems, should_apply_enchant, shapeshift)
         end
         -- Force apply new item
         --if new_info.id then
-        --    apply_item_cmp(effects, new_info, slot, false, should_apply_gems, should_apply_enchant)
+        --    apply_item_cmp(effects, new_info, slot, false, should_apply_gems, should_apply_enchant, shapeshift)
         --end
-        apply_item_cmp(effects, new_info, slot, false, should_apply_gems, should_apply_enchant)
+        apply_item_cmp(effects, new_info, slot, false, should_apply_gems, should_apply_enchant, shapeshift)
     end
 
     if should_apply_set_bonuses then
 
         -- force undo active
-        apply_set_bonuses(effects, true, true);
+        apply_set_bonuses(effects, true, true, shapeshift);
 
         for slot, new_info in pairs(new_items) do
             local old_info = old_items[slot];
@@ -417,7 +462,7 @@ local function apply_items_cmp(loadout, effects, new_items, old_items,
         end
 
         -- force apply with changes
-        apply_set_bonuses(effects, true, false);
+        apply_set_bonuses(effects, true, false, shapeshift);
     end
 end
 
@@ -487,8 +532,15 @@ local function apply_equipment(loadout, effects)
         -- ammo equipped
         apply_ammo(effects, sc.weapons[loadout.items[slots.AmmoSlot]], false);
     end
+    local offhand_link = loadout.item_links[slots.SecondaryHandSlot];
+    if offhand_link then
+        local _, _, _, _, _, class_id, subclass_id = GetItemInfoInstant(offhand_link);
+        if class_id == 4 and subclass_id == 6 then
+            -- shield
+            effects.raw.can_block = effects.raw.can_block + 1;
+        end
+    end
 
-    -- just do weapon enchants for now, are others even needed?
     local _, _, _, enchant_id = GetWeaponEnchantInfo();
     if sc.enchants[enchant_id] then
          -- may need to deal with weapon slots here instead of nil
@@ -514,7 +566,7 @@ local function apply_equipment(loadout, effects)
         local items_applied = 0;
         for _, v in pairs(sc.items) do
             for _, id in pairs(v) do
-                apply_effect(effects, id, sc.item_effects[id], true, 1.0);
+                apply_effect(effects, id, sc.item_effects[id], true, 1.0, false, true, true);
                 items_applied = items_applied + 1;
             end
         end
@@ -524,7 +576,7 @@ local function apply_equipment(loadout, effects)
             for _, bonus in pairs(v) do
                 local id = bonus[2];
 
-                apply_effect(effects, id, sc.set_effects[id], true, 1.0);
+                apply_effect(effects, id, sc.set_effects[id], true, 1.0, false, true, true);
                 sets_applied = sets_applied + 1;
             end
         end
@@ -535,7 +587,7 @@ local function apply_equipment(loadout, effects)
             for _, id in pairs(v) do
 
                 effects.enchants[k] = 1;
-                apply_effect(effects, id, sc.enchant_effects[id], true, 1.0);
+                apply_effect(effects, id, sc.enchant_effects[id], true, 1.0, false, true, true);
                 enchants_applied = enchants_applied + 1;
             end
         end

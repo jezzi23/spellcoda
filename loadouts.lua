@@ -20,6 +20,7 @@ local hp_per_stam                       = sc.scaling.hp_per_stam;
 local ap_per_str                        = sc.scaling.ap_per_str;
 local ap_per_agi                        = sc.scaling.ap_per_agi;
 local rap_per_agi                       = sc.scaling.rap_per_agi;
+local armor_per_agi                     = sc.scaling.armor_per_agi;
 local cr_weights                        = sc.scaling.cr_weights;
 local spirit_mana_regen                 = sc.scaling.spirit_mana_regen;
 
@@ -41,9 +42,9 @@ local loadout_flags = {
 -- Loadout and Effects split into sections by types to make comparing, iterating, merging
 -- not need a slower general purpose recursive implementation
 local loadout_numbers = {
-    "armor",
+    "target_armor",
     "player_hp_max",
-    "player_hp_perc",
+    "player_hp",
     "enemy_hp_perc",
     "flags",
     "lvl",
@@ -60,7 +61,9 @@ local loadout_numbers = {
     "m2_skill",
     "melee_crit",
     "ranged_crit",
-    "block_value",
+    "block",
+    "dodge",
+    "parry",
     "r_speed",
     "r_min",
     "r_max",
@@ -228,6 +231,7 @@ local effects_additive = {
         "target_res_flat",
         "threat",
         "cost_mod",
+        "res_flat",
     },
     by_attr = {
         "stat_flat",
@@ -295,7 +299,7 @@ local effects_additive = {
         "mana_mod",
         "mana_mod_forced",
         "mana",
-        "hp",
+        "hp_flat",
         "hp_mod",
         "hp_mod_forced",
         "mp5_from_int_mod",
@@ -318,6 +322,18 @@ local effects_additive = {
         "extra_hits_flat",
         "skill",
         "class_misc",
+        "base_res_phys_flat",
+        "base_res_phys_mod",
+        "base_res_phys_mod_forced",
+        "res_phys_mod",
+        "res_phys_mod_forced",
+        "base_phys_res_flat",
+        "phys_res_flat",
+        "block",
+        "dodge",
+        "parry",
+        "can_block",
+        "attacker_melee_crit",
 
         "wpn_subclass_mh",
         "wpn_subclass_oh",
@@ -370,6 +386,8 @@ local effects_multiplicative = {
         "ranged_haste_forced",
         "cast_haste",
         "vuln_bleed",
+
+        "player_vuln_phys",
     },
 };
 
@@ -594,9 +612,14 @@ local function effects_negate_for_diff(dst, src)
     end
 end
 
-local function add_field_line(info, val, txt, diff, perc, mul, raw)
+local function add_field_line(info, val, txt, diff, perc, mul, raw, extras)
     local red = (diff and "|cFFC32C0B") or "|cFFFFFFFF";
     local green = (diff and "|cFF21B915") or "|cFFFFFFFF";
+    local stat_color = "|cFFFFD100";
+
+    if diff and extras then
+        stat_color = "|cFFB5B09B";
+    end
 
     local force_add = false;
     local val_str;
@@ -630,11 +653,11 @@ local function add_field_line(info, val, txt, diff, perc, mul, raw)
 
     if force_add or (mul and val > 1) or (not mul and val > 0) then
         info.num_in = info.num_in + 1;
-        info.str = info.str..string.format("%s+ %s|r %s\n", green, val_str, txt);
+        info.str = info.str..string.format("%s+ %s|r %s%s|r\n", green, val_str, stat_color, txt);
         return true;
     elseif (mul and val < 1) or (not mul and val < 0) then
         info.num_out = info.num_out + 1;
-        info.str = info.str..string.format("%s-  %s|r %s\n", red, val_str, txt);
+        info.str = info.str..string.format("%s-  %s|r %s%s|r\n", red, val_str, stat_color, txt);
         return true;
     end
 end
@@ -732,7 +755,30 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
             +
             effects.by_attr.stat_flat[i];
 
-        add_field_line(info, val, v, is_diff);
+        add_field_line(info, val, v, is_diff, nil, nil, nil, true);
+    end
+    ---------------------------------
+    --- Ratings
+    ---------------------------------
+    for _, v in ipairs(ratings) do
+        local val = ((loadout and loadout[v[2]]) or 0)
+            +
+            effects.raw[v[2].."_flat"];
+        add_field_line(info, val, v[3], is_diff, nil, nil, nil, true);
+    end
+
+    -- When diffed, attributes and ratings are grayed out a bit as to indicate
+    -- that when e.g. +1 agility is not additive to the consequent + crit%, dodge% and armor which is also displayed
+
+    ---------------------------------
+    --- Defense
+    ---------------------------------
+
+    do
+        local val = ((loadout and loadout.defense) or 0)
+            +
+            effects.raw.defense_skill_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_DEFENSE_SKILL]);
+        add_field_line(info, val, L["Defense"], is_diff, nil, nil, nil, true);
     end
     ---------------------------------
     --- Attack power
@@ -758,7 +804,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     do
         local val = ((loadout and loadout.player_hp_max) or 0)
             +
-            effects.raw.hp;
+            effects.raw.hp_flat;
         add_field_line(info, val, L["Health"], is_diff);
     end
     ---------------------------------
@@ -769,6 +815,15 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
             +
             effects.raw.mana;
         add_field_line(info, val, L["Mana"], is_diff);
+    end
+    ---------------------------------
+    --- Armor
+    ---------------------------------
+    do
+        local val = ((loadout and loadout.armor) or 0)
+            +
+            effects.by_school.res_flat[schools.physical];
+        add_field_line(info, val, L["Armor"], is_diff);
     end
     ---------------------------------
     --- Spell damage
@@ -965,7 +1020,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     do
         -- Don't show mp5 stat since it's already baked into other field
         --add_field_line(info, effects.raw.mp5_flat, L["mana every 5 sec"], is_diff);
-        add_field_line(info, effects.raw.regen_while_casting, L["mana regen while casting"], is_diff, true);
+        add_field_line(info, effects.raw.regen_while_casting, L["Mana regen while casting"], is_diff, true);
 
         -- Some problems here: in tbc spirit_mana_regen is non linear and cannot be used on simple diff
         -- split into two cases if we are doing diff or not
@@ -1020,17 +1075,60 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
                 0.5 * mp2_not_casting;
         end
 
-        add_field_line(info, mp1_casting, L["mana regen per sec while casting"], is_diff);
-        add_field_line(info, mp1_not_casting, L["mana regen per sec while not casting"], is_diff);
+        add_field_line(info, mp1_casting, L["Mana regen per sec while casting"], is_diff);
+        add_field_line(info, mp1_not_casting, L["Mana regen per sec while not casting"], is_diff);
     end
     ---------------------------------
-    --- Ratings
+    --- Dodge chance
     ---------------------------------
-    for _, v in ipairs(ratings) do
-        local val = ((loadout and loadout[v[2]]) or 0)
+
+    do
+        local val = ((loadout and loadout.dodge) or 0)
             +
-            effects.raw[v[2].."_flat"];
-        add_field_line(info, val, v[3], is_diff);
+            effects.raw.dodge
+            +
+            0.0004*effects.raw.defense_skill_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_DEFENSE_SKILL])
+            +
+            0.01*effects.raw.dodge_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_DODGE]);
+        add_field_line(info, val, L["Dodge"], is_diff, true);
+    end
+
+    ---------------------------------
+    --- Parry chance
+    ---------------------------------
+
+    do
+        if loadout_data.parry ~= 0 then
+            local val = ((loadout and loadout.parry) or 0)
+                +
+                effects.raw.parry
+                +
+                0.0004*effects.raw.defense_skill_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_DEFENSE_SKILL])
+                +
+                0.01*effects.raw.parry_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_PARRY]);
+            add_field_line(info, val, L["Parry"], is_diff, true);
+        end
+    end
+
+    ---------------------------------
+    --- Block chance
+    ---------------------------------
+
+    do
+        if effects.raw.can_block > 0 then
+
+            local val = ((loadout and loadout.block) or 0)
+                +
+                effects.raw.block
+                +
+                0.0004*effects.raw.defense_skill_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_DEFENSE_SKILL])
+                +
+                0.01*effects.raw.block_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_BLOCK]);
+
+            if loadout_data.block then
+                add_field_line(info, val, L["Block"], is_diff, true);
+            end
+        end
     end
 
     ---------------------------------
@@ -1116,10 +1214,10 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
         if not can_compact then
             for i = 2, 7 do
                 local val = effects.by_school.cost_mod[i];
-                add_field_line(info, val, lnames.schools[i].." "..L["spell cost modifier"], is_diff, true);
+                add_field_line(info, val, lnames.schools[i].." "..L["spell cost"], is_diff, true);
             end
         else
-            add_field_line(info, school_prev, L["Spell cost modifier"], is_diff, true);
+            add_field_line(info, school_prev, L["Spell cost"], is_diff, true);
         end
     end
 
@@ -1150,10 +1248,10 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
         if not can_compact then
             for i = 2, 7 do
                 local val = effects.by_school.threat[i];
-                add_field_line(info, val, lnames.schools[i].." "..L["spell threat modifier"], is_diff, true);
+                add_field_line(info, val, lnames.schools[i].." "..L["spell threat"], is_diff, true);
             end
         else
-            add_field_line(info, school_prev, L["Spell threat modifier"], is_diff, true);
+            add_field_line(info, school_prev, L["Spell threat"], is_diff, true);
         end
     end
     ---------------------------------
@@ -1432,9 +1530,13 @@ local function manual_effects_zero_diff()
         haste_rating = 0,
         crit_rating = 0,
         expertise_rating = 0,
+        dodge_rating = 0,
+        parry_rating = 0,
+        defense_skill_rating = 0,
         pen = 0,
         weapon_skill = 0,
         extra_mana = 0,
+        armor = 0,
     };
 end
 
@@ -1463,10 +1565,15 @@ local function effects_add_manual_diff(effects, diff)
     effects.raw.melee_hit_rating_flat = effects.raw.melee_hit_rating_flat + diff.hit_rating;
     effects.raw.ranged_hit_rating_flat = effects.raw.ranged_hit_rating_flat + diff.hit_rating;
     effects.raw.expertise_rating_flat = effects.raw.expertise_rating_flat + diff.expertise_rating;
+    effects.raw.dodge_rating_flat = effects.raw.dodge_rating_flat + diff.dodge_rating;
+    effects.raw.parry_rating_flat = effects.raw.parry_rating_flat + diff.parry_rating;
+    effects.raw.defense_skill_rating_flat = effects.raw.defense_skill_rating_flat + diff.defense_skill_rating;
 
     for i = 1, 7 do
         effects.by_school.target_res_flat[i] = effects.by_school.target_res_flat[i] - diff.pen;
     end
+
+    effects.by_school.res_flat[schools.physical] = effects.by_school.res_flat[schools.physical] + diff.armor;
 
     effects.raw.mana = effects.raw.mana + diff.extra_mana;
 
@@ -1500,14 +1607,16 @@ local function effects_finalize_forced(loadout, effects)
 
     for i = 1, 5 do
         effects.by_attr.stat_flat[i] =
-            (effects.by_attr.stat_mod[i] + effects.by_attr.stat_mod_forced[i]) *
+            (1.0 + effects.by_attr.stat_mod[i] + effects.by_attr.stat_mod_forced[i])
+                *
                 loadout.stats[i]/(1.0 + effects.by_attr.stat_mod[i])
-        +
-        effects.by_attr.stat_flat[i] *
-            (1.0 + effects.by_attr.stat_mod[i] + effects.by_attr.stat_mod_forced[i]);
+            -
+            loadout.stats[i]
+            +
+            effects.by_attr.stat_flat[i] *
+                (1.0 + effects.by_attr.stat_mod[i] + effects.by_attr.stat_mod_forced[i]);
 
     end
-
 
     local sd_from_stats = 0;
     local hp_from_stats = 0;
@@ -1534,23 +1643,46 @@ local function effects_finalize_forced(loadout, effects)
         effects.by_school.crit_forced[i] = effects.by_school.crit_forced[i] + spell_crit_from_int;
     end
 
-    effects.raw.mana = 
+    effects.raw.mana =
         (1.0 + effects.raw.mana_mod + effects.raw.mana_mod_forced)
-        *
-        (
-         (effects.by_attr.stat_flat[attr.intellect] * mana_per_int)
-         +
-         (effects.raw.mana/(1.0 + effects.raw.mana_mod_forced))
-        );
+            * ((effects.by_attr.stat_flat[attr.intellect] * mana_per_int))
+        +
+        effects.raw.mana; -- only added from custom stats as of now
 
-    effects.raw.hp = 
+    effects.raw.hp_flat =
         (1.0 + effects.raw.hp_mod + effects.raw.hp_mod_forced)
         *
         (
          (effects.by_attr.stat_flat[attr.stamina] * hp_per_stam)
          +
-         (effects.raw.hp /(1.0 + effects.raw.hp_mod_forced))
+         effects.raw.hp_flat
         );
+
+    effects.by_school.res_flat[schools.physical] = effects.by_school.res_flat[schools.physical] +
+        effects.by_attr.stat_flat[attr.agility]*armor_per_agi;
+
+    local actual_base_armor = loadout.base_armor - loadout.stats[attr.agility] * armor_per_agi;
+    local equip_armor_increase =
+        (1.0 + effects.raw.base_res_phys_mod + effects.raw.base_res_phys_mod_forced) *
+            actual_base_armor / (1.0 + effects.raw.base_res_phys_mod)
+        -
+        actual_base_armor
+        +
+        effects.raw.base_res_phys_flat -- only from forced item diffs
+            *
+            (1.0 + effects.raw.base_res_phys_mod + effects.raw.base_res_phys_mod_forced);
+
+    effects.by_school.res_flat[schools.physical] =
+        (1.0 + effects.raw.res_phys_mod + effects.raw.res_phys_mod_forced) *
+            loadout.armor/(1.0 + effects.raw.res_phys_mod)
+        -
+        loadout.armor
+        +
+        (1.0 + effects.raw.res_phys_mod + effects.raw.res_phys_mod_forced) *
+            (effects.by_school.res_flat[schools.physical] + equip_armor_increase);
+
+    local dodge_from_agi = 0.01*(sc.dodge_to_agi[loadout.lvl] or 0)*effects.by_attr.stat_flat[attr.agility];
+    effects.raw.dodge = effects.raw.dodge + dodge_from_agi;
 
     local agi_ap_class = class;
     if class == classes.druid and loadout.shapeshift == 3 then
@@ -1691,7 +1823,7 @@ local function dynamic_loadout(loadout)
 
     loadout.melee_crit = GetCritChance()*0.01;
     loadout.ranged_crit = GetRangedCritChance()*0.01;
-    loadout.block_value = GetShieldBlock();
+    loadout.block = GetBlockChance()*0.01;
 
     --loadout.r_speed, loadout.r_min, loadout.r_max, loadout.r_pos, loadout.r_neg, loadout.r_mod = UnitRangedDamage("player");
 
@@ -1710,6 +1842,11 @@ local function dynamic_loadout(loadout)
     loadout.target_name = UnitName("target");
     loadout.mouseover_name = UnitName("mouseover");
 
+    loadout.dodge = 0.01*(GetDodgeChance() or 0);
+    loadout.parry = 0.01*(GetParryChance() or 0);
+    local def_base, def_bonus = UnitDefense("player");
+    loadout.defense = def_base + def_bonus;
+
     loadout.target_res = config.settings.loadout_target_res;
 
     loadout.hostile_towards = "";
@@ -1722,9 +1859,8 @@ local function dynamic_loadout(loadout)
                                          bit.bnot(loadout_flags.target_friendly),
                                          bit.bnot(loadout_flags.target_pvp)));
 
-    loadout.player_hp_max = math.max(UnitHealthMax("player"), 1)
-
-    loadout.player_hp_perc = UnitHealth("player")/loadout.player_hp_max;
+    loadout.player_hp_max = math.max(UnitHealthMax("player"), 1);
+    loadout.player_hp = UnitHealth("player");
 
     loadout.enemy_hp_perc = config.settings.loadout_default_target_hp_perc*0.01;
 
@@ -1778,7 +1914,8 @@ local function dynamic_loadout(loadout)
 
     loadout.target_defense = 5*loadout.target_lvl;
 
-    loadout.armor = config.settings.loadout_target_armor;
+    loadout.base_armor, loadout.armor = UnitArmor("player");
+    loadout.target_armor = config.settings.loadout_target_armor;
     if config.settings.loadout_target_automatic_armor then
         if sc.npc_armor_by_lvl[loadout.target_lvl] then
             local armor_pct;
@@ -1791,16 +1928,20 @@ local function dynamic_loadout(loadout)
             else
                 armor_pct = 100;
             end
-            loadout.armor = sc.npc_armor_by_lvl[loadout.target_lvl] * armor_pct * 0.01;
+            loadout.target_armor = sc.npc_armor_by_lvl[loadout.target_lvl] * armor_pct * 0.01;
         end
     end
 
     sc.buffs.detect_buffs(loadout);
+
+    loadout.calculator_mode = false;
 end
 
-local function apply_effect(effects, spid, auras, forced, stacks, undo, player_owned)
+local function apply_effect(effects, spid, auras, forced, stacks, undo, player_owned, shapeshift)
     if not auras then
-        --print("Missing aura", spid);
+        --if __spellcoda_debug__ then
+        --    print("Missing aura", spid);
+        --end
         return;
     end
     local add_all = 0.0;
@@ -1820,6 +1961,8 @@ local function apply_effect(effects, spid, auras, forced, stacks, undo, player_o
                 apply_effect(effects, k, sc[aura[effect_idx]][k], forced, stacks, undo);
             end
         elseif bit.band(aura[flags_idx], sc.aura_flags.requires_ownership) ~= 0 and not player_owned then
+            -- skip
+        elseif bit.band(aura[flags_idx], sc.aura_flags.requires_feral_shapeshift) ~= 0 and not shapeshift then
             -- skip
         else
             local add;
@@ -1852,8 +1995,10 @@ local function apply_effect(effects, spid, auras, forced, stacks, undo, player_o
                     aura_effect = aura_effect.."_forced";
                 end
                 if bit.band(aura[flags_idx], sc.aura_flags.mul) ~= 0 then
-                    --if not effects["mul"][aura[category_idx]][aura_effect] then
-                    --    print("Missing effects.mul."..aura[category_idx].."."..aura_effect);
+                    --if __spellcoda_debug__ then
+                    --    if not effects["mul"][aura[category_idx]][aura_effect] then
+                    --        print("Missing effects.mul."..aura[category_idx].."."..aura_effect);
+                    --    end
                     --end
 
                     val = 1.0 + val;
@@ -1868,11 +2013,13 @@ local function apply_effect(effects, spid, auras, forced, stacks, undo, player_o
                         end
                     end
                 else
-                    --if not effects[aura[category_idx]] then
-                    --    print("Missing effects."..aura[category_idx]);
-                    --end
-                    --if not effects[aura[category_idx]][aura_effect] then
-                    --    print("Missing effects."..aura[category_idx].."."..aura_effect);
+                    --if __spellcoda_debug__ then
+                    --    if not effects[aura[category_idx]] then
+                    --        print("Missing effects."..aura[category_idx]);
+                    --    end
+                    --    if not effects[aura[category_idx]][aura_effect] then
+                    --        print("Missing effects."..aura[category_idx].."."..aura_effect);
+                    --    end
                     --end
                     if undo then
                         val = -val;
@@ -1912,14 +2059,10 @@ local equipped = {};
 local talented = {};
 local buffed = {};
 local final = {};
-local diffed = {};
 empty_effects(equipped);
 empty_effects(talented);
 empty_effects(buffed);
 empty_effects(final);
-empty_effects(diffed);
-
-
 
 local function active_loadout()
     return loadout_front;
@@ -1950,6 +2093,7 @@ local function update_loadout_and_effects()
         -- will benefit from not having to update icons
         return loadout_front, buffed, final, effects_update_id;
     end
+
     loadouts.force_update = false;
     loadout_front = other;
 
