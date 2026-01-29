@@ -627,7 +627,7 @@ local function init_label_handler()
         overlay_display_crit = {
             func = function(frame_overlay, info, stats)
                 local crit_sum = 0;
-    
+
                 if info.num_direct_effects > 0 then
                     crit_sum = crit_sum + 0.5*(info.total_min_crit_if_hit + info.total_max_crit_if_hit);
                 end
@@ -830,7 +830,7 @@ local function init_label_handler()
         },
         overlay_display_casts_until_oom = {
             func = function(frame_overlay, info)
-                frame_overlay:SetText(format_number(info.num_casts_until_oom, math.min(1, overlay.decimals_cap)));
+                frame_overlay:SetText(format_number(info.num_casts_until_oom, math.min(1, overlay.decimals_cap), true));
             end,
             desc = L["Casts until OOM"],
             color_tag = "casts_until_oom",
@@ -840,7 +840,7 @@ local function init_label_handler()
                 if info.num_direct_effects == 0 or info.hit_normal1 == 0 then
                     return;
                 end
-    
+
                 if info.min_noncrit_if_hit1 ~= info.max_noncrit_if_hit1 then
                     frame_overlay:SetText(string.format("%.0f-%.0f",
                         info.min_noncrit_if_hit1, info.max_noncrit_if_hit1)
@@ -860,7 +860,7 @@ local function init_label_handler()
                 if info.num_direct_effects == 0 or info.crit1 == 0 then
                     return;
                 end
-    
+
                 if info.min_crit_if_hit1 ~= info.max_crit_if_hit1 then
                     frame_overlay:SetText(string.format("%.0f-%.0f",
                         info.min_crit_if_hit1, info.max_crit_if_hit1)
@@ -880,7 +880,7 @@ local function init_label_handler()
                 if info.num_periodic_effects == 0 or info.ot_hit_normal1 == 0 then
                     return;
                 end
-    
+
                 if info.ot_min_noncrit_if_hit1 ~= info.ot_max_noncrit_if_hit1 then
                     frame_overlay:SetText(string.format("%.0f x %.0f-%.0f",
                         info.ot_ticks1, info.ot_min_noncrit_if_hit1/info.ot_ticks1, info.ot_max_noncrit_if_hit1/info.ot_ticks1)
@@ -900,7 +900,7 @@ local function init_label_handler()
                 if info.num_periodic_effects == 0 or info.ot_crit1 == 0 then
                     return;
                 end
-    
+
                 if info.ot_min_crit_if_hit1 ~= info.ot_max_crit_if_hit1 then
                     frame_overlay:SetText(string.format("%.0f x %.0f-%.0f",
                         info.ot_ticks1, info.ot_min_crit_if_hit1/info.ot_ticks1, info.ot_max_crit_if_hit1/info.ot_ticks1)
@@ -942,7 +942,7 @@ local function init_label_handler()
                         mit = stats.target_avg_resi_ot;
                     end
                 end
-    
+
                 if mit ~= 0 then
                     frame_overlay:SetText(string.format("%s%%",
                         format_number(100*mit, math.min(1, overlay.decimals_cap))));
@@ -1920,8 +1920,8 @@ overlay.cc_demo                                     = cc_demo;
 overlay.ccf_label_reconfig                          = ccf_label_reconfig;
 overlay.ccf_anim_reconfig                           = ccf_anim_reconfig;
 overlay.init_label_handler                          = init_label_handler;
-overlay.register_ccf_on_update                      = register_ccf_on_update
-overlay.unregister_ccf_on_update                    = unregister_ccf_on_update
+overlay.register_cc_on_update                       = register_cc_on_update
+overlay.unregister_cc_on_update                     = unregister_cc_on_update
 
 sc.overlay = overlay;
 sc.ext.spell_cache = spell_cache;
