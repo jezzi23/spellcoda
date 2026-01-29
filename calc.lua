@@ -192,10 +192,11 @@ local function stats_attack_skill(comp, spell, loadout, effects, eval_flags)
         return 0, nil;
     end
 
+
     local skill = 0;
     local wpn_skill;
-
     local subclass = nil;
+
     if loadout.shapeshift_no_weapon ~= 0 then
         subclass = sc.feral_skill_as_wpn_subclass_hack;
         -- feral skill as weapon skill only works in vanilla
@@ -227,6 +228,17 @@ local function stats_attack_skill(comp, spell, loadout, effects, eval_flags)
         wpn_skill = 0;
     end
 
+    local sheet_skill;
+    if subclass == effects.raw.wpn_subclass_oh then
+        -- sheet always bases off main hand when there is offhand
+        sheet_skill = loadout.wpn_skills[effects.raw.wpn_subclass_mh];
+        if not sheet_skill then
+            sheet_skill = 1;
+        end
+    else
+        sheet_skill = wpn_skill;
+    end
+
     for mask, v in pairs(effects.wpn_subclass.skill_flat) do
         if bit.band(mask, bit.lshift(1, subclass)) ~= 0 then
             skill = skill + v;
@@ -238,10 +250,10 @@ local function stats_attack_skill(comp, spell, loadout, effects, eval_flags)
     elseif bit.band(eval_flags, evaluation_flags.fix_weapon_skill_to_level) ~= 0 then
         skill = loadout.lvl * 5;
     end
-    return skill, subclass;
+    return skill, sheet_skill, subclass;
 end
 
-local function stats_crit(extra, attack_skill, attack_subclass, bid, comp, spell, loadout, effects)
+local function stats_crit(extra, attack_skill, attack_skill_sheet, attack_subclass, bid, comp, spell, loadout, effects)
 
     local crit = (effects.ability.crit[bid] or 0) + extra;
 
@@ -254,11 +266,19 @@ local function stats_crit(extra, attack_skill, attack_subclass, bid, comp, spell
                     effects.by_school.crit_forced[comp.school1];
             end
             -- rating may come from diffed loadout
-            crit = crit + loadout.ranged_crit +
+            crit = crit +
+                loadout.ranged_crit
+                -
+                0.0004*(attack_skill_sheet - 5*loadout.lvl) -- remove this component baked into sheet crit, added later corrected
+                +
                 0.01*effects.raw.ranged_crit_rating_flat/(loadout.cr_scaling * cr_weights[CR_CRIT_RANGED]);
         else
-            crit = crit + loadout.melee_crit +
-                0.01*effects.raw.melee_crit_rating_flat/(loadout.cr_scaling * cr_weights[CR_CRIT_MELEE]);
+            crit = crit +
+            loadout.melee_crit
+            -
+            0.0004*(attack_skill_sheet - 5*loadout.lvl) -- remove this component baked into sheet crit, added later corrected
+            +
+            0.01*effects.raw.melee_crit_rating_flat/(loadout.cr_scaling * cr_weights[CR_CRIT_MELEE]);
 
         end
         local wpn_subclass_crit_active = 0.0;
@@ -979,10 +999,11 @@ local function spell_stats_direct(stats, spell, loadout, effects, eval_flags)
 
     local direct = spell.direct;
 
-    stats.attack_skill, stats.attack_subclass = stats_attack_skill(direct, spell, loadout, effects, eval_flags);
+    stats.attack_skill, stats.attack_skill_sheet, stats.attack_subclass = stats_attack_skill(direct, spell, loadout, effects, eval_flags);
 
     stats.crit = stats_crit(stats.extra_crit,
                             stats.attack_skill,
+                            stats.attack_skill_sheet,
                             stats.attack_subclass,
                             benefit_id,
                             direct,
@@ -1007,8 +1028,8 @@ local function spell_stats_direct(stats, spell, loadout, effects, eval_flags)
     stats.dodge, stats.parry, stats.block, stats.block_amount = stats_avoidances(stats.attack_skill, direct, spell, loadout, effects);
     stats.spell_power = stats_sp(benefit_id, direct, spell, loadout, effects);
     stats.coef, stats.coef_max = stats_coef(stats, benefit_id, direct, spell, loadout, effects, eval_flags);
-    stats.armor_dr = stats_armor_dr(stats.armor, direct, loadout);
-    stats.spell_mod = stats_spell_mod(stats.armor_dr, stats.attack_subclass, bid, direct, spell, effects, stats);
+    stats.target_armor_dr = stats_armor_dr(stats.target_armor, direct, loadout);
+    stats.spell_mod = stats_spell_mod(stats.target_armor_dr, stats.attack_subclass, bid, direct, spell, effects, stats);
 
     write_attack_table(stats, true);
     -- hit used as probability to do any kind of damage, allowing procs of attack
@@ -1061,10 +1082,11 @@ local function spell_stats_periodic(stats, spell, loadout, effects, eval_flags)
     local benefit_id = spell.beneficiary_id or bid;
     local periodic = spell.periodic;
 
-    stats.attack_skill_ot, stats.attack_subclass_ot = stats_attack_skill(periodic, spell, loadout, effects, eval_flags);
+    stats.attack_skill_ot, stats.attack_skill_sheet_ot, stats.attack_subclass_ot = stats_attack_skill(periodic, spell, loadout, effects, eval_flags);
 
     stats.crit_ot = stats_crit(stats.extra_crit,
                                stats.attack_skill_ot,
+                               stats.attack_skill_sheet_ot,
                                stats.attack_subclass_ot,
                                benefit_id,
                                periodic,
