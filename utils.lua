@@ -137,7 +137,7 @@ local function color_by_lvl_diff(clvl, other_lvl)
     end
 end
 
-local function format_number(val, max_accuracy_digits)
+local function format_number(val, max_accuracy_digits, round_down)
 
     if not val then
         return "";
@@ -150,7 +150,11 @@ local function format_number(val, max_accuracy_digits)
     elseif (abs_val < 1000.0 and max_accuracy_digits >= 1) then
         return string.format("%.1f", val);
     elseif (abs_val < 10000.0) then
-        return string.format("%.0f", val);
+        if round_down then
+            return string.format("%.0f", math.floor(val));
+        else
+            return string.format("%.0f", val);
+        end
     elseif (abs_val < 1000000.0) then
         return string.format("%.1fk", val/1000);
     elseif (abs_val < 10000000000.0) then
