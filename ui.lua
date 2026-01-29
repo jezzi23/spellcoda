@@ -1897,12 +1897,64 @@ local function create_sw_ui_tooltip_frame(pframe)
         tifs[#tifs + 1] = v;
     end
 
+    pframe.quality_dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_tooltip_item_quality_threshold", pframe);
+    pframe.quality_dd._type = "DropDownMenu";
+    pframe.quality_dd:SetPoint("TOPLEFT", 225, pframe.y_offset+2);
+    local qualities = {
+        [0] = L["Poor"],
+        [1] = L["Common"],
+        [2] = L["Uncommon"],
+        [3] = L["Rare"],
+        [4] = L["Epic"],
+        [5] = L["Legendary"],
+    };
+    pframe.quality_dd.init_func = function()
+        libDD:UIDropDownMenu_Initialize(pframe.quality_dd, function()
+
+            if config.settings.tooltip_item_quality_threshold < 0 or
+                config.settings.tooltip_item_quality_threshold > 5 then
+                config.settings.tooltip_item_quality_threshold = 2;
+            end
+            local idx = config.settings.tooltip_item_quality_threshold;
+            libDD:UIDropDownMenu_SetText(
+                pframe.quality_dd,
+                ITEM_QUALITY_COLORS[idx].color:WrapTextInColorCode(L["Quality threshold"])
+            );
+            libDD:UIDropDownMenu_SetWidth(
+                pframe.quality_dd,
+                180
+            );
+
+            for i = 0, 5 do
+
+                libDD:UIDropDownMenu_AddButton({
+                    text = ITEM_QUALITY_COLORS[i].color:WrapTextInColorCode(qualities[i]),
+                    checked = config.settings.tooltip_item_quality_threshold == i,
+                    func = function()
+
+                        config.settings.tooltip_item_quality_threshold = i;
+                        pframe.quality_dd.init_func();
+                    end
+                })
+            end
+        end);
+    end;
+    tifs[#tifs + 1] = pframe.quality_dd;
+
     for _, v in ipairs(multi_row_checkbutton({
         {
             id = "tooltip_item_stat_diff",
             txt = L["Show stat changes"],
             tooltip = "Intended for debugging, not human friendly. Shows all changes detected by calculator, including resolved indirect changes, e.g. spell power from % of spirit talent etc.",
         },
+    }, pframe, 2, nil)) do
+        tifs[#tifs + 1] = v;
+    end
+
+    pframe.y_offset = pframe.y_offset - 25;
+
+
+    for _, v in ipairs(multi_row_checkbutton({
         {
             id = "tooltip_item_apply_enchant",
             txt = L["Apply enchant changes"],
