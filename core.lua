@@ -167,6 +167,26 @@ local tooltip_time = 1.0/2.0;
 
 local function refresh_tooltip()
     local dt = 0.1;
+
+    local spells_frame_open = false;
+    local calc_frame_open = false;
+    if __sc_frame:IsShown() then
+        spells_frame_open = __sc_frame.spells_frame:IsShown();
+        calc_frame_open = __sc_frame.calculator_frame:IsShown();
+    end
+
+    if config.settings.overlay_disable or sc.core.mute_overlay then
+        -- overlay is off, trigger updates which may exit early if nothing changed
+        if calc_frame_open then
+            sc.ui.update_calc_list(false);
+        elseif spells_frame_open then
+            sc.ui.update_spells_frame();
+        end
+    elseif calc_frame_open and __sc_frame.calculator_frame.calculator_plan_changed then
+        -- lower response time of calc updates when plan changed
+        sc.ui.update_calc_list(false);
+    end
+
     if config.settings.tooltip_disable then
 
         C_Timer.After(dt, refresh_tooltip);
@@ -345,19 +365,13 @@ local event_dispatch = {
         sc.loadouts.force_update = true;
     end,
     ["GLYPH_ADDED"] = function()
-        if not config.loadout.use_custom_talents then
-            core.talents_update_needed = true;
-        end
+        core.talents_update_needed = true;
     end,
     ["GLYPH_REMOVED"] = function()
-        if not config.loadout.use_custom_talents then
-            core.talents_update_needed = true;
-        end
+        core.talents_update_needed = true;
     end,
     ["GLYPH_UPDATED"] = function()
-        if not config.loadout.use_custom_talents then
-            core.talents_update_needed = true;
-        end
+        core.talents_update_needed = true;
     end,
     ["CHAT_MSG_SKILL"] = function()
         core.talents_update_needed = true;
@@ -442,8 +456,6 @@ local function command(arg)
         sw_activate_frame("profile_frame");
     elseif arg == "loadout" or arg == "loadouts" then
         sw_activate_frame("loadout_frame");
-    elseif arg == "buffs" or arg == "auras" then
-        sw_activate_frame("buffs_frame");
     elseif arg == "settings" or arg == "opt" or arg == "options" or arg == "conf" or arg == "config" or arg == "configure" then
         sw_activate_frame("settings_frame");
     elseif arg == "reset" then

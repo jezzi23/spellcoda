@@ -185,7 +185,7 @@ local function display_spell_diff(i, calc_list, diff, frame)
             for k, v in pairs(calc_list[frame.num_spells]) do
                 v:Hide();
             end
-            ui.update_calc_list();
+            ui.update_calc_list(true);
         end);
 
         calc_list[i].cancel_button:SetPoint("TOPRIGHT", -10, frame.y_offset + 4);
@@ -235,18 +235,30 @@ end
 
 local cached_spells_cmp_diffs = {};
 
-local function update_calc_list(loadout, effects, effects_diffed, eval_flags)
+local calc_list_update_id = 0;
+
+local function update_calc_list(was_rearranged, loadout, effects, effects_diffed, eval_flags)
 
     local frame = __sc_frame.calculator_frame;
+
+    local update_id;
+    if not loadout then
+        loadout, _, _, effects, effects_diffed, update_id = update_loadout_and_effects_diffed_from_ui();
+
+        local updated = update_id > calc_list_update_id;
+        calc_list_update_id = update_id;
+
+        if not updated and not was_rearranged then
+            return;
+        end
+
+        eval_flags = sc.overlay.overlay_eval_flags();
+    end
 
     for _, v in pairs(frame.calc_list) do
         for _, f in pairs(v) do
             f:Hide();
         end
-    end
-    if not loadout then
-        loadout, effects, effects_diffed = update_loadout_and_effects_diffed_from_ui();
-        eval_flags = sc.overlay.overlay_eval_flags();
     end
 
     eval_flags = bit.bor(eval_flags, evaluation_flags.expectation_of_self);
@@ -269,37 +281,52 @@ local function update_calc_list(loadout, effects, effects_diffed, eval_flags)
         if config.settings.calc_list_use_highest_rank and spells[k] then
             k = highest_learned_rank(spells[k].base_id);
         end
-        if k and spells[k] and bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
-
-            i = i + 1;
-            cached_spells_cmp_diffs[i] = cached_spells_cmp_diffs[i] or {};
-
-            spell_diff(cached_spells_cmp_diffs[i],
-                       config.settings.calc_fight_type,
-                       spells[k],
-                       k,
-                       loadout,
-                       effects,
-                       effects_diffed,
-                       eval_flags);
-
-            cached_spells_cmp_diffs[i].is_dual_spell = spells[k].healing_version ~= nil;
-            cached_spells_cmp_diffs[i].original_id = original_k;
-
-            -- for spells with both heal and dmg
-            if spells[k].healing_version then
+        if k and spells[k] then
+            if bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
 
                 i = i + 1;
                 cached_spells_cmp_diffs[i] = cached_spells_cmp_diffs[i] or {};
 
                 spell_diff(cached_spells_cmp_diffs[i],
                            config.settings.calc_fight_type,
-                           spells[k].healing_version,
+                           spells[k],
                            k,
                            loadout,
                            effects,
                            effects_diffed,
                            eval_flags);
+
+                cached_spells_cmp_diffs[i].is_dual_spell = spells[k].healing_version ~= nil;
+                cached_spells_cmp_diffs[i].original_id = original_k;
+
+                -- for spells with both heal and dmg
+                if spells[k].healing_version then
+
+                    i = i + 1;
+                    cached_spells_cmp_diffs[i] = cached_spells_cmp_diffs[i] or {};
+
+                    spell_diff(cached_spells_cmp_diffs[i],
+                               config.settings.calc_fight_type,
+                               spells[k].healing_version,
+                               k,
+                               loadout,
+                               effects,
+                               effects_diffed,
+                               eval_flags);
+                    cached_spells_cmp_diffs[i].is_dual_spell = false;
+                    cached_spells_cmp_diffs[i].original_id = original_k;
+                end
+            elseif bit.band(spells[k].flags, spell_flags.ehp) ~= 0 then
+
+                i = i + 1;
+                cached_spells_cmp_diffs[i] = cached_spells_cmp_diffs[i] or {};
+
+                ehp_diff(cached_spells_cmp_diffs[i],
+                         loadout,
+                         effects,
+                         effects_diffed,
+                         eval_flags);
+
                 cached_spells_cmp_diffs[i].is_dual_spell = false;
                 cached_spells_cmp_diffs[i].original_id = original_k;
             end
@@ -522,6 +549,7 @@ local function filtered_spell_view(spell_ids, name_filter, loadout, effects, eva
     return filtered;
 end
 
+local ehp_tex = "Interface\\Icons\\Spell_Nature_Reincarnation";
 
 local function populate_scrollable_spell_view(view, starting_idx)
     local cnt = 1;
@@ -636,10 +664,18 @@ local spell_view_update_id = 0;
 
 local function update_spells_frame(loadout, effects, eval_flags, force_refresh)
 
+
     if not loadout then
+        local calc_mode = __sc_frame:IsShown() and __sc_frame.calculator_frame:IsShown() or
+            config.settings.general_calc_global_compare;
+
         local update_id;
         eval_flags = sc.overlay.overlay_eval_flags();
-        loadout, _, effects, update_id = update_loadout_and_effects();
+        if calc_mode then
+            loadout, _, _, _, effects, update_id = update_loadout_and_effects_diffed_from_ui();
+        else
+            loadout, _, effects, update_id = update_loadout_and_effects();
+        end
 
         if update_id > spell_view_update_id then
             spell_view_update_id = update_id;
@@ -702,7 +738,7 @@ local function sw_activate_tab(tab_window)
     if tab_window.frame_to_open == __sc_frame.spells_frame then
         update_spells_frame(nil, nil, nil, true);
     elseif tab_window.frame_to_open == __sc_frame.calculator_frame then
-        update_calc_list();
+        update_calc_list(true);
     end
 
     tab_window.frame_to_open:Show();
@@ -1357,10 +1393,10 @@ local function create_sw_ui_spells_frame(pframe)
                         func = function()
 
                             local id = spell_options.__spid;
-                            if spells[id] and bit.band(spells[id].flags, spell_flags.eval) ~= 0 then
+                            if spells[id] and bit.band(spells[id].flags, bit.bor(spell_flags.eval, spell_flags.ehp)) ~= 0 then
 
                                 config.settings.spell_calc_list[spell_options.__spid] = 1;
-                                update_calc_list();
+                                update_calc_list(true);
                             end
 
                         end,
@@ -1912,6 +1948,7 @@ local function create_sw_ui_tooltip_frame(pframe)
 
     make_frame_scrollable(pframe);
 end
+
 
 local fonts = {
     "Fonts\\FRIZQT__.TTF",
@@ -4374,7 +4411,7 @@ local function create_calculator_stats_subframe(pframe)
         for _, v in pairs(pframe.stats.stat_fields) do
             v.editbox:SetText("");
         end
-        update_calc_list();
+        --update_calc_list(true);
     end);
 
     f:SetPoint("TOPRIGHT", 5, max_y_offset_stats);
@@ -5122,7 +5159,7 @@ local function create_sw_ui_calculator_frame(pframe)
         2,
         function()
             if __sc_frame:IsShown() and pframe:IsShown() then
-                update_calc_list();
+                update_calc_list(true);
             end
         end,
         5);
@@ -5156,7 +5193,7 @@ local function create_sw_ui_calculator_frame(pframe)
                         libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Repeated casts"]);
                         pframe.spell_diff_header_center:SetText(L["Effect"]);
                         pframe.spell_diff_header_right:SetText(L["Per sec"]);
-                        update_calc_list();
+                        update_calc_list(true);
                     end
                 }
             );
@@ -5170,7 +5207,7 @@ local function create_sw_ui_calculator_frame(pframe)
                         libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Cast until OOM"]);
                         pframe.spell_diff_header_center:SetText(L["Effect"]);
                         pframe.spell_diff_header_right:SetText(L["Duration (sec)"]);
-                        update_calc_list();
+                        update_calc_list(true);
                     end
                 }
             );

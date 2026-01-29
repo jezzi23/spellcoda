@@ -2169,10 +2169,18 @@ local stats_diff_last;
 local buffs_cfg;
 local talents_cfg;
 
+local diffed = {};
+local diffed_finalized = {};
+empty_effects(diffed);
+empty_effects(diffed_finalized);
 
-local function update_loadout_and_effects_diffed_from_ui(dont_finalize)
+local last_ui_diff_update_id = 0;
 
-    local loadout, effects, effects_finalized = update_loadout_and_effects();
+local function update_loadout_and_effects_diffed_from_ui()
+
+    local loadout, effects, effects_finalized, update_id = update_loadout_and_effects();
+
+    local updated = update_id > last_ui_diff_update_id;
 
     local calc_frame = __sc_frame.calculator_frame;
     if calc_frame.calculator_plan_changed then
@@ -2183,6 +2191,12 @@ local function update_loadout_and_effects_diffed_from_ui(dont_finalize)
         talents_cfg = calc_frame.talents.working;
 
         calc_frame.calculator_plan_changed = false;
+
+    elseif not updated then
+
+        -- early exit possible
+        last_ui_diff_update_id = update_id;
+        return loadout, effects, diffed, effects_finalized, diffed_finalized, update_id;
     end
 
     cpy_effects(diffed, effects);
@@ -2193,24 +2207,26 @@ local function update_loadout_and_effects_diffed_from_ui(dont_finalize)
     -- Manual stat changes
     effects_add_manual_diff(diffed, stats_diff_last);
 
+    -- Buffs
+    if buffs_cfg.use_custom then
+        sc.buffs.apply_fake_buffs(loadout, diffed, buffs_cfg);
+    end
+
     -- Talents
     if talents_cfg.use_custom then
         sc.talents.apply_talents(loadout, diffed, loadout.talents.code, true, true);
         sc.talents.apply_talents(loadout, diffed, talents_cfg.custom_code, true, false);
     end
 
-    -- Buffs
-    if buffs_cfg.use_custom then
-        sc.buffs.apply_fake_buffs(loadout, diffed, buffs_cfg);
-    end
+    loadout.calculator_mode = true;
 
-    if not dont_finalize then
-        effects_finalize_forced(loadout, diffed);
+    cpy_effects(diffed_finalized, diffed);
+    effects_finalize_forced(loadout, diffed_finalized);
 
-        return loadout, effects_finalized, diffed;
-    else
-        return loadout, effects, diffed;
-    end
+    effects_update_id = effects_update_id + 1;
+    last_ui_diff_update_id = effects_update_id;
+
+    return loadout, effects, diffed, effects_finalized, diffed_finalized, effects_update_id;
 end
 
 ---------------------------------------------------------------------------------------------------

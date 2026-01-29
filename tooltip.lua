@@ -52,11 +52,7 @@ local tooltip_export                            = {};
 local eps                                       = 0.000000001;
 
 local tooltip_effects_diffed                    = {};
-local tooltip_effects_diffed_finalized          = {};
-local tooltip_effects_finalized                 = {};
 empty_effects(tooltip_effects_diffed);
-empty_effects(tooltip_effects_diffed_finalized);
-empty_effects(tooltip_effects_finalized);
 
 -- Tooltip add, share signature so that optional right-hand side works
 local function add_double_line(tooltip, lhs, rhs, rgb_r, rgb_g, rgb_b)
@@ -207,6 +203,8 @@ local spell_tooltip_cached = {
     loadout = nil,
     effects = nil,
     effects_finalized = nil,
+    diffed = nil,
+    diffed_finalized = nil,
     needs_update = true,
 }; -- filled on update need
 
@@ -227,24 +225,39 @@ local function update_tooltip(tooltip, mod_change)
     if not (PlayerTalentFrame and MouseIsOver(PlayerTalentFrame)) and tooltip:IsShown() then
         local _, id = tooltip:GetSpell();
 
-        -- Try to skip periodic update if everything is normal and nothing changed
-        if (not __sc_frame.calculator_frame:IsShown() or not __sc_frame:IsShown()) and
-            not mod_change then
+        if id and (spells[id] or id == clear_tooltip_refresh_id or id == __sc_frame.spell_viewer_invalid_spell_id) then
+
             local update_id;
-            spell_tooltip_cached.loadout, spell_tooltip_cached.effects, spell_tooltip_cached.effects_finalized, update_id =
-                update_loadout_and_effects();
+
+            -- Try to skip periodic update if nothing changed
+            if (__sc_frame:IsShown() and __sc_frame.calculator_frame:IsShown()) or
+                    config.settings.general_calc_global_compare then
+
+                spell_tooltip_cached.loadout,
+                spell_tooltip_cached.effects,
+                spell_tooltip_cached.diffed,
+                spell_tooltip_cached.effects_finalized,
+                spell_tooltip_cached.diffed_finalized,
+                update_id = update_loadout_and_effects_diffed_from_ui();
+            else
+                spell_tooltip_cached.loadout,
+                spell_tooltip_cached.effects,
+                spell_tooltip_cached.effects_finalized,
+                update_id = update_loadout_and_effects();
+            end
+
             local updated = update_id > tooltip_spell_update_id;
             tooltip_spell_update_id = update_id;
 
             if not updated then
                 spell_tooltip_cached.needs_update = false;
-                return;
+                if not mod_change then
+                    return;
+                end
             end
-        end
 
-        -- Workaround: need to set some spell id that exists to get tooltip refreshed when
-        --            looking at custom spell id tooltip
-        if spells[id] or id == clear_tooltip_refresh_id or id == __sc_frame.spell_viewer_invalid_spell_id then
+            -- Workaround: need to set some spell id that exists to get tooltip refreshed when
+            --            looking at custom spell id tooltip
             if id ~= clear_tooltip_refresh_id then
                 spell_id_of_cleared_tooltip = id;
             end
@@ -253,7 +266,7 @@ local function update_tooltip(tooltip, mod_change)
             elseif config.settings.tooltip_clear_original then
                 if (not config.settings.tooltip_shift_to_show or bit.band(sc.tooltip_mod, sc.tooltip_mod_flags.SHIFT) ~= 0) and
                     bit.band(spells[spell_id_of_cleared_tooltip].flags,
-                        bit.bor(spell_flags.eval, spell_flags.resource_regen, spell_flags.no_threat)) ~= 0 then
+                        bit.bor(spell_flags.eval, spell_flags.resource_regen, spell_flags.no_threat, spell_flags.ehp)) ~= 0 then
                     tooltip:SetSpellByID(clear_tooltip_refresh_id);
                 else
                     tooltip:SetSpellByID(spell_id_of_cleared_tooltip);
@@ -1975,30 +1988,50 @@ local function write_spell_tooltip()
         (not __sc_frame.calculator_frame:IsShown() or not __sc_frame:IsShown()) then
 
         if spell_tooltip_cached.needs_update then
-            spell_tooltip_cached.loadout, spell_tooltip_cached.effects, spell_tooltip_cached.effects_finalized =
-                update_loadout_and_effects();
-        end
-        write_tooltip_spell_info(GameTooltip, spell, spell_id,
             spell_tooltip_cached.loadout,
             spell_tooltip_cached.effects,
-            spell_tooltip_cached.effects_finalized);
+            spell_tooltip_cached.effects_finalized = update_loadout_and_effects();
+        end
+        write_tooltip_spell_info(
+            GameTooltip,
+            spell,
+            spell_id,
+            spell_tooltip_cached.loadout,
+            spell_tooltip_cached.effects,
+            spell_tooltip_cached.effects_finalized
+        );
     else
-        spell_tooltip_cached.needs_update = true;
 
-        local loadout, effects, effects_diffed = update_loadout_and_effects_diffed_from_ui(true);
+        if spell_tooltip_cached.needs_update or not spell_tooltip_cached.diffed then
 
-        cpy_effects(tooltip_effects_diffed_finalized, effects_diffed);
-        effects_finalize_forced(loadout, tooltip_effects_diffed_finalized);
-        write_tooltip_spell_info(GameTooltip, spell, spell_id, loadout, effects_diffed, tooltip_effects_diffed_finalized);
+            spell_tooltip_cached.loadout,
+            spell_tooltip_cached.effects,
+            spell_tooltip_cached.diffed,
+            spell_tooltip_cached.effects_finalized,
+            spell_tooltip_cached.diffed_finalized = update_loadout_and_effects_diffed_from_ui();
+        end
+
+        write_tooltip_spell_info(
+            GameTooltip,
+            spell,
+            spell_id,
+            spell_tooltip_cached.loadout,
+            spell_tooltip_cached.diffed,
+            spell_tooltip_cached.diffed_finalized
+        );
 
         if config.settings.general_calc_secondary_tooltip then
             sc_stat_calc_tooltip:ClearLines();
             sc_stat_calc_tooltip:SetOwner(GameTooltip, "ANCHOR_LEFT", 0, -select(2, sc_stat_calc_tooltip:GetSize()));
 
-            cpy_effects(tooltip_effects_finalized, effects);
-            effects_finalize_forced(loadout, tooltip_effects_finalized);
-
-            write_tooltip_spell_info(sc_stat_calc_tooltip, spell, spell_id, loadout, effects, tooltip_effects_finalized);
+            write_tooltip_spell_info(
+                sc_stat_calc_tooltip,
+                spell,
+                spell_id,
+                spell_tooltip_cached.loadout,
+                spell_tooltip_cached.effects,
+                spell_tooltip_cached.effects_finalized
+            );
         end
     end
 end
@@ -2679,6 +2712,9 @@ local function on_clear_tooltip(tooltip)
     end
 end
 
+local tooltip_update_cd = 1.0;
+local last_needs_update_time = 0;
+
 local function on_show_tooltip(tooltip)
     local spell_name, _ = tooltip:GetSpell();
     if not spell_name then
@@ -2690,17 +2726,19 @@ local function on_show_tooltip(tooltip)
             tooltip:SetSpellByID(sc.auto_attack_spell_id);
         end
     end
-    spell_tooltip_cached.needs_update = true;
+    local t = GetTime();
+    if t > last_needs_update_time + tooltip_update_cd then
+        spell_tooltip_cached.needs_update = true;
+        last_needs_update_time = t;
+    end
 end
 
-tooltip_export.tooltip_stat_display             = tooltip_stat_display;
 tooltip_export.sort_stat_weights                = sort_stat_weights;
 tooltip_export.format_bounce_spell              = format_bounce_spell;
 tooltip_export.write_spell_tooltip              = write_spell_tooltip;
 tooltip_export.write_item_tooltip               = write_item_tooltip;
 tooltip_export.update_tooltip                   = update_tooltip;
 tooltip_export.append_tooltip_spell_rank        = append_tooltip_spell_rank;
-tooltip_export.tooltip_eval_mode                = eval_mode;
 tooltip_export.eval_mode_scroll_fn              = eval_mode_scroll_fn;
 tooltip_export.on_clear_tooltip                 = on_clear_tooltip;
 tooltip_export.on_show_tooltip                  = on_show_tooltip;

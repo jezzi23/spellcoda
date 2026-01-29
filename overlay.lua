@@ -1840,35 +1840,32 @@ local function update_overlay()
 
     --local loadout, effects_before, effects, update_id;
     local effects_before, update_id;
-    local updated = true;
+    local updated = false;
     local eval_flags = overlay_eval_flags();
 
     local spells_frame_open = __sc_frame:IsShown() and __sc_frame.spells_frame:IsShown();
     local calc_frame_open = __sc_frame:IsShown() and __sc_frame.calculator_frame:IsShown();
 
     if not config.settings.overlay_disable and not sc.core.mute_overlay then
-        if not calc_frame_open then
+        if not calc_frame_open and not config.settings.general_calc_global_compare then
 
             loadout, _, effects, update_id = update_loadout_and_effects();
-            updated = update_id > overlay_effects_update_id;
-            overlay_effects_update_id = update_id;
+
         else
-            loadout, effects_before, effects =
+            loadout, _, _, effects_before, effects, update_id =
                 update_loadout_and_effects_diffed_from_ui();
         end
+        updated = update_id > overlay_effects_update_id;
+        overlay_effects_update_id = update_id;
     end
 
     if updated then
         if calc_frame_open then
-            if config.settings.overlay_disable or sc.core.mute_overlay then
-                sc.ui.update_calc_list(nil, nil, nil, eval_flags);
-            else
-                sc.ui.update_calc_list(loadout, effects_before, effects, eval_flags);
+            if not config.settings.overlay_disable and not sc.core.mute_overlay then
+                sc.ui.update_calc_list(false, loadout, effects_before, effects, eval_flags);
             end
         elseif spells_frame_open then
-            if config.settings.overlay_disable or sc.core.mute_overlay then
-                sc.ui.update_spells_frame(nil, nil, eval_flags);
-            else
+            if not config.settings.overlay_disable and not sc.core.mute_overlay then
                 sc.ui.update_spells_frame(loadout, effects, eval_flags);
             end
         end
@@ -1887,7 +1884,6 @@ local function update_overlay()
     --        end
     --    end
     --end
-
 
     if not config.settings.overlay_disable_cc_info and not sc.core.mute_overlay then
 
