@@ -41,8 +41,20 @@ sc.npc_armor_by_lvl = {
 --  10033, 10338, 10643,                                                            -- npc level 81-90
 };
 
+-- Channeled spells cannot crit until WotLK
+for _, spell in pairs(spells) do
+    if bit.band(spell.flags, spell_flags.channel) ~= 0 and spell.periodic then
+        spell.periodic.flags = bit.bor(spell.periodic.flags, comp_flags.cant_crit);
+    end
+end
+
 -- Class data modification
 if sc.class == sc.classes.mage then
+
+    -- Arcane Missiles is an exception: it can crit despite being channeled
+    for _, v in pairs(rank_seqs[spids.arcane_missiles]) do
+        spells[v].periodic.flags = bit.band(spells[v].periodic.flags, bit.bnot(comp_flags.cant_crit));
+    end
 
     lookups.averaged_procs = {
         12536, -- clearcast
