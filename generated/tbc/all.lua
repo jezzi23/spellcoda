@@ -550,9 +550,6 @@ sc.player_buffs = {
 	[30833] = {
 			{"raw", "ap_flat", 4, nil, 2, 0},
 	},
-	[36676] = {
-			{"raw", "mp5_from_int_mod", 0.5, nil, 0, 0},
-	},
 	[15471] = {
 			{"raw", "melee_haste", -1, nil, 33, 1},
 	},
@@ -2398,7 +2395,7 @@ sc.player_buffs = {
 			{"by_attr", "stat_flat", -50, {3,}, 2, 1},
 	},
 	[21970] = {
-			{"by_attr", "stat_flat", 25, {-1,}, 2, 0},
+			{"by_attr", "stat_flat", 25, {1,2,3,4,5,}, 2, 0},
 	},
 	[21163] = {
 			{"raw", "res_phys_mod", 0.099999994, nil, 32, 0},
