@@ -737,8 +737,10 @@ local function sw_activate_tab(tab_window)
 
     if tab_window.frame_to_open == __sc_frame.spells_frame then
         update_spells_frame(nil, nil, nil, true);
+        sc.core.activate_tooltip_refresh();
     elseif tab_window.frame_to_open == __sc_frame.calculator_frame then
         update_calc_list(true);
+        sc.core.activate_tooltip_refresh();
     end
 
     tab_window.frame_to_open:Show();
@@ -1079,6 +1081,10 @@ local function make_frame_scrollable(frame)
 end
 
 local function create_sw_ui_spells_frame(pframe)
+
+    pframe:HookScript("OnHide", function()
+        sc.core.deactivate_tooltip_refresh();
+    end);
 
     spell_filter_listing = {
         {
@@ -1851,7 +1857,7 @@ local function create_sw_ui_tooltip_frame(pframe)
         L["Item comparison in tooltips"],
             " * ".."Hold ALT key to switch between evaluation modes".."\n"..
             " * ".."Evaluation is fully computed, not extrapolated from stat weights".."\n"..
-            " * ".."Item tooltips are never parsed for its text, making this feature localization agnostic"
+            " * ".."Item tooltips are never parsed for its text, making this localization agnostic"
     );
     help_icon:SetPoint("TOPRIGHT", -20, pframe.y_offset);
 
@@ -1874,16 +1880,16 @@ local function create_sw_ui_tooltip_frame(pframe)
 
     for _, v in ipairs(multi_row_checkbutton({
         {
+            id = "tooltip_item_stat_diff",
+            txt = L["Show stat changes"],
+        },
+        {
             id = "tooltip_item_smart",
             txt = L["Smarter tooltip"],
             tooltip = L["Adds/removes some sensible aspects of the tooltip. Examples: Never showing Attack for caster classes or for cloth items; Show wand spell for wands; etc"],
         },
-        {
-            id = "tooltip_item_weapon_skill",
-            txt = L["Show skill levels for weapons"],
-        },
 
-    }, pframe, 2, nil)) do 
+    }, pframe, 2, nil)) do
         tifs[#tifs + 1] = v;
     end
 
@@ -1943,9 +1949,8 @@ local function create_sw_ui_tooltip_frame(pframe)
 
     for _, v in ipairs(multi_row_checkbutton({
         {
-            id = "tooltip_item_stat_diff",
-            txt = L["Show stat changes"],
-            tooltip = "Intended for debugging, not human friendly. Shows all changes detected by calculator, including resolved indirect changes, e.g. spell power from % of spirit talent etc.",
+            id = "tooltip_item_weapon_skill",
+            txt = L["Show skill levels for weapons"],
         },
     }, pframe, 2, nil)) do
         tifs[#tifs + 1] = v;
@@ -2154,7 +2159,7 @@ local function create_sw_ui_overlay_frame(pframe)
             txt = L["Disable all overlays in raid instances"],
             tooltip = L["Eliminates dynamic overlay calculations making CPU usage negligible"],
             func = function()
-                sc.core.doing_raid_update();
+                sc.core.overlay_refresh_config();
             end
         },
     }, pframe, 1);
@@ -2193,6 +2198,7 @@ local function create_sw_ui_overlay_frame(pframe)
                 for _, v in ipairs(ofs) do
                     v:SetAlpha(alpha);
                 end
+                sc.core.overlay_refresh_config(true);
             end
         }}, pframe, 1, nil, 0);
 
@@ -2657,6 +2663,7 @@ local function create_sw_ui_overlay_frame(pframe)
                     for _, v in ipairs(cfs) do
                         v:SetAlpha(alpha);
                     end
+                    sc.core.overlay_refresh_config();
                 end
             },
         },
@@ -3166,26 +3173,31 @@ end
 local function update_calculator_item_frame(frame, allow_empty)
 
     local link = frame.link;
-    local quality, tex;
+    local quality, tex, ilvl;
 
     if link then
-        _, _, quality, _, _, _, _, _, _, tex = GetItemInfo(link);
+        _, _, quality, ilvl, _, _, _, _, _, tex = GetItemInfo(link);
     end
 
     if tex and quality then
         frame.icon:SetTexture(tex);
+        frame.ilvl_fstr:SetText(tostring(ilvl or 0));
         frame.icon:Show();
+        frame.ilvl_fstr:Show();
 
         if quality and ITEM_QUALITY_COLORS[quality] then
             local c = ITEM_QUALITY_COLORS[quality];
             --frame.bg:SetVertexColor(c.r, c.g, c.b, 1);
             frame.border:SetVertexColor(c.r, c.g, c.b, 1);
+            frame.ilvl_fstr:SetTextColor(c.r, c.g, c.b, 1);
         else
             --frame.bg:SetVertexColor(1, 1, 1, 1);
             frame.border:Hide();
+            frame.ilvl_fstr:SetTextColor(1, 1, 1, 1);
         end
     else
         frame.icon:Hide();
+        frame.ilvl_fstr:Hide();
         if allow_empty then
             local c = ITEM_QUALITY_COLORS[0];
             frame.border:SetVertexColor(c.r, c.g, c.b, 1);
@@ -3716,6 +3728,12 @@ local function create_calculator_items_subframe(pframe)
         slotf.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92);
         --slotf.icon:SetAlpha(0.4);
 
+        slotf.ilvl_fstr = slotf:CreateFontString(nil, "OVERLAY");
+        slotf.ilvl_fstr:SetFontObject(NumberFontNormalSmall)
+        local fp, _, flags = slotf.ilvl_fstr:GetFont();
+        slotf.ilvl_fstr:SetFont(fp, 10, "THICKOUTLINE");
+        slotf.ilvl_fstr:SetPoint("TOP", 0, -1);
+
         slotf.border = slotf:CreateTexture(nil, "OVERLAY");
         slotf.border:SetTexture("Interface\\Common\\WhiteIconFrame");
         slotf.border:SetBlendMode("BLEND");
@@ -3828,6 +3846,12 @@ local function create_calculator_items_subframe(pframe)
         new_itemf.icon = new_itemf:CreateTexture(nil, "ARTWORK");
         new_itemf.icon:SetAllPoints(new_itemf);
         new_itemf.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92);
+
+        new_itemf.ilvl_fstr = new_itemf:CreateFontString(nil, "OVERLAY");
+        new_itemf.ilvl_fstr:SetFontObject(NumberFontNormalSmall)
+        local fp, _, flags = new_itemf.ilvl_fstr:GetFont();
+        new_itemf.ilvl_fstr:SetFont(fp, 10, "THICKOUTLINE");
+        new_itemf.ilvl_fstr:SetPoint("TOP", 0, -1);
 
         new_itemf.border = new_itemf:CreateTexture(nil, "OVERLAY");
         new_itemf.border:SetAllPoints(new_itemf);
@@ -4879,6 +4903,7 @@ local function create_sw_ui_calculator_frame(pframe)
 
     pframe:HookScript("OnHide", function()
         sc.loadouts.force_update = true;
+        sc.core.deactivate_tooltip_refresh();
     end);
 
     local f, f_txt;
@@ -6402,6 +6427,12 @@ local function create_sw_base_ui()
     __sc_frame:RegisterForDrag("LeftButton");
     __sc_frame:SetScript("OnDragStart", __sc_frame.StartMoving);
     __sc_frame:SetScript("OnDragStop", __sc_frame.StopMovingOrSizing);
+    __sc_frame:HookScript("OnHide", function()
+        sc.core.deactivate_tooltip_refresh();
+    end);
+    __sc_frame:HookScript("OnShow", function()
+        sc.core.activate_tooltip_refresh();
+    end);
 
     local width = 500;
     local height = 600;
@@ -6536,6 +6567,7 @@ local function load_sw_ui()
                 tooltip:AddLine("|cFF9CD6DE"..L["Right click"]..":|r |cFFFF0000("..L["IS OFF"]..")|r "..L["Toggle old rank warning overlay"]);
             end
             tooltip:AddLine(" ");
+            tooltip:AddLine("|cFF9CD6DE".."Discord:|r GjgdtDFQv8");
             tooltip:AddLine("|cFF9CD6DE"..L["Addon data generated from"]..":|r");
             tooltip:AddLine("    "..sc.client_name_src.." "..sc.client_version_src);
             tooltip:AddLine("|cFF9CD6DE"..L["Current client build"]..":|r "..sc.client_version_loaded);

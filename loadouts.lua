@@ -367,6 +367,7 @@ local effects_multiplicative = {
         "vuln_mod",
         "cast_haste",
         "heal_mod",
+        "thp_based_vuln_mod",
     },
     wpn_subclass = {
         "phys_mod",
@@ -1915,6 +1916,7 @@ local function dynamic_loadout(loadout)
     loadout.target_defense = 5*loadout.target_lvl;
 
     loadout.base_armor, loadout.armor = UnitArmor("player");
+
     loadout.target_armor = config.settings.loadout_target_armor;
     if config.settings.loadout_target_automatic_armor then
         if sc.npc_armor_by_lvl[loadout.target_lvl] then
@@ -2070,8 +2072,21 @@ end
 
 loadouts.force_update = true;
 local effects_update_id = 0;
+local effects_update_timestamp = -1;
 
-local function update_loadout_and_effects()
+
+local function update_loadout_and_effects(relaxed_update_dt)
+
+    local now_timestamp = GetTime();
+
+    relaxed_update_dt = relaxed_update_dt or 0;
+
+    if now_timestamp - effects_update_timestamp <= relaxed_update_dt then
+
+        effects_update_timestamp = now_timestamp;
+        return loadout_front, buffed, final, effects_update_id;
+    end
+    effects_update_timestamp = now_timestamp;
 
     local other;
     if loadout_front == loadout_base1 then

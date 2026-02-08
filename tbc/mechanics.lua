@@ -82,11 +82,25 @@ local class_stats_spell = (function()
                         0.5
                     );
                 end
+            end
 
+            -- clearcast
+            if bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 and
+                talent_pts(effects, 106) ~= 0 then
+
+                stats.clearcast_p = 0.4;
+                stats.clearcast_on_crit_lookback_len = 2;
             end
         end
     elseif class == classes.mage then
         return function(anycomp, bid, stats, spell, loadout, effects)
+            local pts = talent_pts(effects, lookups.molten_fury_idx);
+            if pts ~= 0 and loadout.enemy_hp_perc <= 0.2 then
+                local vuln = effects.mul.ability.thp_based_vuln_mod[bid];
+                if vuln then
+                    stats.target_vuln_mod_mul = stats.target_vuln_mod_mul * vuln;
+                end
+            end
         end
     elseif class == classes.warlock then
         return function(anycomp, bid, stats, spell, loadout, effects)

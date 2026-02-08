@@ -5,6 +5,8 @@ local L                                     = sc.L;
 local spells                                = sc.spells;
 local spell_flags                           = sc.spell_flags;
 
+local clear_table                           = sc.utils.clear_table;
+
 local load_localization                     = sc.loc.load_localization;
 
 local load_sw_ui                            = sc.ui.load_sw_ui;
@@ -31,6 +33,7 @@ local write_spell_tooltip                   = sc.tooltip.write_spell_tooltip;
 local write_item_tooltip                    = sc.tooltip.write_item_tooltip;
 local on_clear_tooltip                      = sc.tooltip.on_clear_tooltip;
 local on_show_tooltip                       = sc.tooltip.on_show_tooltip;
+local on_hide_tooltip                       = sc.tooltip.on_hide_tooltip;
 
 -------------------------------------------------------------------------
 local core                      = {};
@@ -39,7 +42,7 @@ sc.core                         = core;
 core.addon_name                 = "SpellCoda";
 
 local version_major             = 0;
-local version_minor             = 8;
+local version_minor             = 9;
 local version_build             = sc.addon_build_id;
 
 core.version_id                 = version_build + version_minor*100000 + version_major*100000000;
@@ -49,7 +52,6 @@ core.version                    = tostring(version_major) .. "." ..
 
 core.sw_addon_loaded            = false;
 
-sc.sequence_counter             = 0;
 core.addon_running_time         = 0;
 core.active_spec                = 1;
 core.doing_raid                 = false;
@@ -58,10 +60,11 @@ core.mute_overlay               = false;
 core.talents_update_needed      = true;
 core.equipment_update_needed    = true;
 core.special_action_bar_changed = true;
-core.setup_action_bar_needed    = true;
 core.update_action_bar_needed   = false;
 core.old_ranks_checks_needed    = true;
 core.rescan_action_bar_needed   = false;
+
+
 
 local function generated_data_is_outdated(loaded_version, gen_version)
     local loaded = string.gmatch(loaded_version, "[^.]+");
@@ -103,23 +106,16 @@ local function client_age_days()
     return diff_days;
 end
 
-
-local function doing_raid_update()
-    local in_instance, instance_type = IsInInstance();
-    sc.core.doing_raid = in_instance and (instance_type == "pvp" or (IsInRaid() and instance_type == "raid"));
-    local should_mute_overlay = config.settings.overlay_disable_in_raid and sc.core.doing_raid;
-    if not sc.core.mute_overlay and should_mute_overlay then
-        sc.overlay.clear_overlays();
-        sc.core.old_ranks_checks_needed = true;
-    end
-    sc.core.mute_overlay = should_mute_overlay;
-end
-core.doing_raid_update = doing_raid_update;
-
 local timestamp = 0.0;
 local pname = UnitName("player");
 
-local function main_update()
+local refreshing_overlay = false;
+local overlay_refresh_scheduled = false;
+
+local function overlay_update()
+
+    overlay_refresh_scheduled = false;
+
     local dt = 1.0 / sc.config.settings.overlay_update_freq;
 
     local t = GetTime();
@@ -132,10 +128,46 @@ local function main_update()
 
     update_overlay();
 
-    sc.sequence_counter = sc.sequence_counter + 1;
     timestamp = t;
 
-    C_Timer.After(dt, main_update);
+    if refreshing_overlay then
+        overlay_refresh_scheduled = true;
+        C_Timer.After(dt, overlay_update);
+    end
+end
+
+function core.overlay_refresh_config(overlay_disable_changed)
+
+    local overlay_muted_before = core.mute_overlay;
+
+    local in_instance, instance_type = IsInInstance();
+    sc.core.doing_raid = in_instance and (instance_type == "pvp" or (IsInRaid() and instance_type == "raid"));
+    local should_mute_overlay = config.settings.overlay_disable_in_raid and sc.core.doing_raid;
+    if not core.mute_overlay and should_mute_overlay then
+        sc.overlay.clear_overlays();
+        sc.core.old_ranks_checks_needed = true;
+    end
+    core.mute_overlay = should_mute_overlay;
+
+    if not core.mute_overlay and
+        (not sc.config.settings.overlay_disable or not sc.config.settings.overlay_disable_cc_info) then
+
+        refreshing_overlay = true;
+        if not overlay_refresh_scheduled then
+            overlay_refresh_scheduled = true;
+            C_Timer.After(1.0 / sc.config.settings.overlay_update_freq, overlay_update);
+        end
+    else
+        refreshing_overlay = false;
+    end
+
+    if overlay_muted_before ~= core.mute_overlay or overlay_disable_changed then
+        sc.spells_feed.external_feed_reconfig(core.mute_overlay, sc.config.settings.overlay_disable);
+    end
+end
+
+function core.external_config()
+    return core.mute_overlay, sc.config.settings.overlay_disable;
 end
 
 local function key_mod_flags()
@@ -156,6 +188,7 @@ local function key_mod_flags()
 end
 
 local tooltip_timestamp = 0.0;
+
 sc.tooltip_mod = 0;
 sc.tooltip_mod_flags = {
     ALT =   bit.lshift(1, 0),
@@ -165,8 +198,14 @@ sc.tooltip_mod_flags = {
 
 local tooltip_time = 1.0/2.0;
 
+local refreshing_tooltip = false;
+local tooltip_dt = 0.1;
+local tooltip_refresh_scheduled = false;
+
 local function refresh_tooltip()
-    local dt = 0.1;
+    tooltip_refresh_scheduled = false;
+
+    local dt = tooltip_dt;
 
     local spells_frame_open = false;
     local calc_frame_open = false;
@@ -175,7 +214,7 @@ local function refresh_tooltip()
         calc_frame_open = __sc_frame.calculator_frame:IsShown();
     end
 
-    if config.settings.overlay_disable or sc.core.mute_overlay then
+    if config.settings.overlay_disable or core.mute_overlay then
         -- overlay is off, trigger updates which may exit early if nothing changed
         if calc_frame_open then
             sc.ui.update_calc_list(false);
@@ -189,7 +228,10 @@ local function refresh_tooltip()
 
     if config.settings.tooltip_disable then
 
-        C_Timer.After(dt, refresh_tooltip);
+        if refreshing_tooltip then
+            tooltip_refresh_scheduled = true;
+            C_Timer.After(dt, refresh_tooltip);
+        end
         return;
     end
     local mod = key_mod_flags();
@@ -207,7 +249,37 @@ local function refresh_tooltip()
         end
     end
 
-    C_Timer.After(dt, refresh_tooltip);
+    if refreshing_tooltip then
+        tooltip_refresh_scheduled = true;
+        C_Timer.After(dt, refresh_tooltip);
+    end
+end
+
+function core.activate_tooltip_refresh()
+    if not refreshing_tooltip then
+        refreshing_tooltip = true;
+        if not tooltip_refresh_scheduled then
+            tooltip_refresh_scheduled = true;
+            C_Timer.After(tooltip_dt, refresh_tooltip);
+        end
+    end
+end
+
+function core.deactivate_tooltip_refresh()
+
+    local spells_frame_open = false;
+    local calc_frame_open = false;
+    if __sc_frame:IsShown() then
+        spells_frame_open = __sc_frame.spells_frame:IsShown();
+        calc_frame_open = __sc_frame.calculator_frame:IsShown();
+    end
+    if not GameTooltip:IsShown() and
+        not ItemRefTooltip:IsShown() and
+        not (spells_frame_open and (config.settings.overlay_disable or core.mute_overlay)) and
+        not calc_frame_open then
+
+        refreshing_tooltip = false;
+    end
 end
 
 local event_dispatch = {
@@ -283,8 +355,7 @@ local event_dispatch = {
         sw_activate_frame("spells_frame");
         __sc_frame:Hide();
 
-        C_Timer.After(1.0, main_update);
-        C_Timer.After(1.0, refresh_tooltip);
+        --C_Timer.After(1.0, overlay_update);
     end,
     ["ACTIONBAR_SLOT_CHANGED"] = function(_, slot)
         if not core.sw_addon_loaded or config.settings.overlay_disable then
@@ -333,6 +404,7 @@ local event_dispatch = {
     end,
     ["ACTIVE_TALENT_GROUP_CHANGED"] = function()
 
+        sc.spells_feed.external_feed_highest_ranks_update();
         if not core.sw_addon_loaded then
             return;
         end
@@ -345,6 +417,7 @@ local event_dispatch = {
     end,
     ["CHARACTER_POINTS_CHANGED"] = function()
 
+        --sc.spells_feed.external_feed_highest_ranks_update();
         sc.loadouts.force_update = true;
         update_talents_frame();
     end,
@@ -357,6 +430,12 @@ local event_dispatch = {
         sc.loadouts.force_update = true;
     end,
     ["LEARNED_SPELL_IN_TAB"] = function()
+        sc.spells_feed.external_feed_highest_ranks_update();
+        core.old_ranks_checks_needed = true;
+        sc.loadouts.force_update = true;
+    end,
+    ["SPELLS_CHANGED"] = function()
+        sc.spells_feed.external_feed_highest_ranks_update();
         core.old_ranks_checks_needed = true;
         sc.loadouts.force_update = true;
     end,
@@ -377,9 +456,11 @@ local event_dispatch = {
         core.talents_update_needed = true;
     end,
     ["ENGRAVING_MODE_CHANGED"] = function()
+        sc.spells_feed.external_feed_highest_ranks_update();
         core.equipment_update_needed = true;
     end,
     ["RUNE_UPDATED"] = function()
+        sc.spells_feed.external_feed_highest_ranks_update();
         core.equipment_update_needed = true;
     end,
     ["PLAYER_REGEN_DISABLED"] = function()
@@ -388,10 +469,10 @@ local event_dispatch = {
         __sc_frame:Hide();
     end,
     ["PLAYER_ENTERING_WORLD"] = function()
-        doing_raid_update();
+        core.overlay_refresh_config();
     end,
     ["GROUP_ROSTER_UPDATE"] = function()
-        doing_raid_update();
+        core.overlay_refresh_config();
     end,
 };
 
@@ -406,6 +487,7 @@ core.event_dispatch_client_exceptions = event_dispatch_client_exceptions;
 
 GameTooltip:HookScript("OnTooltipSetSpell", function()
     if not config.settings.tooltip_disable then
+        core.activate_tooltip_refresh();
         sc.tooltip_mod = key_mod_flags()
         write_spell_tooltip();
     end
@@ -414,6 +496,7 @@ end);
 local item_tooltip_mod = 0;
 GameTooltip:HookScript("OnTooltipSetItem", function(self)
     if not config.settings.tooltip_disable_item then
+        core.activate_tooltip_refresh();
         local mod = key_mod_flags();
         local mod_change = mod ~= item_tooltip_mod;
         item_tooltip_mod = mod;
@@ -423,6 +506,7 @@ end);
 
 hooksecurefunc(ItemRefTooltip, "SetHyperlink", function(self, link)
     if not config.settings.tooltip_disable_item then
+        core.activate_tooltip_refresh();
         local mod = key_mod_flags();
         local mod_change = mod ~= item_tooltip_mod;
         item_tooltip_mod = mod;
@@ -430,11 +514,21 @@ hooksecurefunc(ItemRefTooltip, "SetHyperlink", function(self, link)
     end
 end);
 
+ItemRefTooltip:HookScript("OnTooltipCleared", function(self)
+    on_clear_tooltip(self);
+end);
+ItemRefTooltip:HookScript("OnHide", function(self)
+    core.deactivate_tooltip_refresh();
+end);
+ItemRefTooltip:HookScript("OnShow", function(self)
+end);
+
 GameTooltip:HookScript("OnTooltipCleared", function(self)
     on_clear_tooltip(self);
 end);
-ItemRefTooltip:HookScript("OnTooltipCleared", function(self)
-    on_clear_tooltip(self);
+GameTooltip:HookScript("OnHide", function(self)
+    on_hide_tooltip(self);
+    core.deactivate_tooltip_refresh();
 end);
 GameTooltip:HookScript("OnShow", function(self)
     on_show_tooltip(self);

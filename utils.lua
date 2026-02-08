@@ -277,11 +277,14 @@ local function write_item_info_from_link(info, link)
 
     local link_fields = link and link:match("item:(.+)");
     if not link or not link_fields then
-        info.class_id = nil;
-        info.subclass_id = nil;
         info.gem1 = nil;
         info.enchant_id = nil;
         info.suffix_id = nil;
+        info.inv_type = nil;
+        info.class_id = nil;
+        info.subclass_id = nil;
+        info.quality = nil;
+        info.ilvl = nil;
 
         return false;
     end
@@ -299,7 +302,8 @@ local function write_item_info_from_link(info, link)
     info.gem3 = tonumber(gem3);
     info.gem4 = tonumber(gem4);
 
-    _, _, _, _, _, info.class_id, info.subclass_id = GetItemInfoInstant(link);
+    _, _, _, info.inv_type, _, info.class_id, info.subclass_id = GetItemInfoInstant(link);
+    _, _, info.quality, info.ilvl = GetItemInfo(link); -- might not work when data is cold
 
     return true;
 end
@@ -323,6 +327,19 @@ local combat_ratings = {
     CR_EXPERTISE                      = CR_EXPERTISE                   or 24;
 };
 
+local function table_from_schema(dst, src, schema)
+    clear_table(dst);
+    if schema then
+        for _, k in ipairs(schema) do
+            dst[k] = src[k];
+        end
+    else
+        for k, v in pairs(src) do
+            dst[k] = v;
+        end
+    end
+end
+
 --------------------------------------------------------------------------------
 utils.deep_table_copy               = deep_table_copy;
 utils.clear_table                   = clear_table;
@@ -344,6 +361,7 @@ utils.spell_lname                   = spell_lname;
 utils.dummy_value                   = dummy_value;
 utils.assign_color_tag              = assign_color_tag;
 utils.write_item_info_from_link     = write_item_info_from_link;
+utils.table_from_schema             = table_from_schema;
 utils.combat_ratings                = combat_ratings;
 
 sc.utils = utils;

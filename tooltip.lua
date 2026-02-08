@@ -191,10 +191,6 @@ sc_stat_calc_tooltip:AddFontStrings(header_txt, text, text_small);
 -- they have same fonts and size. Downscale instead
 sc_stat_calc_tooltip:SetScale(0.75);
 
-GameTooltip:HookScript("OnHide", function()
-    sc_stat_calc_tooltip:Hide();
-end);
-
 local spell_id_of_cleared_tooltip = 0;
 local clear_tooltip_refresh_id = 463;
 
@@ -222,7 +218,8 @@ local function update_tooltip(tooltip, mod_change)
         end
         __sc_frame.spell_id_viewer_editbox:SetText(tostring(spell_jump_key));
     end
-    if not (PlayerTalentFrame and MouseIsOver(PlayerTalentFrame)) and tooltip:IsShown() then
+    if not (PlayerTalentFrame and PlayerTalentFrame:IsShown() and MouseIsOver(PlayerTalentFrame)) and
+        tooltip:IsShown() then
         local _, id = tooltip:GetSpell();
 
         if id and (spells[id] or id == clear_tooltip_refresh_id or id == __sc_frame.spell_viewer_invalid_spell_id) then
@@ -2054,6 +2051,7 @@ local inv_type_to_spid_force_eval = {
     INVTYPE_RANGED = { "shoot", "auto_shot", "shoot_bow" },
     INVTYPE_RANGEDRIGHT = { "shoot", "auto_shot", "shoot_bow" },
     INVTYPE_SHIELD = { "dodge" },
+    INVTYPE_THROWN = { "throw" },
 };
 
 local armor_ignorable = {
@@ -2084,7 +2082,7 @@ local function make_item_tooltip_data(tooltip)
             [1] = { len = 0, diff_list = {}, diff_str = ""},
             [2] = { len = 0, diff_list = {}, diff_str = ""}
         },
-        tooltip_item_id_last = 0,
+        tooltip_item_link_last = "",
         item_tooltip_frames_hidden = false,
         item_tooltip_effects_update_id = 0,
         new_item = {},
@@ -2175,7 +2173,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         return;
     end
 
-    _, _, tt.new_item.quality, _, _, _, _, _, tt.new_item.inv_type, tt.new_item.tex, _, tt.new_item.class_id, tt.new_item.subclass_id =
+    _, _, tt.new_item.quality, tt.new_item.ilvl, _, _, _, _, tt.new_item.inv_type, tt.new_item.tex, _, tt.new_item.class_id, tt.new_item.subclass_id =
         GetItemInfo(tt.new_item.link);
 
     if not tt.new_item.inv_type or
@@ -2184,15 +2182,6 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     end
     local cmp_slots = inv_type_to_slot_ids[tt.new_item.inv_type];
     if not cmp_slots then
-        return;
-    end
-
-    local loadout, effects, effects_finalized, update_id = update_loadout_and_effects();
-    local updated = update_id > tt.item_tooltip_effects_update_id;
-    tt.item_tooltip_effects_update_id = update_id;
-
-    if tt.new_item.id == loadout.items[cmp_slots[1]] or
-        (cmp_slots[2] and tt.new_item.id == loadout.items[cmp_slots[2]]) then
         return;
     end
 
@@ -2222,6 +2211,15 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         end
     end
 
+    local loadout, effects, effects_finalized, update_id = update_loadout_and_effects();
+    local updated = update_id > tt.item_tooltip_effects_update_id;
+    tt.item_tooltip_effects_update_id = update_id;
+
+    if tt.new_item.id == loadout.items[cmp_slots[1]] or
+        (cmp_slots[2] and tt.new_item.id == loadout.items[cmp_slots[2]]) then
+        return;
+    end
+
     local fight_type = config.settings.calc_fight_type;
     if bit.band(mod, sc.tooltip_mod_flags.ALT) ~= 0 then
         if fight_type == fight_types.repeated_casts then
@@ -2245,7 +2243,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     --local effects_diffed = sc.loadouts.diffed;
     local effects_diffed = tooltip_effects_diffed;
     -- TODO: might want to compare item link string
-    if tt.tooltip_item_id_last ~= tt.new_item.id or updated or mod_change then
+    if tt.tooltip_item_link_last ~= tt.new_item.link or updated or mod_change then
         -- actual evaluation update step and overwrites cache
 
         for item_fits_in_slot, slot in pairs(cmp_slots) do
@@ -2266,7 +2264,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             write_item_info_from_link(old_item, old_item.link);
             if old_item.link then
 
-                _, _, old_item.quality, _, _, _, _, _, old_item.inv_type, old_item.tex, _, old_item.class_id, old_item.subclass_id =
+                _, _, old_item.quality, old_item.ilvl, _, _, _, _, old_item.inv_type, old_item.tex, _, old_item.class_id, old_item.subclass_id =
                     GetItemInfo(old_item.link);
             else
                 old_item.tex = empty_tex;
@@ -2305,7 +2303,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 write_item_info_from_link(knocked_slot_data, knocked_slot_data.link);
                 if knocked_slot_data.link then
 
-                    _, _, knocked_slot_data.quality, _, _, _, _, _, knocked_slot_data.inv_type, knocked_slot_data.tex, _, knocked_slot_data.class_id, knocked_slot_data.subclass_id =
+                    _, _, knocked_slot_data.quality, knocked_slot_data.ilvl, _, _, _, _, knocked_slot_data.inv_type, knocked_slot_data.tex, _, knocked_slot_data.class_id, knocked_slot_data.subclass_id =
                         GetItemInfo(knocked_slot_data.link);
                 else
                     knocked_slot_data.tex = empty_tex;
@@ -2356,7 +2354,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             if config.settings.tooltip_item_smart and inv_type_to_spid_force_eval[tt.new_item.inv_type] then
                 for _, spid_id in pairs(inv_type_to_spid_force_eval[tt.new_item.inv_type]) do
                     local k = spids[spid_id];
-                    if (k == spids.shoot and not_ranged_class) or
+                    if ((k == spids.shoot or k == spids.throw) and not_ranged_class) or
                        (k == spids.attack and not_melee_class) or
                        (k == spids.dodge and not_shield_class) then
                         k = nil;
@@ -2401,7 +2399,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                     k = highest_learned_rank(spells[k].base_id);
                 end
                 if config.settings.tooltip_item_smart then
-                    if (k == spids.shoot and not_ranged_class) or
+                    if ((k == spids.shoot or k == spids.throw) and not_ranged_class) or
                        (k == spids.attack and not_melee_class)
                        --or (k == spids.dodge and not_shield_class)
                        then
@@ -2461,7 +2459,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         end
     end
 
-    tt.tooltip_item_id_last = tt.new_item.id;
+    tt.tooltip_item_link_last = tt.new_item.link;
 
     -- abort if no spells or all diffs are 0
     local neutral_abort = true;
@@ -2640,7 +2638,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 else
                     tooltip:AddDoubleLine(string.format("  %s %s", spell_texture_str, diff.disp), " ");
                 end
-            elseif diff.id == spids.auto_shot or diff.id == spids.shoot then -- hunter ranged auto attack
+            elseif diff.id == spids.auto_shot or diff.id == spids.shoot or diff.id == spids.throw then -- hunter ranged auto attack
                 if cmp_slots[item_fits_in_slot] == slots.RangedSlot then
                     tooltip:AddDoubleLine(string.format("  |T%s:16:16:0:0|t  %s", tt.new_item.tex, diff.disp), " ");
                 else
@@ -2715,6 +2713,10 @@ end
 local tooltip_update_cd = 1.0;
 local last_needs_update_time = 0;
 
+local function on_hide_tooltip(tooltip)
+    sc_stat_calc_tooltip:Hide();
+end
+
 local function on_show_tooltip(tooltip)
     local spell_name, _ = tooltip:GetSpell();
     if not spell_name then
@@ -2742,6 +2744,7 @@ tooltip_export.append_tooltip_spell_rank        = append_tooltip_spell_rank;
 tooltip_export.eval_mode_scroll_fn              = eval_mode_scroll_fn;
 tooltip_export.on_clear_tooltip                 = on_clear_tooltip;
 tooltip_export.on_show_tooltip                  = on_show_tooltip;
+tooltip_export.on_hide_tooltip                  = on_hide_tooltip;
 tooltip_export.stat_diffs_included_effects_str  = stat_diffs_included_effects_str;
 tooltip_export.colored_diff_str                 = colored_diff_str;
 

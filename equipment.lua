@@ -1,9 +1,14 @@
 local _, sc = ...;
 
 local attr                             = sc.attr;
+local aura_idx_effect                  = sc.aura_idx_effect;
+local aura_idx_value                   = sc.aura_idx_value;
 local special_item_properties          = sc.special_item_properties;
+
 local apply_effect                     = sc.loadouts.apply_effect;
 local cpy_effects                      = sc.loadouts.cpy_effects;
+
+
 ---------------------------------------------------------------------------------------------------
 local equipment = {};
 
@@ -70,7 +75,33 @@ local inv_type_to_slot_ids = {
     INVTYPE_RANGED = { slots.RangedSlot },
     INVTYPE_RANGEDRIGHT = { slots.RangedSlot },
     INVTYPE_RELIC = { slots.RangedSlot },
+    INVTYPE_THROWN = { slots.RangedSlot },
 };
+
+local inv_type_to_rand_prop_points_index = {
+    INVTYPE_HEAD           = 1,
+    INVTYPE_CHEST          = 1,
+    INVTYPE_ROBE           = 1,
+    INVTYPE_LEGS           = 1,
+    INVTYPE_2HWEAPON       = 1,
+    INVTYPE_SHOULDER       = 2,
+    INVTYPE_WAIST          = 2,
+    INVTYPE_FEET           = 2,
+    INVTYPE_HAND           = 2,
+    INVTYPE_NECK           = 3,
+    INVTYPE_WRIST          = 3,
+    INVTYPE_FINGER         = 3,
+    INVTYPE_CLOAK          = 3,
+    INVTYPE_HOLDABLE       = 3,
+    INVTYPE_SHIELD         = 3,
+    INVTYPE_WEAPON         = 4,
+    INVTYPE_WEAPONMAINHAND = 4,
+    INVTYPE_WEAPONOFFHAND  = 4,
+    INVTYPE_RANGED         = 5,
+    INVTYPE_RANGEDRIGHT    = 5,
+    INVTYPE_RELIC          = 5,
+    INVTYPE_THROWN         = 5,
+}
 
 
 local wpn_strs = {
@@ -120,23 +151,22 @@ end
 
 -- Generated spell effects handle most item effects but some require special handling
 local item_stats_handler = {
-    ITEM_MOD_INTELLECT_SHORT = function(effects, val, _, forced, undo)
+    ITEM_MOD_INTELLECT_SHORT = function(effects, val, forced, undo)
         flat_add(val, forced, undo, effects.by_attr.stat_flat, attr.intellect);
     end,
-    ITEM_MOD_SPIRIT_SHORT = function(effects, val, _, forced, undo)
+    ITEM_MOD_SPIRIT_SHORT = function(effects, val, forced, undo)
         flat_add(val, forced, undo, effects.by_attr.stat_flat, attr.spirit);
     end,
-    ITEM_MOD_STRENGTH_SHORT = function(effects, val, _, forced, undo)
+    ITEM_MOD_STRENGTH_SHORT = function(effects, val, forced, undo)
         flat_add(val, forced, undo, effects.by_attr.stat_flat, attr.strength);
     end,
-    ITEM_MOD_AGILITY_SHORT = function(effects, val, _, forced, undo)
+    ITEM_MOD_AGILITY_SHORT = function(effects, val, forced, undo)
         flat_add(val, forced, undo, effects.by_attr.stat_flat, attr.agility);
     end,
-    ITEM_MOD_STAMINA_SHORT = function(effects, val, _, forced, undo)
+    ITEM_MOD_STAMINA_SHORT = function(effects, val, forced, undo)
         flat_add(val, forced, undo, effects.by_attr.stat_flat, attr.stamina);
     end,
 };
-
 
 local function apply_weapon(effects, id, slot, subclass_id, undo)
 
@@ -218,17 +248,18 @@ end
 local function apply_item_stats(effects, item_info, forced, undo)
 
     if not item_info.link then
-        return;
+        return nil;
     end
     local item_stats = GetItemStats(item_info.link);
 
     if item_stats then
         for k, v in pairs(item_stats) do
             if item_stats_handler[k] then
-                item_stats_handler[k](effects, v, property, forced, undo);
+                item_stats_handler[k](effects, v, forced, undo);
             end
         end
     end
+    return item_stats;
 end
 
 local gems_buffer = {};
@@ -365,7 +396,7 @@ local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems,
         end
     end
 
-    apply_item_stats(effects, item_info, true, undo);
+    local item_stats = apply_item_stats(effects, item_info, true, undo);
 
     if should_apply_gems then
         apply_gems(effects, true, undo, item_info.id,
@@ -376,10 +407,54 @@ local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems,
     end
 
     if item_info.suffix_id and sc.suffix_ids[item_info.suffix_id] then
-        for _, ench_id in pairs(sc.suffix_ids[item_info.suffix_id]) do
+        for ench_idx, ench_id in pairs(sc.suffix_ids[item_info.suffix_id]) do
             if sc.enchants[ench_id] then
                 for _, effect_id in pairs(sc.enchants[ench_id]) do
-                    apply_effect(effects, effect_id, sc.enchant_effects[effect_id], true, 1, undo, false);
+
+                    local enchant_effects = sc.enchant_effects[effect_id];
+
+                    -- suffix auras always have only 1 entry if any
+
+                    if item_info.suffix_id < 0 and #enchant_effects > 0 then
+
+                        -- suffixes with negative ID behave differently and scale with ilvl depending on
+                        -- item type, ilvl and quality
+
+                        -- various checks needed which could theoretically fail out in the wild
+                        local value = (
+                            item_info.inv_type and
+                            item_info.ilvl and
+                            item_info.quality and
+                            sc.ilvl_to_quality_rand_prop_points[item_info.ilvl] and
+                            sc.ilvl_to_quality_rand_prop_points[item_info.ilvl][item_info.quality] and
+                            inv_type_to_rand_prop_points_index[item_info.inv_type] and
+                                math.floor(
+                                    sc.ilvl_to_quality_rand_prop_points[item_info.ilvl][math.max(2, math.min(4, item_info.quality))][
+                                        inv_type_to_rand_prop_points_index[item_info.inv_type]
+                                    ]
+                                    *
+                                    sc.random_suffix_allocation_pct[item_info.suffix_id][ench_idx]
+                                )
+                        ) or 0;
+
+                        local prev_values = {};
+                        for i, aura in ipairs(enchant_effects) do
+                            if aura[aura_idx_effect] ~= "stat_flat" then
+                                -- flat stats gets populated in GetItems, deal with others
+                                prev_values[i] = aura[aura_idx_value];
+                                aura[aura_idx_value] = value;
+                            end
+                        end
+                        apply_effect(effects, effect_id, enchant_effects, true, 1, undo, false);
+                        for i, prev in pairs(prev_values) do
+                            enchant_effects[i][aura_idx_value] = prev;
+                        end
+
+                    else
+                        apply_effect(effects, effect_id, enchant_effects, true, 1, undo, false);
+                    end
+
+
                 end
             end
         end
@@ -605,6 +680,5 @@ equipment.apply_items_cmp               = apply_items_cmp;
 equipment.wpn_skill_for_slot            = wpn_skill_for_slot;
 equipment.slots                         = slots;
 equipment.inv_type_to_slot_ids          = inv_type_to_slot_ids;
-equipment.write_item_info_from_link     = write_item_info_from_link;
 
 sc.equipment = equipment;

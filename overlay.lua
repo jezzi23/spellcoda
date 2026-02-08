@@ -7,6 +7,7 @@ local spell_cast_time                               = sc.utils.spell_cast_time;
 local effect_color                                  = sc.utils.effect_color;
 local format_number                                 = sc.utils.format_number;
 local format_dur                                    = sc.utils.format_dur;
+local table_from_schema                             = sc.utils.table_from_schema;
 
 local spells                                        = sc.spells;
 local spids                                         = sc.spids;
@@ -33,33 +34,16 @@ local initialized = false;
 local active_overlays = {};
 local action_bar_frame_names = {};
 local spell_book_frames = {};
-local action_bar_addon_name = "Default";
 local num_overlay_components_toggled = 0;
 local action_id_frames = {};
 local num_actions = 120;
-
 local external_overlay_frames = {};
-local external_ccf_callbacks = {};
+
+local loadout, effects;
 
 overlay.decimals_cap = 3;
 
 local anyspell_overlay, anyspell_cast_until_oom_overlay, mana_restoration_overlay, only_threat_overlay, effective_hp_overlay;
-
---local externally_registered_spells = {};
---sc.ext.register_spell = function(spell_id)
---    if spells[spell_id] and bit.band(spell.flags, spell_flags.eval) ~= 0 then
---        if not externally_registered_spells[spell_id] then
---            externally_registered_spells[spell_id] = 0;
---        end
---        externally_registered_spells[spell_id] = externally_registered_spells[spell_id] + 1;
---    end
---end
---
---sc.ext.unregister_spell = function(spell_id)
---    if spells[spell_id] and externally_registered_spells[spell_id] then
---        externally_registered_spells[spell_id] = math.max(0, externally_registered_spells[spell_id] - 1);
---    end
---end
 
 local function overlay_frames_config(overlay_frames)
 
@@ -113,6 +97,8 @@ sc.ext.unregister_overlay_frame = function(frame)
     end
     external_overlay_frames[frame] = nil;
 end
+
+local external_ccf_callbacks = {};
 
 local function register_cc_on_update(callback_fn, info_schema, stats_schema)
     local ccf_data = {};
@@ -292,14 +278,6 @@ end
 local function scan_action_frames()
 
     for action_id, v in pairs(action_bar_frame_names) do
-
-        if not action_id_frames[action_id].frame then
-
-            local button_frame = _G[v];
-            if button_frame then
-                button_frame:HookScript("OnMouseWheel", sc.tooltip.eval_mode_scroll_fn);
-            end
-        end
         try_register_frame(action_id, v);
     end
 end
@@ -355,7 +333,6 @@ local function gather_spell_icons()
         for i = 1, num_actions do
             action_bar_frame_names[i] = "BT4Button"..i;
         end
-        action_bar_addon_name = "Bartender4";
 
     elseif IsAddOnLoaded("ElvUI") then
 
@@ -367,34 +344,33 @@ local function gather_spell_icons()
                 index = index + 1;
             end
         end
-        action_bar_addon_name = "ElvUI";
 
     elseif IsAddOnLoaded("Dominos") then
 
         local highest_action_found = 0;
         for k, v in pairs({
-            "Action",
-            "Bonus",
-            "MultiBarRight",
-            "MultiBarLeft",
-            "MultiBarBottomRight",
-            "MultiBarBottomLeft",
-            "",
-            "MultiBar0",
-            "MultiBar1",
-            "MultiBar2",
-            "MultiBar3",
-            "MultiBar4",
-            "MultiBar5",
-            "MultiBar6",
-            "MultiBar7",
+            "Action",               -- 1-12
+            "Bonus",                -- 13-24
+            "MultiBarRight",        -- 25-36
+            "MultiBarLeft",         -- 37-48
+            "MultiBarBottomRight",  -- 49-60
+            "MultiBarBottomLeft",   -- 61-72
+            "",                     -- 73-84
+            "MultiBar0",            -- 85-96
+            "MultiBar1",            -- 97-108
+            "MultiBar2",            -- 109-120
+            "MultiBar3",            -- 121-132
+            "MultiBar4",            -- 133-144
+            "MultiBar5",            -- 145-156
+            "MultiBar6",            -- 157-168
+            "MultiBar7",            -- 169-180
         }) do
             for j = 1, 12 do
                 if v ~= "" then
-                    if getglobal(v.."ActionButton"..j) then
+                    if _G[v.."ActionButton"..j] then
                         action_bar_frame_names[index] = v.."ActionButton"..j;
                         highest_action_found = index;
-                    elseif getglobal(v.."Button"..j) then
+                    elseif _G[v.."Button"..j] then
                         action_bar_frame_names[index] = v.."Button"..j;
                         highest_action_found = index;
                     end
@@ -405,9 +381,10 @@ local function gather_spell_icons()
         -- Overwrite default bar names where DominosActionButtons are defined
         for i = 1, 180 do
             local bar_name = "DominosActionButton"..i;
-            local slotf = getglobal(bar_name)
+            local slotf = _G[bar_name];
             if slotf then
-                local idx = slotf.action or i;
+                --local idx = slotf.action or i;
+                local idx = i;
 
                 action_bar_frame_names[idx] = bar_name;
                 highest_action_found = math.max(highest_action_found, idx);
@@ -415,26 +392,50 @@ local function gather_spell_icons()
         end
         num_actions = math.max(num_actions, highest_action_found);
 
-        action_bar_addon_name = "Dominos";
 
     else -- default action bars
 
-        index = 1;
+        local highest_action_found = 0;
         for k, v in pairs({
-            "ActionButton",
-            "BonusActionButton",
-            "MultiBarRightButton",
-            "MultiBarLeftButton",
-            "MultiBarBottomRightButton",
-            "MultiBarBottomLeftButton"
-        }) do
-            for j = 1, 12 do
-                action_bar_frame_names[index] = v..j;
+            "Action",                -- 1-12
+            "Bonus",           -- 13-24
+            "MultiBarRight",         -- 25-36
+            "MultiBarLeft",          -- 37-48
+            "MultiBarBottomRight",   -- 49-60
+            "MultiBarBottomLeft",    -- 61-72
+            "",                            -- 73-84
+            "",                            -- 85-96
+            "",                            -- 97-108
+            "",                            -- 109-120
+            "",                            -- 121-132
+            "",                            -- 133-144
+            "MultiBar5",                   -- 145-156
+            "MultiBar6",                   -- 157-168
+            "MultiBar7",                   -- 169-180
 
+
+        }) do
+
+            for j = 1, 12 do
+                if v ~= "" then
+                    if _G[v.."ActionButton"..j] then
+                        action_bar_frame_names[index] = v.."ActionButton"..j;
+                        highest_action_found = index;
+                    elseif _G[v.."Button"..j] then
+                        action_bar_frame_names[index] = v.."Button"..j;
+                        highest_action_found = index;
+                    end
+                end
                 index = index + 1;
             end
+            num_actions = math.max(num_actions, highest_action_found);
         end
-        action_bar_addon_name = "Default";
+    end
+
+    for k, v in pairs(action_bar_frame_names) do
+        if v ~= "" and _G[v] then
+            _G[v]:HookScript("OnMouseWheel", sc.tooltip.eval_mode_scroll_fn);
+        end
     end
 
     for i = 1, num_actions do
@@ -604,7 +605,6 @@ local function update_action_bars()
     update_icon_overlay_settings();
 end
 
-local spell_cache = {};
 local overlay_label_handler;
 local function init_label_handler()
     -- delayed init to allow for config based localization
@@ -1322,7 +1322,6 @@ ccf_hook_events(true);
 
 local active_ccf_labels = {};
 local ccfs;
-local loadout, effects;
 
 local function update_ccf(frame, spell, info, stats, spell_id)
 
@@ -1422,35 +1421,20 @@ local function update_cc()
                 cc.data.spell = spells[k];
 
                 if info then
-                    if cc.info_schema then
-                        for _, key in ipairs(cc.info_schema) do
-                            cc.info[key] = info[key];
-                        end
-                    else
-                        for kk, vv in pairs(info) do
-                            cc.info[kk] = vv;
-                        end
-                    end
+                    table_from_schema(cc.info, info, cc.info_schema)
+
                     cc.data.info = cc.info;
                 else
                     cc.data.info = nil;
                 end
                 if stats then
-                    if cc.stats_schema then
-                        for _, key in ipairs(cc.stats_schema) do
-                            cc.stats[key] = stats[key];
-                        end
-                    else
-                        for kk, vv in pairs(stats) do
-                            cc.stats[kk] = vv;
-                        end
-                    end
+                    table_from_schema(cc.stats, stats, cc.stats_schema)
                     cc.data.stats = cc.stats;
                 else
                     cc.data.stats = nil;
                 end
 
-                fn(cc.data.spell_id, cc.data.spell, cc.data.info, cc.data.stats);
+                fn();
             end
         end
     end
@@ -1748,10 +1732,6 @@ local special_action_bar_changed_id = 0;
 
 local function update_spell_icons(loadout, effects, eval_flags)
 
-    if sc.core.setup_action_bar_needed then
-        setup_action_bars();
-        sc.core.setup_action_bar_needed = false;
-    end
     if sc.core.update_action_bar_needed then
         update_action_bars();
         sc.core.update_action_bar_needed = false;
@@ -1796,7 +1776,7 @@ local function update_spell_icons(loadout, effects, eval_flags)
                 end
                 local spell_name = v.frame.SpellName:GetText();
                 local spell_rank_name = v.frame.SpellSubName:GetText();
-                
+
                 local _, _, _, _, _, _, id = GetSpellInfo(spell_name, spell_rank_name);
 
                 local remaining_spells_in_page = 12;
@@ -1813,11 +1793,9 @@ local function update_spell_icons(loadout, effects, eval_flags)
     end
 
     -- update action bar icons
-    local num_evals = 0;
     for k, _ in pairs(active_overlays) do
         local v = action_id_frames[k];
         if v.frame and v.frame:IsShown() and spells[v.spell_id] then
-            num_evals = num_evals + 1;
             update_overlay_frame(v, loadout, effects, v.spell_id, eval_flags);
         end
     end
@@ -1849,7 +1827,7 @@ local function update_overlay()
     if not config.settings.overlay_disable and not sc.core.mute_overlay then
         if not calc_frame_open and not config.settings.general_calc_global_compare then
 
-            loadout, _, effects, update_id = update_loadout_and_effects();
+            loadout, _, effects, update_id = update_loadout_and_effects(0.7 / sc.config.settings.overlay_update_freq);
 
         else
             loadout, _, _, effects_before, effects, update_id =
@@ -1872,6 +1850,17 @@ local function update_overlay()
 
         if not config.settings.overlay_disable and not sc.core.mute_overlay then
             update_spell_icons(loadout, effects, eval_flags);
+        end
+
+        for feed, feed_data in pairs(sc.spells_feed.external_feeds) do
+            if not feed_data.paused then
+                sc.spells_feed.external_feed_calc(feed, feed_data, loadout, effects);
+                sc.spells_feed.external_feed_calc(feed, feed_data,  loadout, effects);
+
+                if feed_data.callback_fn then
+                    feed_data.callback_fn(feed);
+                end
+            end
         end
     end
 
@@ -1924,5 +1913,4 @@ overlay.register_cc_on_update                       = register_cc_on_update
 overlay.unregister_cc_on_update                     = unregister_cc_on_update
 
 sc.overlay = overlay;
-sc.ext.spell_cache = spell_cache;
 

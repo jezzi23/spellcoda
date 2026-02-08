@@ -51,9 +51,14 @@ end
 -- in spells list without requiring "Other spells filter"
 -- Do this for special spells like auto attack and shoot
 local normal_spell_train_hack = -1;
-for k, v in pairs({"attack", "shoot", "auto_shot", "dodge"}) do
+for k, v in pairs({"attack", "shoot", "auto_shot", "dodge", "throw"}) do
     if spids[v] then
         spells[spids[v]].train = normal_spell_train_hack;
+    end
+end
+for k, v in pairs({"shoot", "throw", "shoot_bow", "shoot_gun", "shoot_crossbow"}) do
+    if spids[v] then
+        spells[spids[v]].flags = bit.bor(spells[spids[v]].flags, spell_flags.uses_attack_speed);
     end
 end
 
