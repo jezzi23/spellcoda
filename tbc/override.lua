@@ -44,6 +44,8 @@ sc.npc_armor_by_lvl = {
 -- Class data modification
 if sc.class == sc.classes.mage then
 
+    lookups.molten_fury_idx = 220;
+
     lookups.averaged_procs = {
         12536, -- clearcast
         22008, -- tier 2 instant cast proc
@@ -186,7 +188,7 @@ elseif sc.class == sc.classes.priest then
     end
 
     for _, v in pairs(rank_seqs[spids.power_word_shield]) do
-        spells[v].direct.coef = spell_coef_lvl_adjusted(0.1, spells[v].lvl_req);
+        spells[v].direct.coef = spell_coef_lvl_adjusted(0.345, spells[v].lvl_req);
     end
 
     for _, v in pairs(rank_seqs[spids.lightwell]) do
@@ -207,6 +209,7 @@ elseif sc.class == sc.classes.priest then
 elseif sc.class == sc.classes.shaman then
 
     lookups.averaged_procs = {
+        16246 -- clearcast
     };
 
     -- THREAT

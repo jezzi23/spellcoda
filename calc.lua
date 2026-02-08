@@ -248,6 +248,7 @@ local function stats_attack_skill(comp, spell, loadout, effects, eval_flags)
     if loadout.shapeshift_no_weapon ~= 0 then
         subclass = nil;
     elseif bit.band(eval_flags, evaluation_flags.fix_weapon_skill_to_level) ~= 0 then
+
         skill = loadout.lvl * 5;
     end
     return skill, sheet_skill, subclass;
@@ -927,11 +928,18 @@ local function stats_cost(bid, spell, loadout, effects)
     return cost, base_cost;
 end
 
--- Execution time of spell
 local function stats_avg_cost(cost, stats, bid, spell, loadout, effects)
 
     if config.settings.general_average_proc_effects then
-        cost = cost * (1.0 - (stats.clearcast_p or 0.0));
+        if stats.clearcast_on_crit_lookback_len == 0 then
+            cost = cost * (1.0 - (stats.clearcast_p or 0.0));
+        else
+            cost = cost * (1.0 -
+                (stats.clearcast_p or 0.0)
+                *
+                (1.0 - (1.0 - stats.crit)^stats.clearcast_on_crit_lookback_len)
+            );
+        end
     end
 
     if bit.band(spell.flags, spell_flags.uses_all_power) ~= 0 then
@@ -940,10 +948,11 @@ local function stats_avg_cost(cost, stats, bid, spell, loadout, effects)
     -- Assemble refunds
     local resource_refund = 0.0;
     if bit.band(spell.flags, spell_flags.only_threat) == 0 then
+
         resource_refund = resource_refund +
             stats.resource_refund
             +
-            stats.resource_refund_mul_crit * stats.crit * (1.0 - stats.miss)
+            stats.resource_refund_mul_crit * stats.crit
             +
             stats.resource_refund_mul_hit * (1.0 - stats.miss);
 
@@ -959,7 +968,7 @@ local function stats_avg_cost(cost, stats, bid, spell, loadout, effects)
     cost = cost - resource_refund;
     cost = math.max(cost, 0);
 
-    return cost, cost_actual;
+    return cost;
 end
 
 local attack_table =  {
@@ -1465,6 +1474,8 @@ local function stats_for_spell(stats, spell, loadout, effects, eval_flags)
     stats.resource_refund_mul_crit = 0.0; -- resource refunded to be multiplied by crit
     stats.resource_refund_mul_hit = 0.0; -- resource refunded to be multiplied by hit
     -- resource refunded to be multiplied by pontentially modified spell cost and by hit
+
+    stats.clearcast_on_crit_lookback_len = 0;
 
     if bit.band(anycomp.flags, comp_flags.jump_amp_as_per_extra_power) ~= 0 then
         stats.effect_mod_flat = stats.effect_mod_flat +

@@ -367,6 +367,7 @@ local effects_multiplicative = {
         "vuln_mod",
         "cast_haste",
         "heal_mod",
+        "thp_based_vuln_mod",
     },
     wpn_subclass = {
         "phys_mod",
@@ -1915,6 +1916,7 @@ local function dynamic_loadout(loadout)
     loadout.target_defense = 5*loadout.target_lvl;
 
     loadout.base_armor, loadout.armor = UnitArmor("player");
+
     loadout.target_armor = config.settings.loadout_target_armor;
     if config.settings.loadout_target_automatic_armor then
         if sc.npc_armor_by_lvl[loadout.target_lvl] then
