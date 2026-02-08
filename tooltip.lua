@@ -2051,6 +2051,7 @@ local inv_type_to_spid_force_eval = {
     INVTYPE_RANGED = { "shoot", "auto_shot", "shoot_bow" },
     INVTYPE_RANGEDRIGHT = { "shoot", "auto_shot", "shoot_bow" },
     INVTYPE_SHIELD = { "dodge" },
+    INVTYPE_THROWN = { "throw" },
 };
 
 local armor_ignorable = {
@@ -2184,15 +2185,6 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         return;
     end
 
-    local loadout, effects, effects_finalized, update_id = update_loadout_and_effects();
-    local updated = update_id > tt.item_tooltip_effects_update_id;
-    tt.item_tooltip_effects_update_id = update_id;
-
-    if tt.new_item.id == loadout.items[cmp_slots[1]] or
-        (cmp_slots[2] and tt.new_item.id == loadout.items[cmp_slots[2]]) then
-        return;
-    end
-
     if config.settings.tooltip_item_smart and tt.new_item.class_id == 4 then
         if tt.new_item.subclass_id == 1 and not_caster_class and tt.new_item.inv_type ~= "INVTYPE_CLOAK" then
             -- cloth
@@ -2217,6 +2209,15 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         if key and config.settings["tooltip_item_ignore_"..key] then
             return;
         end
+    end
+
+    local loadout, effects, effects_finalized, update_id = update_loadout_and_effects();
+    local updated = update_id > tt.item_tooltip_effects_update_id;
+    tt.item_tooltip_effects_update_id = update_id;
+
+    if tt.new_item.id == loadout.items[cmp_slots[1]] or
+        (cmp_slots[2] and tt.new_item.id == loadout.items[cmp_slots[2]]) then
+        return;
     end
 
     local fight_type = config.settings.calc_fight_type;
@@ -2353,7 +2354,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             if config.settings.tooltip_item_smart and inv_type_to_spid_force_eval[tt.new_item.inv_type] then
                 for _, spid_id in pairs(inv_type_to_spid_force_eval[tt.new_item.inv_type]) do
                     local k = spids[spid_id];
-                    if (k == spids.shoot and not_ranged_class) or
+                    if ((k == spids.shoot or k == spids.throw) and not_ranged_class) or
                        (k == spids.attack and not_melee_class) or
                        (k == spids.dodge and not_shield_class) then
                         k = nil;
@@ -2398,7 +2399,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                     k = highest_learned_rank(spells[k].base_id);
                 end
                 if config.settings.tooltip_item_smart then
-                    if (k == spids.shoot and not_ranged_class) or
+                    if ((k == spids.shoot or k == spids.throw) and not_ranged_class) or
                        (k == spids.attack and not_melee_class)
                        --or (k == spids.dodge and not_shield_class)
                        then
@@ -2637,7 +2638,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 else
                     tooltip:AddDoubleLine(string.format("  %s %s", spell_texture_str, diff.disp), " ");
                 end
-            elseif diff.id == spids.auto_shot or diff.id == spids.shoot then -- hunter ranged auto attack
+            elseif diff.id == spids.auto_shot or diff.id == spids.shoot or diff.id == spids.throw then -- hunter ranged auto attack
                 if cmp_slots[item_fits_in_slot] == slots.RangedSlot then
                     tooltip:AddDoubleLine(string.format("  |T%s:16:16:0:0|t  %s", tt.new_item.tex, diff.disp), " ");
                 else
