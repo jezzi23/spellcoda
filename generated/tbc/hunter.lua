@@ -997,7 +997,7 @@ sc.spells = {
 			per_lvl = 0,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = -1000.00006,
 		cost = 585,
@@ -1116,7 +1116,7 @@ sc.spells = {
 			per_lvl = 0,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = -1000.00006,
 		cost = 420,
@@ -1385,7 +1385,7 @@ sc.spells = {
 			per_lvl = 0.65,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0, comp_flags.unbounded_aoe),
+			flags = bit.bor(0, comp_flags.cant_crit, comp_flags.unbounded_aoe),
 		},
 		periodic = {
 			min = 37,
@@ -1420,7 +1420,7 @@ sc.spells = {
 			per_lvl = 0.58,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0, comp_flags.unbounded_aoe),
+			flags = bit.bor(0, comp_flags.cant_crit, comp_flags.unbounded_aoe),
 		},
 		periodic = {
 			min = 2,
@@ -1954,7 +1954,7 @@ sc.spells = {
 		gcd = 1.5000001,
 		train = 1200,
 		anyschool = schools.arcane,
-		flags = bit.bor(0, spell_flags.channel, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.channel),
 	},
 	[14287] = {
 		direct = {
@@ -3756,7 +3756,7 @@ sc.spells = {
 			per_lvl = 0,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = -1000.00006,
 		cost = 350,
@@ -3914,7 +3914,7 @@ sc.spells = {
 		gcd = 1.5000001,
 		train = 1200,
 		anyschool = schools.nature,
-		flags = bit.bor(0, spell_flags.channel, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.channel),
 	},
 	[14295] = {
 		periodic = {
@@ -3927,7 +3927,7 @@ sc.spells = {
 			per_lvl = 0,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = -1000.00006,
 		cost = 490,
@@ -4159,8 +4159,6 @@ sc.talent_effects = {
 			{"aura_pts_flat", 0, 0.08, {32447,}, 0, 0},
 	},
 	[34494] = {
-			{"by_school", "vuln_mod", -0.02, {1,2,3,4,5,6,7,}, 1, 0},
-			{"raw", "vuln_phys", -0.02, nil, 1, 0},
 			{"raw", "player_vuln_phys", -0.02, nil, 1, 0},
 			{"raw", "ap_mod", 0.02, nil, 32, 1},
 			{"raw", "rap_mod", 0.02, nil, 32, 2},
@@ -4434,8 +4432,6 @@ sc.talent_effects = {
 			{"ability", "cost_mod", -0.02, {1510,2643,19434,3044,19503,20736,34490,1978,19386,34120,}, 0, 0},
 	},
 	[34496] = {
-			{"by_school", "vuln_mod", -0.04, {1,2,3,4,5,6,7,}, 1, 0},
-			{"raw", "vuln_phys", -0.04, nil, 1, 0},
 			{"raw", "player_vuln_phys", -0.04, nil, 1, 0},
 			{"raw", "ap_mod", 0.04, nil, 32, 1},
 			{"raw", "rap_mod", 0.04, nil, 32, 2},

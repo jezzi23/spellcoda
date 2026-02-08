@@ -478,7 +478,7 @@ sc.spells = {
 			per_lvl = 0.1,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 320,
@@ -818,7 +818,7 @@ sc.spells = {
 			per_lvl = 0.3,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 1160,
@@ -940,7 +940,7 @@ sc.spells = {
 			per_lvl = 0.4,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 1400,
@@ -1204,7 +1204,7 @@ sc.spells = {
 			per_lvl = 0.2,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 520,
@@ -3302,7 +3302,7 @@ sc.spells = {
 			per_lvl = 0.4,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 1645,
@@ -3910,7 +3910,7 @@ sc.spells = {
 			per_lvl = 0.2,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 720,
@@ -4650,7 +4650,7 @@ sc.spells = {
 			per_lvl = 0.3,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 935,
@@ -5496,8 +5496,6 @@ sc.talent_effects = {
 			{"aura_pts", -1, 0.5, {33946,604,41478,8455,27130,10169,33944,10173,10174,8451,8450,10170,1008,}, 0, 0},
 	},
 	[31575] = {
-			{"by_school", "vuln_mod", -0.04, {1,2,3,4,5,6,7,}, 1, 0},
-			{"raw", "vuln_phys", -0.04, nil, 1, 0},
 			{"raw", "player_vuln_phys", -0.04, nil, 1, 0},
 	},
 	[16765] = {
@@ -5556,6 +5554,9 @@ sc.talent_effects = {
 	[31657] = {
 			{"ability", "coef_mod_flat", 0.06, {133,}, 0, 0},
 	},
+	[31680] = {
+			{"ability", "thp_based_vuln_mod", 0.19999999, {5143,2948,11113,30455,30482,24530,2120,11366,133,116,122,1449,31661,10,120,30451,2136,}, 1, 0},
+	},
 	[31585] = {
 			{"by_attr", "sd_of_stat_pct", 0.099999994, {4,}, 32, 0},
 	},
@@ -5591,7 +5592,6 @@ sc.talent_effects = {
 	},
 	[31640] = {
 			{"by_school", "dmg_mod", 0.03, {1,2,3,4,5,6,7,}, 1, 0},
-			{"by_school", "vuln_mod", 0.03, {1,2,3,4,5,6,7,}, 1, 1},
 	},
 	[11368] = {
 			{"by_school", "crit", 0.06, {3,}, 32, 0},
@@ -5632,9 +5632,6 @@ sc.talent_effects = {
 	[12400] = {
 			{"ability", "effect_mod", 0.099999994, {2948,11113,30482,24530,2120,11366,133,31661,2136,}, 0, 0},
 			{"ability", "effect_mod_ot", 0.099999994, {2120,11366,133,}, 0, 1},
-	},
-	[31669] = {
-			{"by_school", "vuln_mod", -0.06, {3,5,}, 1, 0},
 	},
 	[11367] = {
 			{"by_school", "crit", 0.04, {3,}, 32, 0},
@@ -5693,22 +5690,15 @@ sc.talent_effects = {
 	},
 	[31639] = {
 			{"by_school", "dmg_mod", 0.02, {1,2,3,4,5,6,7,}, 1, 0},
-			{"by_school", "vuln_mod", 0.02, {1,2,3,4,5,6,7,}, 1, 1},
 	},
 	[31638] = {
 			{"by_school", "dmg_mod", 0.01, {1,2,3,4,5,6,7,}, 1, 0},
-			{"by_school", "vuln_mod", 0.01, {1,2,3,4,5,6,7,}, 1, 1},
 	},
 	[11210] = {
 			{"by_school", "threat", -0.19999999, {7,}, 0, 0},
 			{"by_school", "target_res_flat", -5, {2,3,4,5,6,7,}, 0, 1},
 	},
-	[31667] = {
-			{"by_school", "vuln_mod", -0.02, {3,5,}, 1, 0},
-	},
 	[31574] = {
-			{"by_school", "vuln_mod", -0.02, {1,2,3,4,5,6,7,}, 1, 0},
-			{"raw", "vuln_phys", -0.02, nil, 1, 0},
 			{"raw", "player_vuln_phys", -0.02, nil, 1, 0},
 	},
 	[31656] = {
@@ -5720,8 +5710,8 @@ sc.talent_effects = {
 	[31676] = {
 			{"by_school", "dmg_mod", 0.03, {5,}, 1, 2},
 	},
-	[31668] = {
-			{"by_school", "vuln_mod", -0.04, {3,5,}, 1, 0},
+	[31679] = {
+			{"ability", "thp_based_vuln_mod", 0.099999994, {5143,2948,11113,30455,30482,24530,2120,11366,133,116,122,1449,31661,10,120,30451,2136,}, 1, 0},
 	},
 	[12469] = {
 			{"ability", "crit", 0.06, {1449,30451,}, 0, 0},

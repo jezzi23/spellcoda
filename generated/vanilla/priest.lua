@@ -813,7 +813,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 120,
@@ -1036,7 +1036,7 @@ sc.spells = {
 		base_id = 402174,
 		gcd = 1.5000001,
 		train = 0,
-		flags = bit.bor(0, spell_flags.channel, spell_flags.cd, spell_flags.base_mana_cost, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.channel, spell_flags.cd, spell_flags.base_mana_cost, spell_flags.eval, spell_flags.ot_haste_improved),
 		healing_version = {
 		periodic = {
 			base_min = 38.258377,
@@ -1064,7 +1064,7 @@ sc.spells = {
 		gcd = 1.5000001,
 		train = 0,
 		beneficiary_id = 402277,
-		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.cd, spell_flags.base_mana_cost, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.cd, spell_flags.base_mana_cost, spell_flags.eval, spell_flags.ot_haste_improved),
 		},
 	},
 	[15473] = {
@@ -1119,7 +1119,7 @@ sc.spells = {
 		base_id = 413259,
 		gcd = 1.5000001,
 		train = 0,
-		flags = bit.bor(0, spell_flags.channel, spell_flags.base_mana_cost, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.channel, spell_flags.base_mana_cost, spell_flags.eval, spell_flags.ot_haste_improved),
 	},
 	[10881] = {
 		cast_time = 10,
@@ -2489,7 +2489,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 50,
@@ -2898,7 +2898,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 200,
@@ -3258,7 +3258,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 85,
@@ -3691,7 +3691,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 250,
@@ -4476,7 +4476,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 160,
@@ -5500,12 +5500,6 @@ sc.talent_effects = {
 	[14520] = {
 			{"ability", "cost_mod", -0.02, {401859,2652,401955,23455,401946,425204,139,425268,2944,17,18137,13896,15237,589,}, 0, 0},
 	},
-	[28998] = {
-			{"by_school", "vuln_mod", -0.099999994, {3,4,5,}, 1, 0},
-	},
-	[27904] = {
-			{"by_school", "vuln_mod", -0.099999994, {1,2,3,4,5,6,7,}, 1, 0},
-	},
 	[15307] = {
 			{"ability", "base_mod", 0.04, {8092,2944,413259,18137,}, 0, 0},
 			{"ability", "base_mod_ot", 0.04, {8092,2944,413259,18137,}, 0, 0},
@@ -5525,9 +5519,6 @@ sc.talent_effects = {
 			{"aura_pts", -1, 0.02, {402277,15007,}, 0, 0},
 			{"ability", "base_mod", 0.02, {401859,23455,596,401946,139,2050,425268,2061,2054,402277,2060,401937,13908,}, 0, 0},
 			{"ability", "base_mod_ot", 0.02, {401859,23455,596,401946,139,2050,425268,2061,2054,402277,2060,401937,13908,}, 0, 0},
-	},
-	[28997] = {
-			{"by_school", "vuln_mod", -0.07, {3,4,5,}, 1, 0},
 	},
 	[15354] = {
 			{"aura_pts", -1, 0.06, {402277,15007,}, 0, 0},
@@ -5562,9 +5553,6 @@ sc.talent_effects = {
 	},
 	[15018] = {
 			{"ability", "cost_mod", -0.19999999, {596,}, 0, 0},
-	},
-	[28996] = {
-			{"by_school", "vuln_mod", -0.04, {3,4,5,}, 1, 0},
 	},
 	[15308] = {
 			{"ability", "base_mod", 0.06, {8092,2944,413259,18137,}, 0, 0},
@@ -5684,12 +5672,6 @@ sc.talent_effects = {
 	[14524] = {
 			{"wpn_subclass", "spell_mod", 0.049999997, {524288}, 9, 0},
 	},
-	[27901] = {
-			{"by_school", "vuln_mod", -0.04, {1,2,3,4,5,6,7,}, 1, 0},
-	},
-	[27902] = {
-			{"by_school", "vuln_mod", -0.06, {1,2,3,4,5,6,7,}, 1, 0},
-	},
 	[15029] = {
 			{"by_attr", "sd_of_stat_pct", 0.14999999, {1,}, 32, 0},
 			{"by_attr", "hp_of_stat_pct", 0.14999999, {1,}, 32, 1},
@@ -5716,9 +5698,6 @@ sc.talent_effects = {
 	[15020] = {
 			{"ability", "base_mod", 0.099999994, {139,425268,}, 0, 0},
 			{"ability", "base_mod_ot", 0.099999994, {139,425268,}, 0, 0},
-	},
-	[27903] = {
-			{"by_school", "vuln_mod", -0.08, {1,2,3,4,5,6,7,}, 1, 0},
 	},
 	[18530] = {
 			{"ability", "cast_mod_flat", -0.1, {14914,2054,585,2060,}, 0, 0},
@@ -5748,9 +5727,6 @@ sc.talent_effects = {
 	},
 	[14889] = {
 			{"ability", "crit", 0.01, {401859,23455,596,401946,14914,2050,2061,2054,402174,15237,402277,585,2060,401937,13908,}, 0, 0},
-	},
-	[27900] = {
-			{"by_school", "vuln_mod", -0.02, {1,2,3,4,5,6,7,}, 1, 0},
 	},
 };
 sc.talent_ranks = {

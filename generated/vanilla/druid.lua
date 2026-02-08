@@ -3577,7 +3577,7 @@ sc.spells = {
 		base_id = 417448,
 		gcd = 1,
 		train = 0,
-		flags = bit.bor(0, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.instant, spell_flags.eval, spell_flags.ot_haste_improved),
 	},
 	[5217] = {
 		periodic = {

@@ -250,7 +250,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 125,
@@ -2190,7 +2190,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 370,
@@ -2791,7 +2791,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 80,
@@ -2852,7 +2852,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 180,
@@ -2917,7 +2917,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 240,
@@ -2992,7 +2992,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 45,
@@ -3016,7 +3016,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 305,
@@ -4266,9 +4266,6 @@ sc.talent_effects = {
 			{"ability", "base_mod", 0.14999999, {324,}, 0, 0},
 			{"ability", "base_mod_ot", 0.14999999, {324,}, 0, 0},
 	},
-	[28998] = {
-			{"by_school", "vuln_mod", -0.099999994, {3,4,5,}, 1, 0},
-	},
 	[16579] = {
 			{"ability", "cast_mod_flat", -0.4, {403,421,}, 0, 0},
 	},
@@ -4301,9 +4298,6 @@ sc.talent_effects = {
 	},
 	[16300] = {
 			{"raw", "block", 0.04, nil, 2, 0},
-	},
-	[28997] = {
-			{"by_school", "vuln_mod", -0.07, {3,4,5,}, 1, 0},
 	},
 	[16205] = {
 			{"aura_pts", -1, 0.099999994, {10493,5677,10494,24853,10491,}, 0, 0},
@@ -4392,9 +4386,6 @@ sc.talent_effects = {
 	},
 	[16272] = {
 			{"raw", "dodge", 0.03, nil, 2, 0},
-	},
-	[28996] = {
-			{"by_school", "vuln_mod", -0.04, {3,4,5,}, 1, 0},
 	},
 	[16298] = {
 			{"raw", "block", 0.02, nil, 2, 0},

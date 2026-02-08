@@ -1,6 +1,6 @@
 -- THIS FILE IS GENERATED
 local _, sc = ...;
-sc.addon_build_id = 1914;
+sc.addon_build_id = 1921;
 sc.client_name_src = "wow_anniversary";
 sc.client_version_src = "2.5.5.65795";
 _, sc.class = UnitClass("player");
@@ -189,4 +189,4 @@ sc.gem_type_flags = {
 	red =  2,
 	yellow =  4,
 	blue =  8,
-}
+};

@@ -2979,9 +2979,6 @@ sc.talent_order = {
 	[2] = {8,7,5,24,6,1,9,16,13,11,2,12,4,14,15,3,20,18,17,19,10,21,23,22,},
 };
 sc.talent_effects = {
-	[31244] = {
-			{"raw", "vuln_heal", 0.099999994, nil, 1, 1},
-	},
 	[13788] = {
 			{"raw", "dodge", 0.02, nil, 2, 0},
 	},
@@ -3068,7 +3065,6 @@ sc.talent_effects = {
 			{"ability", "effect_mod", 0.099999994, {53,1752,1776,}, 0, 1},
 	},
 	[31385] = {
-			{"raw", "vuln_phys", -0.049999997, nil, 1, 0},
 			{"raw", "player_vuln_phys", -0.049999997, nil, 1, 0},
 	},
 	[31217] = {
@@ -3080,7 +3076,6 @@ sc.talent_effects = {
 			{"by_school", "target_res_flat", 0, {1,}, 0, 1},
 	},
 	[31383] = {
-			{"raw", "vuln_phys", -0.03, nil, 1, 0},
 			{"raw", "player_vuln_phys", -0.03, nil, 1, 0},
 	},
 	[13805] = {
@@ -3088,9 +3083,6 @@ sc.talent_effects = {
 	},
 	[13732] = {
 			{"ability", "cost_mod_flat", -3, {1752,}, 0, 0},
-	},
-	[31245] = {
-			{"raw", "vuln_heal", 0.19999999, nil, 1, 1},
 	},
 	[13802] = {
 			{"wpn_subclass", "phys_crit_mod", 0.04, {16}, 8, 1},
@@ -3158,7 +3150,6 @@ sc.talent_effects = {
 			{"ability", "effect_mod_ot", 0.19999999, {2835,}, 0, 1},
 	},
 	[31384] = {
-			{"raw", "vuln_phys", -0.04, nil, 1, 0},
 			{"raw", "player_vuln_phys", -0.04, nil, 1, 0},
 	},
 	[13801] = {
@@ -3192,7 +3183,6 @@ sc.talent_effects = {
 			{"raw", "attacker_melee_crit", -0.01, nil, 0, 1},
 	},
 	[31382] = {
-			{"raw", "vuln_phys", -0.02, nil, 1, 0},
 			{"raw", "player_vuln_phys", -0.02, nil, 1, 0},
 	},
 	[13849] = {
@@ -3344,7 +3334,6 @@ sc.talent_effects = {
 			{"ability", "hit", 0.099999994, {13220,26786,2835,}, 0, 0},
 	},
 	[31380] = {
-			{"raw", "vuln_phys", -0.01, nil, 1, 0},
 			{"raw", "player_vuln_phys", -0.01, nil, 1, 0},
 	},
 	[13863] = {

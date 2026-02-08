@@ -332,7 +332,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 100,
@@ -772,7 +772,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 400,
@@ -1119,7 +1119,7 @@ sc.spells = {
 		gcd = 1.5000001,
 		train = 4000,
 		anyschool = schools.nature,
-		flags = bit.bor(0, spell_flags.channel, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.channel),
 	},
 	[10496] = {
 		periodic = {
@@ -2405,7 +2405,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 275,
@@ -3226,7 +3226,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 60,
@@ -3273,7 +3273,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 150,
@@ -3371,7 +3371,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 200,
@@ -3469,7 +3469,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 25,
@@ -3516,7 +3516,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 250,
@@ -4487,7 +4487,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 325,
@@ -4969,9 +4969,6 @@ sc.talent_effects = {
 	[16291] = {
 			{"ability", "effect_mod", 0.14999999, {324,}, 0, 0},
 	},
-	[28998] = {
-			{"by_school", "vuln_mod", -0.099999994, {3,4,5,}, 1, 0},
-	},
 	[16579] = {
 			{"ability", "cast_mod_flat", -0.2, {45297,403,421,}, 0, 0},
 	},
@@ -5004,9 +5001,6 @@ sc.talent_effects = {
 	},
 	[16300] = {
 			{"raw", "block", 0.04, nil, 2, 0},
-	},
-	[28997] = {
-			{"by_school", "vuln_mod", -0.07, {3,4,5,}, 1, 0},
 	},
 	[16205] = {
 			{"ability", "effect_mod_ot", 0.099999994, {5394,}, 0, 0},
@@ -5053,6 +5047,9 @@ sc.talent_effects = {
 	[16229] = {
 			{"ability", "cast_mod_flat", -0.5, {331,}, 0, 0},
 	},
+	[30665] = {
+			{"raw", "mp5_from_int_mod", 0.04, nil, 0, 0},
+	},
 	[16206] = {
 			{"ability", "effect_mod_ot", 0.14999999, {5394,}, 0, 0},
 			{"aura_pts", -1, 0.14999999, {10493,5677,10494,24853,10491,25569,}, 0, 1},
@@ -5070,6 +5067,9 @@ sc.talent_effects = {
 	},
 	[16173] = {
 			{"ability", "cost_mod", -0.049999997, {3599,16190,1535,5394,8190,5675,}, 0, 0},
+	},
+	[30667] = {
+			{"raw", "mp5_from_int_mod", 0.08, nil, 0, 0},
 	},
 	[16120] = {
 			{"ability", "crit", 0.049999997, {45297,403,421,}, 0, 0},
@@ -5096,9 +5096,6 @@ sc.talent_effects = {
 	},
 	[16272] = {
 			{"raw", "dodge", 0.03, nil, 2, 0},
-	},
-	[28996] = {
-			{"by_school", "vuln_mod", -0.04, {3,4,5,}, 1, 0},
 	},
 	[30872] = {
 			{"ability", "effect_mod", 0.099999994, {1064,}, 0, 0},
@@ -5130,6 +5127,9 @@ sc.talent_effects = {
 	},
 	[16223] = {
 			{"ability", "cost_mod", -0.14999999, {3599,16190,1535,5394,8190,5675,}, 0, 0},
+	},
+	[30664] = {
+			{"raw", "mp5_from_int_mod", 0.02, nil, 0, 0},
 	},
 	[16254] = {
 			{"raw", "dodge", 0.01, nil, 2, 0},
@@ -5166,6 +5166,9 @@ sc.talent_effects = {
 	},
 	[16089] = {
 			{"ability", "crit_mod", 1, {45297,3599,8050,8033,403,421,1535,8056,8042,8190,}, 0, 0},
+	},
+	[30668] = {
+			{"raw", "mp5_from_int_mod", 0.099999994, nil, 0, 0},
 	},
 	[30812] = {
 			{"ability", "cost_mod", -0.02, {3599,8050,8033,17364,16190,974,1535,5394,324,8056,8042,8190,5675,}, 0, 0},
@@ -5264,6 +5267,9 @@ sc.talent_effects = {
 	},
 	[16219] = {
 			{"ability", "crit", 0.03, {1064,45297,403,421,8004,324,331,}, 0, 0},
+	},
+	[30666] = {
+			{"raw", "mp5_from_int_mod", 0.06, nil, 0, 0},
 	},
 	[16180] = {
 			{"raw", "phys_hit", 0.01, nil, 0, 0},

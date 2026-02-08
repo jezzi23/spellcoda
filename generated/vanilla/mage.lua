@@ -345,7 +345,7 @@ sc.spells = {
 		base_id = 401417,
 		gcd = 1.5000001,
 		train = 0,
-		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.base_mana_cost, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.base_mana_cost, spell_flags.eval, spell_flags.ot_haste_improved),
 	},
 	[8400] = {
 		direct = {
@@ -4808,7 +4808,7 @@ sc.spells = {
 		base_id = 412510,
 		gcd = 1.5000001,
 		train = 0,
-		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.cd, spell_flags.base_mana_cost, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.cd, spell_flags.base_mana_cost, spell_flags.eval, spell_flags.ot_haste_improved),
 	},
 	[10053] = {
 		cast_time = 3.0000002,

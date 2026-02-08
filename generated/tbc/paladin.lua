@@ -18,7 +18,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jump_amp = 1,
 			threat_mod = -0.75,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 140,
@@ -693,7 +693,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jump_amp = 1,
 			threat_mod = -0.75,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 210,
@@ -745,7 +745,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jump_amp = 1,
 			threat_mod = -0.75,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 110,
@@ -1166,7 +1166,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jump_amp = 1,
 			threat_mod = -0.75,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 180,
@@ -1204,7 +1204,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jump_amp = 1,
 			threat_mod = -0.75,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 280,
@@ -3912,8 +3912,6 @@ sc.talent_effects = {
 			{"ability", "crit", 0.04, {635,}, 0, 0},
 	},
 	[31853] = {
-			{"by_school", "vuln_mod", -0.24, {1,2,3,4,5,6,7,}, 1, 0},
-			{"raw", "vuln_phys", -0.24, nil, 1, 0},
 			{"raw", "player_vuln_phys", -0.24, nil, 1, 0},
 	},
 	[20048] = {
@@ -3970,9 +3968,6 @@ sc.talent_effects = {
 	},
 	[20042] = {
 			{"aura_pts", -1, 0.04, {25782,25916,27140,19836,19835,19837,19834,19740,27141,19838,25291,}, 0, 0},
-	},
-	[31847] = {
-			{"by_school", "vuln_mod", -0.04, {1,2,3,4,5,6,7,}, 1, 0},
 	},
 	[20101] = {
 			{"ability", "cost_mod", -0.03, {348704,20165,31892,20375,21084,20154,}, 0, 0},
@@ -4075,8 +4070,6 @@ sc.talent_effects = {
 			{"aura_pts", -1, 0.25, {41106,}, 0, 0},
 	},
 	[31851] = {
-			{"by_school", "vuln_mod", -0.12, {1,2,3,4,5,6,7,}, 1, 0},
-			{"raw", "vuln_phys", -0.12, nil, 1, 0},
 			{"raw", "player_vuln_phys", -0.12, nil, 1, 0},
 	},
 	[20265] = {
@@ -4102,8 +4095,6 @@ sc.talent_effects = {
 			{"by_school", "threat", -0.24, {1,2,3,4,5,6,7,}, 0, 1},
 	},
 	[31854] = {
-			{"by_school", "vuln_mod", -0.29999998, {1,2,3,4,5,6,7,}, 1, 0},
-			{"raw", "vuln_phys", -0.29999998, nil, 1, 0},
 			{"raw", "player_vuln_phys", -0.29999998, nil, 1, 0},
 	},
 	[20200] = {
@@ -4143,8 +4134,6 @@ sc.talent_effects = {
 			{"raw", "parry", 0.049999997, nil, 2, 0},
 	},
 	[31852] = {
-			{"by_school", "vuln_mod", -0.17999999, {1,2,3,4,5,6,7,}, 1, 0},
-			{"raw", "vuln_phys", -0.17999999, nil, 1, 0},
 			{"raw", "player_vuln_phys", -0.17999999, nil, 1, 0},
 	},
 	[20145] = {
@@ -4217,9 +4206,6 @@ sc.talent_effects = {
 	[20143] = {
 			{"raw", "base_res_phys_mod", 0.02, nil, 32, 0},
 	},
-	[31846] = {
-			{"by_school", "vuln_mod", -0.02, {1,2,3,4,5,6,7,}, 1, 0},
-	},
 	[20045] = {
 			{"aura_pts", -1, 0.08, {25782,25916,27140,19836,19835,19837,19834,19740,27141,19838,25291,}, 0, 0},
 	},
@@ -4244,8 +4230,6 @@ sc.talent_effects = {
 			{"wpn_subclass", "phys_mod", 0.04, {354}, 9, 0},
 	},
 	[31850] = {
-			{"by_school", "vuln_mod", -0.06, {1,2,3,4,5,6,7,}, 1, 0},
-			{"raw", "vuln_phys", -0.06, nil, 1, 0},
 			{"raw", "player_vuln_phys", -0.06, nil, 1, 0},
 	},
 	[20121] = {

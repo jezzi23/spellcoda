@@ -568,7 +568,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 120,
@@ -848,7 +848,7 @@ sc.spells = {
 		base_id = 10797,
 		gcd = 1.5000001,
 		train = 6500,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.ot_haste_improved),
 	},
 	[10916] = {
 		direct = {
@@ -1242,7 +1242,7 @@ sc.spells = {
 		gcd = 1.5000001,
 		train = 24000,
 		anyschool = schools.shadow,
-		flags = bit.bor(0, spell_flags.channel, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.channel),
 	},
 	[19276] = {
 		periodic = {
@@ -1458,7 +1458,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 50,
@@ -1551,7 +1551,7 @@ sc.spells = {
 		base_id = 10797,
 		gcd = 1.5000001,
 		train = 300,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.ot_haste_improved),
 	},
 	[25431] = {
 		cast_time = 0,
@@ -1627,7 +1627,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 200,
@@ -1716,7 +1716,7 @@ sc.spells = {
 		gcd = 1.5000001,
 		train = 44000,
 		anyschool = schools.shadow,
-		flags = bit.bor(0, spell_flags.channel, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.channel),
 	},
 	[15261] = {
 		direct = {
@@ -1906,7 +1906,7 @@ sc.spells = {
 		base_id = 10797,
 		gcd = 1.5000001,
 		train = 2200,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.ot_haste_improved),
 	},
 	[19304] = {
 		periodic = {
@@ -1932,7 +1932,7 @@ sc.spells = {
 		base_id = 10797,
 		gcd = 1.5000001,
 		train = 1500,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.ot_haste_improved),
 	},
 	[15487] = {
 		cast_time = 0,
@@ -1960,7 +1960,7 @@ sc.spells = {
 		gcd = 1.5000001,
 		train = 4000,
 		anyschool = schools.shadow,
-		flags = bit.bor(0, spell_flags.channel, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.channel),
 	},
 	[594] = {
 		periodic = {
@@ -1997,7 +1997,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 250,
@@ -2611,7 +2611,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 160,
@@ -3051,7 +3051,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 270,
@@ -3193,7 +3193,7 @@ sc.spells = {
 		base_id = 10797,
 		gcd = 1.5000001,
 		train = 100,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.ot_haste_improved),
 	},
 	[9592] = {
 		cast_time = 0,
@@ -3444,7 +3444,7 @@ sc.spells = {
 		gcd = 1.5000001,
 		train = 24000,
 		anyschool = schools.shadow,
-		flags = bit.bor(0, spell_flags.channel, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.channel),
 	},
 	[10938] = {
 		cast_time = 0,
@@ -4200,7 +4200,7 @@ sc.spells = {
 		base_id = 10797,
 		gcd = 1.5000001,
 		train = 90,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.ot_haste_improved),
 	},
 	[588] = {
 		cast_time = 0,
@@ -4709,7 +4709,7 @@ sc.spells = {
 			per_lvl_sq = 0,
 			jumps = 2,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 85,
@@ -5134,7 +5134,7 @@ sc.spells = {
 		base_id = 10797,
 		gcd = 1.5000001,
 		train = 1100,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.ot_haste_improved),
 	},
 	[970] = {
 		periodic = {
@@ -5185,7 +5185,7 @@ sc.spells = {
 		base_id = 10797,
 		gcd = 1.5000001,
 		train = 600,
-		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval),
+		flags = bit.bor(0, spell_flags.cd, spell_flags.instant, spell_flags.eval, spell_flags.ot_haste_improved),
 	},
 	[19241] = {
 		direct = {
@@ -5708,7 +5708,7 @@ sc.spells = {
 		gcd = 1.5000001,
 		train = 10000,
 		anyschool = schools.shadow,
-		flags = bit.bor(0, spell_flags.channel, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.channel),
 	},
 	[25368] = {
 		periodic = {
@@ -6203,12 +6203,6 @@ sc.talent_effects = {
 	[14520] = {
 			{"ability", "cost_mod", -0.02, {34861,2652,32379,139,44041,2944,17,33076,18137,13896,15237,589,}, 0, 0},
 	},
-	[28998] = {
-			{"by_school", "vuln_mod", -0.099999994, {3,4,5,}, 1, 0},
-	},
-	[27904] = {
-			{"by_school", "vuln_mod", -0.099999994, {1,2,3,4,5,6,7,}, 1, 0},
-	},
 	[15307] = {
 			{"ability", "effect_mod", 0.04, {32379,8092,2944,18137,}, 0, 0},
 			{"ability", "effect_mod_ot", 0.04, {2944,18137,15407,589,34914,}, 0, 1},
@@ -6223,9 +6217,6 @@ sc.talent_effects = {
 	[33186] = {
 			{"ability", "hit", 0.02, {8092,585,}, 0, 1},
 	},
-	[14910] = {
-			{"by_school", "crit_forced", -0.02, {2,3,4,5,6,7,}, 0, 0},
-	},
 	[34908] = {
 			{"by_attr", "stat_mod", 0.01, {3,}, 32, 0},
 			{"by_attr", "stat_mod", 0.01, {4,}, 32, 1},
@@ -6236,9 +6227,6 @@ sc.talent_effects = {
 	},
 	[33213] = {
 			{"ability", "cost_mod", -0.049999997, {8092,15407,}, 0, 0},
-	},
-	[28997] = {
-			{"by_school", "vuln_mod", -0.07, {3,4,5,}, 1, 0},
 	},
 	[14771] = {
 			{"aura_pts", -1, 0.29999998, {16329,}, 0, 0},
@@ -6284,9 +6272,6 @@ sc.talent_effects = {
 	},
 	[33215] = {
 			{"ability", "cost_mod", -0.14999999, {8092,15407,}, 0, 0},
-	},
-	[28996] = {
-			{"by_school", "vuln_mod", -0.04, {3,4,5,}, 1, 0},
 	},
 	[15308] = {
 			{"ability", "effect_mod", 0.06, {32379,8092,2944,18137,}, 0, 0},
@@ -6433,12 +6418,6 @@ sc.talent_effects = {
 	[14524] = {
 			{"wpn_subclass", "spell_mod", 0.049999997, {524288}, 9, 0},
 	},
-	[27901] = {
-			{"by_school", "vuln_mod", -0.04, {1,2,3,4,5,6,7,}, 1, 0},
-	},
-	[27902] = {
-			{"by_school", "vuln_mod", -0.06, {1,2,3,4,5,6,7,}, 1, 0},
-	},
 	[15029] = {
 			{"by_attr", "sd_of_stat_pct", 0.14999999, {5,}, 32, 0},
 			{"by_attr", "hp_of_stat_pct", 0.14999999, {5,}, 32, 1},
@@ -6473,9 +6452,6 @@ sc.talent_effects = {
 	[33214] = {
 			{"ability", "cost_mod", -0.099999994, {8092,15407,}, 0, 0},
 	},
-	[27903] = {
-			{"by_school", "vuln_mod", -0.08, {1,2,3,4,5,6,7,}, 1, 0},
-	},
 	[33224] = {
 			{"ability", "crit", 0.12, {32379,8092,}, 0, 0},
 	},
@@ -6488,9 +6464,6 @@ sc.talent_effects = {
 	},
 	[15318] = {
 			{"ability", "threat", -0.08, {2652,32379,8092,2944,18137,15407,589,34914,}, 0, 0},
-	},
-	[33371] = {
-			{"by_school", "crit_forced", -0.04, {2,3,4,5,6,7,}, 0, 0},
 	},
 	[33190] = {
 			{"ability", "hit", 0.04, {8092,585,}, 0, 1},
@@ -6522,9 +6495,6 @@ sc.talent_effects = {
 	},
 	[14889] = {
 			{"by_school", "crit", 0.01, {2,}, 32, 0},
-	},
-	[27900] = {
-			{"by_school", "vuln_mod", -0.02, {1,2,3,4,5,6,7,}, 1, 0},
 	},
 };
 sc.talent_ranks = {

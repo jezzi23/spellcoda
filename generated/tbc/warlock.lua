@@ -79,7 +79,7 @@ sc.spells = {
 			per_lvl = 0.8,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 1665,
@@ -164,7 +164,7 @@ sc.spells = {
 			per_lvl = 0.3,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 295,
@@ -506,7 +506,7 @@ sc.spells = {
 		base_id = 17767,
 		gcd = 1.5000001,
 		train = -16361,
-		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.eval, spell_flags.pet, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.eval, spell_flags.pet),
 	},
 	[11684] = {
 		periodic = {
@@ -519,7 +519,7 @@ sc.spells = {
 			per_lvl = 0.7,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 1300,
@@ -715,7 +715,7 @@ sc.spells = {
 		base_id = 17767,
 		gcd = 1.5000001,
 		train = -16358,
-		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.eval, spell_flags.pet, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.eval, spell_flags.pet),
 	},
 	[18930] = {
 		direct = {
@@ -820,7 +820,7 @@ sc.spells = {
 			per_lvl = 0.5,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 975,
@@ -1107,7 +1107,7 @@ sc.spells = {
 		gcd = 1.5000001,
 		train = -16379,
 		anyschool = schools.shadow,
-		flags = bit.bor(0, spell_flags.channel, spell_flags.base_mana_cost, spell_flags.binary, spell_flags.pet, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.channel, spell_flags.base_mana_cost, spell_flags.binary, spell_flags.pet),
 	},
 	[11725] = {
 		cast_time = 3.0000002,
@@ -1522,7 +1522,7 @@ sc.spells = {
 		base_id = 17767,
 		gcd = 1.5000001,
 		train = -16359,
-		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.eval, spell_flags.pet, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.eval, spell_flags.pet),
 	},
 	[28610] = {
 		direct = {
@@ -1586,7 +1586,7 @@ sc.spells = {
 			per_lvl = 0.4,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 605,
@@ -1666,7 +1666,7 @@ sc.spells = {
 		base_id = 17767,
 		gcd = 1.5000001,
 		train = -16360,
-		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.eval, spell_flags.pet, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.eval, spell_flags.pet),
 	},
 	[1949] = {
 		periodic = {
@@ -1679,7 +1679,7 @@ sc.spells = {
 			per_lvl = 0.4,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 645,
@@ -3441,7 +3441,7 @@ sc.spells = {
 		base_id = 17767,
 		gcd = 1.5000001,
 		train = -22184,
-		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.eval, spell_flags.pet, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.eval, spell_flags.pet),
 	},
 	[18647] = {
 		cast_time = 1.5000001,
@@ -3604,7 +3604,7 @@ sc.spells = {
 			per_lvl = 0.8,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 1480,
@@ -3926,7 +3926,7 @@ sc.spells = {
 		base_id = 17767,
 		gcd = 1.5000001,
 		train = -16357,
-		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.eval, spell_flags.pet, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.eval, spell_flags.pet),
 	},
 	[11708] = {
 		cast_time = 0,
@@ -4419,7 +4419,7 @@ sc.spells = {
 		base_id = 17767,
 		gcd = 1.5000001,
 		train = -16362,
-		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.eval, spell_flags.pet, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.heal, spell_flags.channel, spell_flags.eval, spell_flags.pet),
 	},
 	[11689] = {
 		direct = {
@@ -4503,7 +4503,7 @@ sc.spells = {
 			per_lvl = 0.6,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 1185,
@@ -5173,7 +5173,7 @@ sc.spells = {
 		gcd = 1.5000001,
 		train = 2500,
 		anyschool = schools.shadow,
-		flags = bit.bor(0, spell_flags.channel, spell_flags.ot_haste_improved),
+		flags = bit.bor(0, spell_flags.channel),
 	},
 	[17953] = {
 		cast_time = 3.0000002,
@@ -5642,7 +5642,7 @@ sc.spells = {
 			per_lvl = 0.5,
 			per_lvl_sq = 0,
 			jump_amp = 1,
-			flags = bit.bor(0),
+			flags = bit.bor(0, comp_flags.cant_crit),
 		},
 		cast_time = 0,
 		cost = 885,
@@ -6146,7 +6146,6 @@ sc.talent_effects = {
 	[30320] = {
 			{"raw", "attacker_melee_crit", -0.02, nil, 0, 0},
 			{"aura_pts_flat", -1, -0.099999994, {35697,}, 0, 1},
-			{"by_school", "crit_forced", -0.02, {2,3,4,5,6,7,}, 0, 2},
 	},
 	[18707] = {
 			{"aura_pts", -1, 0.29999998, {27599,}, 0, 0},
@@ -6257,7 +6256,6 @@ sc.talent_effects = {
 	[30319] = {
 			{"raw", "attacker_melee_crit", -0.01, nil, 0, 0},
 			{"aura_pts_flat", -1, -0.049999997, {35697,}, 0, 1},
-			{"by_school", "crit_forced", -0.01, {2,3,4,5,6,7,}, 0, 2},
 	},
 	[30327] = {
 			{"aura_pts_flat", 1, 66, {11703,6226,30908,5138,11704,27221,}, 0, 0},
@@ -6274,7 +6272,6 @@ sc.talent_effects = {
 	[30321] = {
 			{"raw", "attacker_melee_crit", -0.03, nil, 0, 0},
 			{"aura_pts_flat", -1, -0.14999999, {35697,}, 0, 1},
-			{"by_school", "crit_forced", -0.03, {2,3,4,5,6,7,}, 0, 2},
 	},
 	[18755] = {
 			{"aura_pts", -1, 0.19999999, {37200,36241,36661,}, 0, 0},
