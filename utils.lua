@@ -323,6 +323,19 @@ local combat_ratings = {
     CR_EXPERTISE                      = CR_EXPERTISE                   or 24;
 };
 
+local function table_from_schema(dst, src, schema)
+    clear_table(dst);
+    if schema then
+        for _, k in ipairs(schema) do
+            dst[k] = src[k];
+        end
+    else
+        for k, v in pairs(src) do
+            dst[k] = v;
+        end
+    end
+end
+
 --------------------------------------------------------------------------------
 utils.deep_table_copy               = deep_table_copy;
 utils.clear_table                   = clear_table;
@@ -344,6 +357,7 @@ utils.spell_lname                   = spell_lname;
 utils.dummy_value                   = dummy_value;
 utils.assign_color_tag              = assign_color_tag;
 utils.write_item_info_from_link     = write_item_info_from_link;
+utils.table_from_schema             = table_from_schema;
 utils.combat_ratings                = combat_ratings;
 
 sc.utils = utils;

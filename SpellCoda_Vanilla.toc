@@ -72,6 +72,7 @@ calc.lua
 overlay.lua
 tooltip.lua
 ui.lua
+spells_feed.lua
 core.lua
 public.lua
 
