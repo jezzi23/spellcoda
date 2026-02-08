@@ -2173,7 +2173,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         return;
     end
 
-    _, _, tt.new_item.quality, _, _, _, _, _, tt.new_item.inv_type, tt.new_item.tex, _, tt.new_item.class_id, tt.new_item.subclass_id =
+    _, _, tt.new_item.quality, tt.new_item.ilvl, _, _, _, _, tt.new_item.inv_type, tt.new_item.tex, _, tt.new_item.class_id, tt.new_item.subclass_id =
         GetItemInfo(tt.new_item.link);
 
     if not tt.new_item.inv_type or
@@ -2264,7 +2264,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             write_item_info_from_link(old_item, old_item.link);
             if old_item.link then
 
-                _, _, old_item.quality, _, _, _, _, _, old_item.inv_type, old_item.tex, _, old_item.class_id, old_item.subclass_id =
+                _, _, old_item.quality, old_item.ilvl, _, _, _, _, old_item.inv_type, old_item.tex, _, old_item.class_id, old_item.subclass_id =
                     GetItemInfo(old_item.link);
             else
                 old_item.tex = empty_tex;
@@ -2303,7 +2303,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 write_item_info_from_link(knocked_slot_data, knocked_slot_data.link);
                 if knocked_slot_data.link then
 
-                    _, _, knocked_slot_data.quality, _, _, _, _, _, knocked_slot_data.inv_type, knocked_slot_data.tex, _, knocked_slot_data.class_id, knocked_slot_data.subclass_id =
+                    _, _, knocked_slot_data.quality, knocked_slot_data.ilvl, _, _, _, _, knocked_slot_data.inv_type, knocked_slot_data.tex, _, knocked_slot_data.class_id, knocked_slot_data.subclass_id =
                         GetItemInfo(knocked_slot_data.link);
                 else
                     knocked_slot_data.tex = empty_tex;

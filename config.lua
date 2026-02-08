@@ -57,7 +57,7 @@ local default_settings     = {
     tooltip_item_quality_threshold                              = 2,
 
     tooltip_item_apply_set_bonuses                              = false,
-    tooltip_item_apply_gems                                     = false,
+    tooltip_item_apply_gems                                     = true,
     tooltip_item_apply_enchant                                  = false,
 
     tooltip_item_show_evaluation_modes                          = false,
@@ -232,7 +232,6 @@ local default_settings     = {
         -- druid
         [5176] = 5176, -- wrath
         [5185] = 5185, -- healing touch
-        [774] = 774, -- rejuv
         -- shaman
         [403] = 403, -- lightning bolt
         [331] = 331, -- healing wave
@@ -243,7 +242,6 @@ local default_settings     = {
         -- priest
         [8092] = 8092, -- mind blast
         [15407] = 15407, -- mind flay
-        [139] = 139, -- renew
         [2054] = 2054, -- heal
         -- rogue
         [1752] = 1752, -- sinister strike
@@ -422,11 +420,29 @@ local function misc_modify_existing()
         __sc_p_acc.profiles then
 
         for k, v in pairs(__sc_p_acc.profiles) do
-            if v.settings and v.settings.spell_calc_list then
-                v.settings.spell_calc_list[81] = 81; -- dodge passive as EHP
+            if v.settings then
+                if v.settings.spell_calc_list then
+                    v.settings.spell_calc_list[81] = 81; -- dodge passive as EHP
+                end
             end
+
         end
     end
+    if __sc_p_acc and
+        __sc_p_acc.version_saved and
+        __sc_p_acc.version_saved < 900000 and
+        __sc_p_acc.profiles then
+
+        for k, v in pairs(__sc_p_acc.profiles) do
+            if v.settings then
+                -- not applying gems by default for tbc items leads to confusion
+                -- force this into existing profiles during this version transition into 0.9
+                v.settings.tooltip_item_apply_gems = true;
+            end
+
+        end
+    end
+
 end
 
 local function load_config()
