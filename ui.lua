@@ -737,8 +737,10 @@ local function sw_activate_tab(tab_window)
 
     if tab_window.frame_to_open == __sc_frame.spells_frame then
         update_spells_frame(nil, nil, nil, true);
+        sc.core.activate_tooltip_refresh();
     elseif tab_window.frame_to_open == __sc_frame.calculator_frame then
         update_calc_list(true);
+        sc.core.activate_tooltip_refresh();
     end
 
     tab_window.frame_to_open:Show();
@@ -1079,6 +1081,10 @@ local function make_frame_scrollable(frame)
 end
 
 local function create_sw_ui_spells_frame(pframe)
+
+    pframe:HookScript("OnHide", function()
+        sc.core.deactivate_tooltip_refresh();
+    end);
 
     spell_filter_listing = {
         {
@@ -2154,7 +2160,7 @@ local function create_sw_ui_overlay_frame(pframe)
             txt = L["Disable all overlays in raid instances"],
             tooltip = L["Eliminates dynamic overlay calculations making CPU usage negligible"],
             func = function()
-                sc.core.doing_raid_update();
+                sc.core.overlay_refresh_config();
             end
         },
     }, pframe, 1);
@@ -2193,6 +2199,7 @@ local function create_sw_ui_overlay_frame(pframe)
                 for _, v in ipairs(ofs) do
                     v:SetAlpha(alpha);
                 end
+                sc.core.overlay_refresh_config(true);
             end
         }}, pframe, 1, nil, 0);
 
@@ -2657,6 +2664,7 @@ local function create_sw_ui_overlay_frame(pframe)
                     for _, v in ipairs(cfs) do
                         v:SetAlpha(alpha);
                     end
+                    sc.core.overlay_refresh_config();
                 end
             },
         },
@@ -4879,6 +4887,7 @@ local function create_sw_ui_calculator_frame(pframe)
 
     pframe:HookScript("OnHide", function()
         sc.loadouts.force_update = true;
+        sc.core.deactivate_tooltip_refresh();
     end);
 
     local f, f_txt;
@@ -6402,6 +6411,12 @@ local function create_sw_base_ui()
     __sc_frame:RegisterForDrag("LeftButton");
     __sc_frame:SetScript("OnDragStart", __sc_frame.StartMoving);
     __sc_frame:SetScript("OnDragStop", __sc_frame.StopMovingOrSizing);
+    __sc_frame:HookScript("OnHide", function()
+        sc.core.deactivate_tooltip_refresh();
+    end);
+    __sc_frame:HookScript("OnShow", function()
+        sc.core.activate_tooltip_refresh();
+    end);
 
     local width = 500;
     local height = 600;

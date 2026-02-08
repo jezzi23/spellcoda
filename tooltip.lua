@@ -191,10 +191,6 @@ sc_stat_calc_tooltip:AddFontStrings(header_txt, text, text_small);
 -- they have same fonts and size. Downscale instead
 sc_stat_calc_tooltip:SetScale(0.75);
 
-GameTooltip:HookScript("OnHide", function()
-    sc_stat_calc_tooltip:Hide();
-end);
-
 local spell_id_of_cleared_tooltip = 0;
 local clear_tooltip_refresh_id = 463;
 
@@ -222,7 +218,8 @@ local function update_tooltip(tooltip, mod_change)
         end
         __sc_frame.spell_id_viewer_editbox:SetText(tostring(spell_jump_key));
     end
-    if not (PlayerTalentFrame and MouseIsOver(PlayerTalentFrame)) and tooltip:IsShown() then
+    if not (PlayerTalentFrame and PlayerTalentFrame:IsShown() and MouseIsOver(PlayerTalentFrame)) and
+        tooltip:IsShown() then
         local _, id = tooltip:GetSpell();
 
         if id and (spells[id] or id == clear_tooltip_refresh_id or id == __sc_frame.spell_viewer_invalid_spell_id) then
@@ -2084,7 +2081,7 @@ local function make_item_tooltip_data(tooltip)
             [1] = { len = 0, diff_list = {}, diff_str = ""},
             [2] = { len = 0, diff_list = {}, diff_str = ""}
         },
-        tooltip_item_id_last = 0,
+        tooltip_item_link_last = "",
         item_tooltip_frames_hidden = false,
         item_tooltip_effects_update_id = 0,
         new_item = {},
@@ -2245,7 +2242,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     --local effects_diffed = sc.loadouts.diffed;
     local effects_diffed = tooltip_effects_diffed;
     -- TODO: might want to compare item link string
-    if tt.tooltip_item_id_last ~= tt.new_item.id or updated or mod_change then
+    if tt.tooltip_item_link_last ~= tt.new_item.link or updated or mod_change then
         -- actual evaluation update step and overwrites cache
 
         for item_fits_in_slot, slot in pairs(cmp_slots) do
@@ -2461,7 +2458,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         end
     end
 
-    tt.tooltip_item_id_last = tt.new_item.id;
+    tt.tooltip_item_link_last = tt.new_item.link;
 
     -- abort if no spells or all diffs are 0
     local neutral_abort = true;
@@ -2715,6 +2712,10 @@ end
 local tooltip_update_cd = 1.0;
 local last_needs_update_time = 0;
 
+local function on_hide_tooltip(tooltip)
+    sc_stat_calc_tooltip:Hide();
+end
+
 local function on_show_tooltip(tooltip)
     local spell_name, _ = tooltip:GetSpell();
     if not spell_name then
@@ -2742,6 +2743,7 @@ tooltip_export.append_tooltip_spell_rank        = append_tooltip_spell_rank;
 tooltip_export.eval_mode_scroll_fn              = eval_mode_scroll_fn;
 tooltip_export.on_clear_tooltip                 = on_clear_tooltip;
 tooltip_export.on_show_tooltip                  = on_show_tooltip;
+tooltip_export.on_hide_tooltip                  = on_hide_tooltip;
 tooltip_export.stat_diffs_included_effects_str  = stat_diffs_included_effects_str;
 tooltip_export.colored_diff_str                 = colored_diff_str;
 

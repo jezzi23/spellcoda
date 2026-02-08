@@ -33,6 +33,7 @@ local write_spell_tooltip                   = sc.tooltip.write_spell_tooltip;
 local write_item_tooltip                    = sc.tooltip.write_item_tooltip;
 local on_clear_tooltip                      = sc.tooltip.on_clear_tooltip;
 local on_show_tooltip                       = sc.tooltip.on_show_tooltip;
+local on_hide_tooltip                       = sc.tooltip.on_hide_tooltip;
 
 -------------------------------------------------------------------------
 local core                      = {};
@@ -197,8 +198,14 @@ sc.tooltip_mod_flags = {
 
 local tooltip_time = 1.0/2.0;
 
+local refreshing_tooltip = false;
+local tooltip_dt = 0.1;
+local tooltip_refresh_scheduled = false;
+
 local function refresh_tooltip()
-    local dt = 0.1;
+    tooltip_refresh_scheduled = false;
+
+    local dt = tooltip_dt;
 
     local spells_frame_open = false;
     local calc_frame_open = false;
@@ -207,7 +214,7 @@ local function refresh_tooltip()
         calc_frame_open = __sc_frame.calculator_frame:IsShown();
     end
 
-    if config.settings.overlay_disable or sc.core.mute_overlay then
+    if config.settings.overlay_disable or core.mute_overlay then
         -- overlay is off, trigger updates which may exit early if nothing changed
         if calc_frame_open then
             sc.ui.update_calc_list(false);
@@ -221,7 +228,10 @@ local function refresh_tooltip()
 
     if config.settings.tooltip_disable then
 
-        C_Timer.After(dt, refresh_tooltip);
+        if refreshing_tooltip then
+            tooltip_refresh_scheduled = true;
+            C_Timer.After(dt, refresh_tooltip);
+        end
         return;
     end
     local mod = key_mod_flags();
@@ -239,7 +249,37 @@ local function refresh_tooltip()
         end
     end
 
-    C_Timer.After(dt, refresh_tooltip);
+    if refreshing_tooltip then
+        tooltip_refresh_scheduled = true;
+        C_Timer.After(dt, refresh_tooltip);
+    end
+end
+
+function core.activate_tooltip_refresh()
+    if not refreshing_tooltip then
+        refreshing_tooltip = true;
+        if not tooltip_refresh_scheduled then
+            tooltip_refresh_scheduled = true;
+            C_Timer.After(tooltip_dt, refresh_tooltip);
+        end
+    end
+end
+
+function core.deactivate_tooltip_refresh()
+
+    local spells_frame_open = false;
+    local calc_frame_open = false;
+    if __sc_frame:IsShown() then
+        spells_frame_open = __sc_frame.spells_frame:IsShown();
+        calc_frame_open = __sc_frame.calculator_frame:IsShown();
+    end
+    if not GameTooltip:IsShown() and
+        not ItemRefTooltip:IsShown() and
+        not (spells_frame_open and (config.settings.overlay_disable or core.mute_overlay)) and
+        not calc_frame_open then
+
+        refreshing_tooltip = false;
+    end
 end
 
 local event_dispatch = {
@@ -315,8 +355,7 @@ local event_dispatch = {
         sw_activate_frame("spells_frame");
         __sc_frame:Hide();
 
-        C_Timer.After(1.0, main_update);
-        C_Timer.After(1.0, refresh_tooltip);
+        --C_Timer.After(1.0, overlay_update);
     end,
     ["ACTIONBAR_SLOT_CHANGED"] = function(_, slot)
         if not core.sw_addon_loaded or config.settings.overlay_disable then
@@ -448,6 +487,7 @@ core.event_dispatch_client_exceptions = event_dispatch_client_exceptions;
 
 GameTooltip:HookScript("OnTooltipSetSpell", function()
     if not config.settings.tooltip_disable then
+        core.activate_tooltip_refresh();
         sc.tooltip_mod = key_mod_flags()
         write_spell_tooltip();
     end
@@ -456,6 +496,7 @@ end);
 local item_tooltip_mod = 0;
 GameTooltip:HookScript("OnTooltipSetItem", function(self)
     if not config.settings.tooltip_disable_item then
+        core.activate_tooltip_refresh();
         local mod = key_mod_flags();
         local mod_change = mod ~= item_tooltip_mod;
         item_tooltip_mod = mod;
@@ -465,6 +506,7 @@ end);
 
 hooksecurefunc(ItemRefTooltip, "SetHyperlink", function(self, link)
     if not config.settings.tooltip_disable_item then
+        core.activate_tooltip_refresh();
         local mod = key_mod_flags();
         local mod_change = mod ~= item_tooltip_mod;
         item_tooltip_mod = mod;
@@ -472,11 +514,21 @@ hooksecurefunc(ItemRefTooltip, "SetHyperlink", function(self, link)
     end
 end);
 
+ItemRefTooltip:HookScript("OnTooltipCleared", function(self)
+    on_clear_tooltip(self);
+end);
+ItemRefTooltip:HookScript("OnHide", function(self)
+    core.deactivate_tooltip_refresh();
+end);
+ItemRefTooltip:HookScript("OnShow", function(self)
+end);
+
 GameTooltip:HookScript("OnTooltipCleared", function(self)
     on_clear_tooltip(self);
 end);
-ItemRefTooltip:HookScript("OnTooltipCleared", function(self)
-    on_clear_tooltip(self);
+GameTooltip:HookScript("OnHide", function(self)
+    on_hide_tooltip(self);
+    core.deactivate_tooltip_refresh();
 end);
 GameTooltip:HookScript("OnShow", function(self)
     on_show_tooltip(self);
