@@ -6567,6 +6567,7 @@ local function load_sw_ui()
                 tooltip:AddLine("|cFF9CD6DE"..L["Right click"]..":|r |cFFFF0000("..L["IS OFF"]..")|r "..L["Toggle old rank warning overlay"]);
             end
             tooltip:AddLine(" ");
+            tooltip:AddLine("|cFF9CD6DE".."Discord:|r GjgdtDFQv8");
             tooltip:AddLine("|cFF9CD6DE"..L["Addon data generated from"]..":|r");
             tooltip:AddLine("    "..sc.client_name_src.." "..sc.client_version_src);
             tooltip:AddLine("|cFF9CD6DE"..L["Current client build"]..":|r "..sc.client_version_loaded);

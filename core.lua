@@ -42,7 +42,7 @@ sc.core                         = core;
 core.addon_name                 = "SpellCoda";
 
 local version_major             = 0;
-local version_minor             = 8;
+local version_minor             = 9;
 local version_build             = sc.addon_build_id;
 
 core.version_id                 = version_build + version_minor*100000 + version_major*100000000;
@@ -52,7 +52,6 @@ core.version                    = tostring(version_major) .. "." ..
 
 core.sw_addon_loaded            = false;
 
-sc.sequence_counter             = 0;
 core.addon_running_time         = 0;
 core.active_spec                = 1;
 core.doing_raid                 = false;
@@ -61,10 +60,11 @@ core.mute_overlay               = false;
 core.talents_update_needed      = true;
 core.equipment_update_needed    = true;
 core.special_action_bar_changed = true;
-core.setup_action_bar_needed    = true;
 core.update_action_bar_needed   = false;
 core.old_ranks_checks_needed    = true;
 core.rescan_action_bar_needed   = false;
+
+
 
 local function generated_data_is_outdated(loaded_version, gen_version)
     local loaded = string.gmatch(loaded_version, "[^.]+");

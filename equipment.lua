@@ -680,6 +680,5 @@ equipment.apply_items_cmp               = apply_items_cmp;
 equipment.wpn_skill_for_slot            = wpn_skill_for_slot;
 equipment.slots                         = slots;
 equipment.inv_type_to_slot_ids          = inv_type_to_slot_ids;
-equipment.write_item_info_from_link     = write_item_info_from_link;
 
 sc.equipment = equipment;
