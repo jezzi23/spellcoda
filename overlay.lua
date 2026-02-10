@@ -291,14 +291,71 @@ local IsAddOnLoaded = IsAddOnLoaded or function(addon_name)
         return ElvUI_Bar1Button1 ~= nil;
     elseif addon_name == "Dominos" then
         return DominosActionButton1 ~= nil;
+    elseif addon_name == "DragonflightUI" then
+        return DragonflightUI ~= nil;
     else
         return false;
     end
 end;
 
 
-local default_bars = {
+local action_bar_base = {
+    "Action",               -- 1-12
+    "Bonus",                -- 13-24
+    "MultiBarRight",        -- 25-36
+    "MultiBarLeft",         -- 37-48
+    "MultiBarBottomRight",  -- 49-60
+    "MultiBarBottomLeft",   -- 61-72
+    "",                     -- 73-84
+    "MultiBar0",            -- 85-96
+    "MultiBar1",            -- 97-108
+    "MultiBar2",            -- 109-120
+    "MultiBar3",            -- 121-132
+    "MultiBar4",            -- 133-144
+    "MultiBar5",            -- 145-156
+    "MultiBar6",            -- 157-168
+    "MultiBar7",            -- 169-180
 };
+
+local function use_base_bars()
+
+    local index = 1;
+
+    local highest_action_found = 0;
+    for k, v in pairs({
+        "Action",               -- 1-12
+        "Bonus",                -- 13-24
+        "MultiBarRight",        -- 25-36
+        "MultiBarLeft",         -- 37-48
+        "MultiBarBottomRight",  -- 49-60
+        "MultiBarBottomLeft",   -- 61-72
+        "",                     -- 73-84
+        "MultiBar0",            -- 85-96
+        "MultiBar1",            -- 97-108
+        "MultiBar2",            -- 109-120
+        "MultiBar3",            -- 121-132
+        "MultiBar4",            -- 133-144
+        "MultiBar5",            -- 145-156
+        "MultiBar6",            -- 157-168
+        "MultiBar7",            -- 169-180
+    }) do
+        for j = 1, 12 do
+            if v ~= "" then
+                if _G[v.."ActionButton"..j] then
+                    action_bar_frame_names[index] = v.."ActionButton"..j;
+                    highest_action_found = index;
+                elseif _G[v.."Button"..j] then
+                    action_bar_frame_names[index] = v.."Button"..j;
+                    highest_action_found = index;
+                end
+            end
+            index = index + 1;
+        end
+    end
+
+    return highest_action_found;
+end
+
 
 local function gather_spell_icons()
 
@@ -325,111 +382,76 @@ local function gather_spell_icons()
     end
 
     -- gather action bar icons
-    local index = 1;
 
     -- check for some common addons if they overrite spellbook frames
     if IsAddOnLoaded("Bartender4") then
 
+        num_actions = 120;
         for i = 1, num_actions do
             action_bar_frame_names[i] = "BT4Button"..i;
         end
 
     elseif IsAddOnLoaded("ElvUI") then
 
-        for i = 1, 10 do
+        local highest_action_found = 0;
+        for i = 1, 15 do
             for j = 1, 12 do
-                action_bar_frame_names[index] = 
-                    "ElvUI_Bar"..i.."Button"..j;
+                local btn_name = "ElvUI_Bar"..i.."Button"..j;
+                local slotf = _G[btn_name];
 
-                index = index + 1;
+                if slotf then
+                    local idx = slotf.action or i;
+
+                    action_bar_frame_names[idx] = btn_name;
+                    highest_action_found = math.max(highest_action_found, idx);
+                end
             end
         end
+        num_actions = math.max(num_actions, highest_action_found);
 
     elseif IsAddOnLoaded("Dominos") then
 
-        local highest_action_found = 0;
-        for k, v in pairs({
-            "Action",               -- 1-12
-            "Bonus",                -- 13-24
-            "MultiBarRight",        -- 25-36
-            "MultiBarLeft",         -- 37-48
-            "MultiBarBottomRight",  -- 49-60
-            "MultiBarBottomLeft",   -- 61-72
-            "",                     -- 73-84
-            "MultiBar0",            -- 85-96
-            "MultiBar1",            -- 97-108
-            "MultiBar2",            -- 109-120
-            "MultiBar3",            -- 121-132
-            "MultiBar4",            -- 133-144
-            "MultiBar5",            -- 145-156
-            "MultiBar6",            -- 157-168
-            "MultiBar7",            -- 169-180
-        }) do
-            for j = 1, 12 do
-                if v ~= "" then
-                    if _G[v.."ActionButton"..j] then
-                        action_bar_frame_names[index] = v.."ActionButton"..j;
-                        highest_action_found = index;
-                    elseif _G[v.."Button"..j] then
-                        action_bar_frame_names[index] = v.."Button"..j;
-                        highest_action_found = index;
-                    end
-                end
-                index = index + 1;
-            end
-        end
+        local highest_action_found = use_base_bars();
+
         -- Overwrite default bar names where DominosActionButtons are defined
         for i = 1, 180 do
-            local bar_name = "DominosActionButton"..i;
-            local slotf = _G[bar_name];
+            local btn_name = "DominosActionButton"..i;
+            local slotf = _G[btn_name];
             if slotf then
-                --local idx = slotf.action or i;
-                local idx = i;
+                --local idx = i;
+                local idx = slotf.action or i;
 
-                action_bar_frame_names[idx] = bar_name;
+                action_bar_frame_names[idx] = btn_name;
                 highest_action_found = math.max(highest_action_found, idx);
             end
         end
         num_actions = math.max(num_actions, highest_action_found);
 
+    elseif IsAddOnLoaded("DragonflightUI") then
+        local highest_action_found = use_base_bars();
+
+        -- Overwrite default bar names where DragonflightUI buttons are defined
+        local action_id = 145;
+        for bar = 6, 8 do
+            for btn = 1, 12 do
+                local bar_name = "DragonflightUIMultiactionBar"..bar.."Button"..btn;
+                local slotf = _G[bar_name];
+                if slotf then
+
+                    local idx = action_id;
+                    action_bar_frame_names[idx] = bar_name;
+                    highest_action_found = math.max(highest_action_found, idx);
+                end
+                action_id = action_id + 1;
+            end
+        end
+        num_actions = math.max(num_actions, highest_action_found);
 
     else -- default action bars
 
-        local highest_action_found = 0;
-        for k, v in pairs({
-            "Action",                -- 1-12
-            "Bonus",           -- 13-24
-            "MultiBarRight",         -- 25-36
-            "MultiBarLeft",          -- 37-48
-            "MultiBarBottomRight",   -- 49-60
-            "MultiBarBottomLeft",    -- 61-72
-            "",                            -- 73-84
-            "",                            -- 85-96
-            "",                            -- 97-108
-            "",                            -- 109-120
-            "",                            -- 121-132
-            "",                            -- 133-144
-            "MultiBar5",                   -- 145-156
-            "MultiBar6",                   -- 157-168
-            "MultiBar7",                   -- 169-180
+        local highest_action_found = use_base_bars();
 
-
-        }) do
-
-            for j = 1, 12 do
-                if v ~= "" then
-                    if _G[v.."ActionButton"..j] then
-                        action_bar_frame_names[index] = v.."ActionButton"..j;
-                        highest_action_found = index;
-                    elseif _G[v.."Button"..j] then
-                        action_bar_frame_names[index] = v.."Button"..j;
-                        highest_action_found = index;
-                    end
-                end
-                index = index + 1;
-            end
-            num_actions = math.max(num_actions, highest_action_found);
-        end
+        num_actions = math.max(num_actions, highest_action_found);
     end
 
     for k, v in pairs(action_bar_frame_names) do

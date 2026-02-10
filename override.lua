@@ -8,9 +8,21 @@ local class                         = sc.class;
 local classes                       = sc.classes;
 local spids                         = sc.spids;
 local spell_flags                   = sc.spell_flags;
+local comp_flags                    = sc.comp_flags;
+local rank_seqs                     = sc.rank_seqs;
 ---------------------------------------------------------------------------------------------------
 
-if class == classes.paladin then
+if sc.class == classes.mage then
+
+    for _, v in pairs(rank_seqs[spids.fireball]) do
+        if spells[v].periodic then
+            -- empowered fireball talent was giving the periodic part an incorrect boost in coef
+            -- this is never intended in any client
+            spells[v].periodic.flags = bit.bor(spells[v].periodic.flags, comp_flags.no_coef);
+        end
+    end
+
+elseif class == classes.paladin then
     lookups.greater_bol_lname = GetSpellInfo(spids.greater_blessing_of_light);
     lookups.bol_lname = GetSpellInfo(spids.blessing_of_light);
     lookups.bol_rank_to_hl_coef_subtract = {
@@ -47,15 +59,6 @@ elseif sc.class == sc.classes.hunter then
     end
 end
 
--- training cost as -1 is a hack to let the spell show up as normal
--- in spells list without requiring "Other spells filter"
--- Do this for special spells like auto attack and shoot
-local normal_spell_train_hack = -1;
-for k, v in pairs({"attack", "shoot", "auto_shot", "dodge", "throw"}) do
-    if spids[v] then
-        spells[spids[v]].train = normal_spell_train_hack;
-    end
-end
 for k, v in pairs({"shoot", "throw", "shoot_bow", "shoot_gun", "shoot_crossbow"}) do
     if spids[v] then
         spells[spids[v]].flags = bit.bor(spells[spids[v]].flags, spell_flags.uses_attack_speed);
