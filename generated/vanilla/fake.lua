@@ -21,6 +21,8 @@ sc.talent_effects = {
 };
 sc.talent_ranks = {
 };
+sc.talent_idx = {
+};
 sc.class_buffs = {
 };
 local class_hostile_buffs = {

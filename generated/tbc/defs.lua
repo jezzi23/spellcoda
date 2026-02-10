@@ -1,6 +1,6 @@
 -- THIS FILE IS GENERATED
 local _, sc = ...;
-sc.addon_build_id = 1921;
+sc.addon_build_id = 1929;
 sc.client_name_src = "wow_anniversary";
 sc.client_version_src = "2.5.5.65795";
 _, sc.class = UnitClass("player");
@@ -146,6 +146,7 @@ sc.comp_flags = {
 	bleed = bit.lshift(1, 18),
 	weapon_pct = bit.lshift(1, 19),
 	coef_applied_to_avg_weapon_dmg = bit.lshift(1, 20),
+	no_coef = bit.lshift(1, 21),
 };
 sc.aura_flags = {
 	mul = bit.lshift(1, 0),
