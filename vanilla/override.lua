@@ -63,18 +63,8 @@ sc.npc_armor_by_lvl = {
 --  10033, 10338, 10643,                                                            -- npc level 81-90
 };
 
--- NOTE:
---  THREAT: Client data does not contain special threat information
---          added to many spells like Sunder armor, Heroic Strike, Mind Blast etc
---          For what it's worth, some threat info is added in this file according to
---          https://www.wowhead.com/classic/guide/threat-overview-classic-wow
---          Treat flat threat values from threat guide as extra threat regardless of
---          threat % modifiers and damage done by ability
---          (may be a faulty assumption since presumably threat data from
---          spell like Revenge was gathered in defensive stance with threat modifier)
---
+-- Threat data for special abilities needs some fixing
 
--- Class data modification
 if sc.class == sc.classes.mage then
     for _, v in pairs(rank_seqs[spids.ice_lance]) do
         spells[v].direct.coef = spell_coef_lvl_adjusted(0.429, spells[v].lvl_req);

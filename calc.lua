@@ -590,7 +590,7 @@ local function stats_coef(stats, bid, comp, spell, loadout, effects, eval_flags)
     local combo_pts = stats.combo_pts;
 
     local coef, coef_max;
-    if bid == auto_wand_spell_id then
+    if bid == auto_wand_spell_id or bit.band(comp.flags, comp_flags.no_coef) ~= 0 then
         coef = 0;
     elseif comp.school1 == schools.physical or
         bit.band(comp.flags, comp_flags.magic_scaling_as_ap) ~= 0 then

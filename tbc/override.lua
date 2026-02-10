@@ -41,7 +41,6 @@ sc.npc_armor_by_lvl = {
 --  10033, 10338, 10643,                                                            -- npc level 81-90
 };
 
--- Class data modification
 if sc.class == sc.classes.mage then
 
     lookups.molten_fury_idx = 220;
