@@ -298,25 +298,6 @@ local IsAddOnLoaded = IsAddOnLoaded or function(addon_name)
     end
 end;
 
-
-local action_bar_base = {
-    "Action",               -- 1-12
-    "Bonus",                -- 13-24
-    "MultiBarRight",        -- 25-36
-    "MultiBarLeft",         -- 37-48
-    "MultiBarBottomRight",  -- 49-60
-    "MultiBarBottomLeft",   -- 61-72
-    "",                     -- 73-84
-    "MultiBar0",            -- 85-96
-    "MultiBar1",            -- 97-108
-    "MultiBar2",            -- 109-120
-    "MultiBar3",            -- 121-132
-    "MultiBar4",            -- 133-144
-    "MultiBar5",            -- 145-156
-    "MultiBar6",            -- 157-168
-    "MultiBar7",            -- 169-180
-};
-
 local function use_base_bars()
 
     local index = 1;

@@ -2324,7 +2324,7 @@ local function cast_until_oom(spell_effect, spell, stats, loadout, effects, calc
     local resource_loss_per_sec = spell_effect.cost_per_sec - mp1_casting;
     spell_effect.mana = mana;
 
-    if resource_loss_per_sec <= 0 then
+    if resource_loss_per_sec <= 0 or spell_effect.cost_per_sec == math.huge then
         spell_effect.num_casts_until_oom = math.huge;
         spell_effect.effect_until_oom = math.huge;
         spell_effect.time_until_oom = math.huge;
@@ -2712,7 +2712,11 @@ local function dummy_cast_until_oom_info(info, stats, spell_id, loadout, effects
     stats.cost = cost;
     stats.cast_time = cast_time;
     stats.regen_while_casting = effects.raw.regen_while_casting;
-    info.cost_per_sec = cost/cast_time;
+    if cast_time == 0 then
+        info.cost_per_sec = math.huge;
+    else
+        info.cost_per_sec = cost/cast_time;
+    end
     info.expected = 0
     if not spells[spell_id] or resource_name ~= "MANA" then
         stats.cast_time = 0.0;
