@@ -1881,7 +1881,7 @@ local function create_sw_ui_tooltip_frame(pframe)
     for _, v in ipairs(multi_row_checkbutton({
         {
             id = "tooltip_item_stat_diff",
-            txt = L["Show stat changes"],
+            txt = L["Always show stat changes"],
         },
         {
             id = "tooltip_item_smart",

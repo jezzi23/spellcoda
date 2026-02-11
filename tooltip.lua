@@ -2240,6 +2240,9 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         eval_flags = bit.bor(eval_flags, evaluation_flags.fix_weapon_skill_to_level);
     end
 
+    local show_stat_diffs = config.settings.tooltip_item_stat_diff or
+        bit.band(mod, sc.tooltip_mod_flags.SHIFT) ~= 0;
+
     --local effects_diffed = sc.loadouts.diffed;
     local effects_diffed = tooltip_effects_diffed;
     -- TODO: might want to compare item link string
@@ -2336,7 +2339,8 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 old_items_buffer[slot_knocked_out] = nil;
             end
 
-            if config.settings.tooltip_item_stat_diff then
+            if show_stat_diffs then
+
                 effects_finalize_forced(loadout, effects_diffed);
                 slot_cmp.diff_str = stats_diff_format(loadout, effects_finalized, effects_diffed);
                 if slot_cmp.diff_str ~= "" then
@@ -2617,7 +2621,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                     1, 1, 1);
             end
             num_lines = num_lines + 1;
-            if config.settings.tooltip_item_stat_diff then
+            if show_stat_diffs then
                 num_lines = num_lines + 1;
             end
         else
@@ -2670,7 +2674,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             end
         end
 
-        if config.settings.tooltip_item_stat_diff then
+        if show_stat_diffs then
             tooltip:AddLine(slot_cmp.diff_str);
         end
     end
