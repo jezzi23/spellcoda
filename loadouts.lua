@@ -663,6 +663,18 @@ local function add_field_line(info, val, txt, diff, perc, mul, raw, extras)
     end
 end
 
+local stat_diff_flags = {
+
+    tank          = bit.lshift(1, 1),
+    melee         = bit.lshift(1, 2),
+    ranged        = bit.lshift(1, 3),
+    caster        = bit.lshift(1, 4),
+    healer        = bit.lshift(1, 5),
+
+    spells        = bit.lshift(1, 6),
+};
+
+
 local lnames;
 local function init_lnames()
     -- this function is called once after localized strings have been loaded
@@ -713,32 +725,59 @@ local function init_lnames()
         };
     };
     local rating_lnames = {
-        [combat_ratings.CR_DEFENSE_SKILL  ]   = L["Defense skill rating"],
-        [combat_ratings.CR_DODGE          ]   = L["Dodge rating"],
-        [combat_ratings.CR_PARRY          ]   = L["Parry rating"],
-        [combat_ratings.CR_BLOCK          ]   = L["Block rating"],
-        [combat_ratings.CR_HASTE_SPELL    ]   = L["Spell haste rating"],
-        [combat_ratings.CR_HASTE_MELEE    ]   = L["Melee haste rating"],
-        [combat_ratings.CR_HASTE_RANGED   ]   = L["Ranged haste rating"],
-        [combat_ratings.CR_HIT_SPELL      ]   = L["Spell hit rating"],
-        [combat_ratings.CR_HIT_MELEE      ]   = L["Melee hit rating"],
-        [combat_ratings.CR_HIT_RANGED     ]   = L["Ranged hit rating"],
-        [combat_ratings.CR_CRIT_SPELL     ]   = L["Spell critical rating"],
-        [combat_ratings.CR_CRIT_MELEE     ]   = L["Melee critical rating"],
-        [combat_ratings.CR_CRIT_RANGED    ]   = L["Ranged critical rating"],
-        [combat_ratings.CR_EXPERTISE      ]   = L["Expertise critical rating"],
+        [combat_ratings.CR_DEFENSE_SKILL  ]   = { L["Defense skill rating"], stat_diff_flags.tank },
+        [combat_ratings.CR_DODGE          ]   = { L["Dodge rating"], stat_diff_flags.tank },
+        [combat_ratings.CR_PARRY          ]   = { L["Parry rating"], stat_diff_flags.tank },
+        [combat_ratings.CR_BLOCK          ]   = { L["Block rating"], stat_diff_flags.tank },
+        [combat_ratings.CR_HASTE_SPELL    ]   = { L["Spell haste rating"], bit.bor(stat_diff_flags.caster, stat_diff_flags.healer) },
+        [combat_ratings.CR_HASTE_MELEE    ]   = { L["Melee haste rating"], stat_diff_flags.melee },
+        [combat_ratings.CR_HASTE_RANGED   ]   = { L["Ranged haste rating"], stat_diff_flags.ranged },
+        [combat_ratings.CR_HIT_SPELL      ]   = { L["Spell hit rating"], stat_diff_flags.caster },
+        [combat_ratings.CR_HIT_MELEE      ]   = { L["Melee hit rating"], stat_diff_flags.melee },
+        [combat_ratings.CR_HIT_RANGED     ]   = { L["Ranged hit rating"], stat_diff_flags.ranged },
+        [combat_ratings.CR_CRIT_SPELL     ]   = { L["Spell critical rating"], bit.bor(stat_diff_flags.caster, stat_diff_flags.healer) },
+        [combat_ratings.CR_CRIT_MELEE     ]   = { L["Melee critical rating"], stat_diff_flags.melee },
+        [combat_ratings.CR_CRIT_RANGED    ]   = { L["Ranged critical rating"], stat_diff_flags.ranged },
+        [combat_ratings.CR_EXPERTISE      ]   = { L["Expertise critical rating"], stat_diff_flags.melee },
     };
     for k, _ in pairs(ratings) do
-        ratings[k][3] =  rating_lnames[ratings[k][1]] or "";
+        ratings[k][3] =  rating_lnames[ratings[k][1]][1] or "";
+        ratings[k][4] =  rating_lnames[ratings[k][1]][2];
     end
 end
 
--- Internal format for loadout and effects is designed to work well with client data generator
--- but not for human visualization.
--- We want to be able to display recognizable fields to the user
+local stat_diff_flag_options = {
+    tooltip_item_stat_diff_tank             = "tank",
+    tooltip_item_stat_diff_melee            = "melee",
+    tooltip_item_stat_diff_ranged           = "ranged",
+    tooltip_item_stat_diff_caster           = "caster",
+    tooltip_item_stat_diff_healer           = "healer",
+    tooltip_item_stat_diff_spells           = "spells",
+};
+local attribute_flags_req = {
+    stat_diff_flags.melee,                                   -- str
+    bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged),  -- agi
+    bit.bor(
+        stat_diff_flags.tank,
+        stat_diff_flags.melee,
+        stat_diff_flags.ranged,
+        stat_diff_flags.caster,
+        stat_diff_flags.healer),                            -- stam
+    bit.bor(stat_diff_flags.caster, stat_diff_flags.healer), -- int
+    bit.bor(stat_diff_flags.caster, stat_diff_flags.healer)  -- spirit
+};
+
 local function human_friendly_fields(loadout, effects, is_diff, loadout_data, effects_before, effects_after)
     -- if is_diff is true, loadout should be nil and effects is the diffed effects
     -- loadout_data, effects_before and effects_after need to be supplied for edge cases when doing diffs
+
+    local stat_flags = 0;
+    for conf_key, flag_name in pairs(stat_diff_flag_options) do
+        if config.settings[conf_key] then
+            stat_flags = bit.bor(stat_flags, stat_diff_flags[flag_name]);
+        end
+    end
+
 
     local cr_scaling = loadout_data.cr_scaling;
 
@@ -752,20 +791,25 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     --- Attributes
     ---------------------------------
     for i, v in ipairs(lnames.attributes) do
-        local val = ((loadout and loadout.stats[i]) or 0)
-            +
-            effects.by_attr.stat_flat[i];
+        if bit.band(stat_flags, attribute_flags_req[i]) ~= 0 then
+            local val = ((loadout and loadout.stats[i]) or 0)
+                +
+                effects.by_attr.stat_flat[i];
 
-        add_field_line(info, val, v, is_diff, nil, nil, nil, true);
+            add_field_line(info, val, v, is_diff, nil, nil, nil, true);
+        end
     end
     ---------------------------------
     --- Ratings
     ---------------------------------
     for _, v in ipairs(ratings) do
-        local val = ((loadout and loadout[v[2]]) or 0)
-            +
-            effects.raw[v[2].."_flat"];
-        add_field_line(info, val, v[3], is_diff, nil, nil, nil, true);
+        local req_flags = v[4];
+        if bit.band(stat_flags, req_flags) ~= 0 then
+            local val = ((loadout and loadout[v[2]]) or 0)
+                +
+                effects.raw[v[2].."_flat"];
+            add_field_line(info, val, v[3], is_diff, nil, nil, nil, true);
+        end
     end
 
     -- When diffed, attributes and ratings are grayed out a bit as to indicate
@@ -774,8 +818,8 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Defense
     ---------------------------------
+    if bit.band(stat_flags, stat_diff_flags.tank) ~= 0 then
 
-    do
         local val = ((loadout and loadout.defense) or 0)
             +
             effects.raw.defense_skill_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_DEFENSE_SKILL]);
@@ -784,7 +828,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Attack power
     ---------------------------------
-    do
+    if bit.band(stat_flags, stat_diff_flags.melee) ~= 0 then
         local val = ((loadout and loadout.ap) or 0)
             +
             effects.raw.ap_flat;
@@ -793,7 +837,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Ranged attack power
     ---------------------------------
-    do
+    if bit.band(stat_flags, stat_diff_flags.ranged) ~= 0 then
         local val = ((loadout and loadout.rap) or 0)
             +
             effects.raw.rap_flat;
@@ -802,7 +846,14 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Health
     ---------------------------------
-    do
+    if bit.band(stat_flags,
+        bit.bor(
+            stat_diff_flags.tank,
+            stat_diff_flags.melee,
+            stat_diff_flags.ranged,
+            stat_diff_flags.caster,
+            stat_diff_flags.healer)
+        ) ~= 0 then
         local val = ((loadout and loadout.player_hp_max) or 0)
             +
             effects.raw.hp_flat;
@@ -811,7 +862,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Mana
     ---------------------------------
-    do
+    if bit.band(stat_flags, bit.bor(stat_diff_flags.caster, stat_diff_flags.healer)) ~= 0 then
         local val = ((loadout and loadout.resources_max[powers.mana]) or 0)
             +
             effects.raw.mana;
@@ -820,7 +871,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Armor
     ---------------------------------
-    do
+    if bit.band(stat_flags, stat_diff_flags.tank) ~= 0 then
         local val = ((loadout and loadout.armor) or 0)
             +
             effects.by_school.res_flat[schools.physical];
@@ -829,7 +880,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Spell damage
     ---------------------------------
-    do
+    if bit.band(stat_flags, stat_diff_flags.caster) ~= 0 then
         local can_compact = true;
         local school_prev;
         for i = 2, 7 do
@@ -858,7 +909,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Healing power
     ---------------------------------
-    do
+    if bit.band(stat_flags, stat_diff_flags.healer) ~= 0 then
         local val = ((loadout and loadout.healing_power) or 0)
             +
             effects.raw.healing_power_flat;
@@ -868,7 +919,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Melee crit
     ---------------------------------
-    do
+    if bit.band(stat_flags, stat_diff_flags.melee) ~= 0 then
         local val = ((loadout and loadout.melee_crit) or 0)
             +
             0.01*effects.raw.melee_crit_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_CRIT_MELEE])
@@ -879,7 +930,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Ranged crit
     ---------------------------------
-    do
+    if bit.band(stat_flags, stat_diff_flags.ranged) ~= 0 then
         local val = ((loadout and loadout.ranged_crit) or 0)
             +
             0.01*effects.raw.ranged_crit_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_CRIT_RANGED])
@@ -891,7 +942,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     --- Spell crit
     ---------------------------------
 
-    do
+    if bit.band(stat_flags, bit.bor(stat_diff_flags.caster, stat_diff_flags.healer)) ~= 0 then
         local can_compact = true;
         local school_prev;
         for i = 2, 7 do
@@ -926,7 +977,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Melee hit
     ---------------------------------
-    do
+    if bit.band(stat_flags, stat_diff_flags.melee) ~= 0 then
         local val = 
             effects.raw.phys_hit
             +
@@ -937,7 +988,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Ranged hit
     ---------------------------------
-    do
+    if bit.band(stat_flags, stat_diff_flags.ranged) ~= 0 then
         local val =
             effects.raw.phys_hit
             +
@@ -948,7 +999,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Spell hit
     ---------------------------------
-    do
+    if bit.band(stat_flags, stat_diff_flags.caster) ~= 0 then
         local can_compact = true;
         local school_prev;
         for i = 2, 7 do
@@ -985,7 +1036,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Melee haste multiplier
     ---------------------------------
-    do
+    if bit.band(stat_flags, stat_diff_flags.melee) ~= 0 then
         local haste_mul_from_rating = 1.0 +
             0.01*(((loadout and loadout.melee_haste_rating) or 0)+effects.raw.melee_haste_rating_flat)/
                 (cr_scaling * cr_weights[combat_ratings.CR_HASTE_MELEE]);
@@ -996,7 +1047,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Ranged haste multiplier
     ---------------------------------
-    do
+    if bit.band(stat_flags, stat_diff_flags.ranged) ~= 0 then
         local haste_mul_from_rating = 1.0 +
             0.01*(((loadout and loadout.ranged_haste_rating) or 0)+effects.raw.ranged_haste_rating_flat)/
                 (cr_scaling * cr_weights[combat_ratings.CR_HASTE_RANGED]);
@@ -1007,7 +1058,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Spell haste multiplier
     ---------------------------------
-    do
+    if bit.band(stat_flags, bit.bor(stat_diff_flags.caster, stat_diff_flags.healer)) ~= 0 then
         local haste_mul_from_rating = 1.0 +
             0.01*(((loadout and loadout.spell_haste_rating) or 0)+effects.raw.spell_haste_rating_flat)/
                 (cr_scaling * cr_weights[combat_ratings.CR_HASTE_SPELL]);
@@ -1018,7 +1069,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Mana regen
     ---------------------------------
-    do
+    if bit.band(stat_flags, bit.bor(stat_diff_flags.caster, stat_diff_flags.healer)) ~= 0 then
         -- Don't show mp5 stat since it's already baked into other field
         --add_field_line(info, effects.raw.mp5_flat, L["mana every 5 sec"], is_diff);
         add_field_line(info, effects.raw.regen_while_casting, L["Mana regen while casting"], is_diff, true);
@@ -1083,7 +1134,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     --- Dodge chance
     ---------------------------------
 
-    do
+    if bit.band(stat_flags, stat_diff_flags.tank) ~= 0 then
         local val = ((loadout and loadout.dodge) or 0)
             +
             effects.raw.dodge
@@ -1098,7 +1149,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     --- Parry chance
     ---------------------------------
 
-    do
+    if bit.band(stat_flags, stat_diff_flags.tank) ~= 0 then
         if loadout_data.parry ~= 0 then
             local val = ((loadout and loadout.parry) or 0)
                 +
@@ -1115,7 +1166,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     --- Block chance
     ---------------------------------
 
-    do
+    if bit.band(stat_flags, stat_diff_flags.tank) ~= 0 then
         if effects.raw.can_block > 0 then
 
             local val = ((loadout and loadout.block) or 0)
@@ -1135,7 +1186,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Armor penetration
     ---------------------------------
-    do
+    if bit.band(stat_flags, bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)) ~= 0 then
         add_field_line(info, -effects.by_school.target_res_flat[schools.physical], L["Armor penetration"], is_diff);
         add_field_line(info, effects.by_school.target_res[schools.physical], L["Armor penetration"], is_diff, true);
     end
@@ -1143,7 +1194,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     --- Spell peneteration
     ---------------------------------
 
-    do
+    if bit.band(stat_flags, stat_diff_flags.caster) ~= 0 then
         local can_compact = true;
         local school_prev;
         -- Holy (i=2) spell pen not included in most spell penetration stats effects?
@@ -1170,9 +1221,9 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     end
 
     ---------------------------------
-    --- Spell critical damage modifier
+    --- Spell critical effect modifier
     ---------------------------------
-    do
+    if bit.band(stat_flags, bit.bor(stat_diff_flags.caster, stat_diff_flags.healer)) ~= 0 then
         local can_compact = true;
         local school_prev;
         for i = 2, 7 do
@@ -1198,7 +1249,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Spell cost modifier
     ---------------------------------
-    do
+    if bit.band(stat_flags, bit.bor(stat_diff_flags.caster, stat_diff_flags.healer)) ~= 0 then
         local can_compact = true;
         local school_prev;
         for i = 2, 7 do
@@ -1225,14 +1276,14 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Physical threat
     ---------------------------------
-    do
+    if bit.band(stat_flags, bit.bor(stat_diff_flags.tank, stat_diff_flags.melee, stat_diff_flags.ranged)) ~= 0 then
         add_field_line(info, effects.by_school.threat[schools.physical], L["Physical threat"], is_diff, true);
     end
 
     ---------------------------------
     --- Spell threat
     ---------------------------------
-    do
+    if bit.band(stat_flags, bit.bor(stat_diff_flags.tank, stat_diff_flags.caster, stat_diff_flags.healer)) ~= 0 then
         local can_compact = true;
         local school_prev;
         for i = 2, 7 do
@@ -1258,7 +1309,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- % Stats
     ---------------------------------
-    do
+    if stat_flags ~= 0 then
         local can_compact = true;
         local attr_prev;
         for i = 1, 5 do
@@ -1275,7 +1326,9 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
         if not can_compact then
             for i = 1, 5 do
                 local val = effects.by_attr.stat_mod[i] + effects.by_attr.stat_mod_forced[i];
-                add_field_line(info, val, lnames.attributes[i], is_diff, true);
+                if bit.band(stat_flags, attribute_flags_req[i]) ~= 0 then
+                    add_field_line(info, val, lnames.attributes[i], is_diff, true);
+                end
             end
         else
             add_field_line(info, attr_prev, L["All stats"], is_diff, true);
@@ -1285,13 +1338,15 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Weapon slots
     ---------------------------------
-    do
+    if bit.band(stat_flags, bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)) ~= 0 then
         add_field_line(info, effects.raw.wpn_min_mh, L["Main hand minimum damage"], is_diff);
         add_field_line(info, effects.raw.wpn_max_mh, L["Main hand maximum damage"], is_diff);
         add_field_line(info, effects.raw.wpn_delay_mh, L["Main hand delay"], is_diff);
         add_field_line(info, effects.raw.wpn_min_oh, L["Offhand minimum damage"], is_diff);
         add_field_line(info, effects.raw.wpn_max_oh, L["Offhand maximum damage"], is_diff);
         add_field_line(info, effects.raw.wpn_delay_oh, L["Offhand attack delay"], is_diff);
+    end
+    if bit.band(stat_flags, stat_diff_flags.ranged) ~= 0 then
         add_field_line(info, effects.raw.wpn_min_ranged, L["Ranged minimum damage"], is_diff);
         add_field_line(info, effects.raw.wpn_max_ranged, L["Ranged maximum damage"], is_diff);
         add_field_line(info, effects.raw.wpn_delay_ranged, L["Ranged attack delay"], is_diff);
@@ -1299,23 +1354,27 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Physical damage
     ---------------------------------
-    do
+    if bit.band(stat_flags, bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)) ~= 0 then
         add_field_line(info, effects.raw.phys_dmg_flat, L["Physical damage"], is_diff);
     end
 
     ---------------------------------
     --- Physical damage modifier
     ---------------------------------
-    add_field_line(info, effects.mul.raw.phys_mod, L["Physical damage"], is_diff, true, true);
+    if bit.band(stat_flags, bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)) ~= 0 then
+        add_field_line(info, effects.mul.raw.phys_mod, L["Physical damage"], is_diff, true, true);
+    end
     ---------------------------------
     --- Physical damage taken (target)
     ---------------------------------
-    add_field_line(info, effects.mul.raw.vuln_phys, L["Target physical damage taken"], is_diff, true, true);
+    if bit.band(stat_flags, bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)) ~= 0 then
+        add_field_line(info, effects.mul.raw.vuln_phys, L["Target physical damage taken"], is_diff, true, true);
+    end
 
     ---------------------------------
     --- Spell damage multiplier
     ---------------------------------
-    do
+    if bit.band(stat_flags, stat_diff_flags.caster) ~= 0 then
         local can_compact = true;
         local school_prev;
         for i = 2, 7 do
@@ -1341,7 +1400,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Spell damage taken (target)
     ---------------------------------
-    do
+    if bit.band(stat_flags, stat_diff_flags.caster) ~= 0 then
         local can_compact = true;
         local school_prev;
         for i = 2, 7 do
@@ -1368,45 +1427,51 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Healing modifier
     ---------------------------------
-    add_field_line(info, effects.mul.raw.heal_mod, L["Healing"], is_diff, true, true);
+    if bit.band(stat_flags, stat_diff_flags.healer) ~= 0 then
+        add_field_line(info, effects.mul.raw.heal_mod, L["Healing"], is_diff, true, true);
+    end
     ---------------------------------
     --- Healing taken (target)
     ---------------------------------
-    add_field_line(info, effects.mul.raw.vuln_heal, L["Target healing taken"], is_diff, true, true);
+    if bit.band(stat_flags, stat_diff_flags.healer) ~= 0 then
+        add_field_line(info, effects.mul.raw.vuln_heal, L["Target healing taken"], is_diff, true, true);
+    end
 
     ---------------------------------
     --- Ability effects
     ---------------------------------
 
-    for k, v in ipairs(lnames.ability_additive_fields) do
-        local val_last;
-        for spell_id, val in pairs(effects.ability[v[1]]) do
+    if bit.band(stat_flags, stat_diff_flags.spells) ~= 0 then
+        for k, v in ipairs(lnames.ability_additive_fields) do
+            local val_last;
+            for spell_id, val in pairs(effects.ability[v[1]]) do
 
-            if val_last == val then
-                -- same value as previous thing, just add append this spell name
-                -- info.str now ends with "\n", need to move it to appended string
-                info.str = info.str:sub(1, -2)..", "..spell_lname(spell_id).."\n";
-            else
-                if (add_field_line(info, val, v[2]..": "..spell_lname(spell_id), is_diff, v[3])) then
-                    val_last = val;
+                if val_last == val then
+                    -- same value as previous thing, just add append this spell name
+                    -- info.str now ends with "\n", need to move it to appended string
+                    info.str = info.str:sub(1, -2)..", "..spell_lname(spell_id).."\n";
+                else
+                    if (add_field_line(info, val, v[2]..": "..spell_lname(spell_id), is_diff, v[3])) then
+                        val_last = val;
+                    end
                 end
+
             end
-
         end
-    end
 
-    for k, v in ipairs(lnames.ability_multiplicative_fields) do
+        for k, v in ipairs(lnames.ability_multiplicative_fields) do
 
-        local val_last;
-        for spell_id, val in pairs(effects.mul.ability[v[1]]) do
+            local val_last;
+            for spell_id, val in pairs(effects.mul.ability[v[1]]) do
 
-            if val_last == val then
-                -- same value as previous thing, just add append this spell name
-                -- info.str now ends with "\n", need to move it to appended string
-                info.str = info.str:sub(1, -2)..", "..spell_lname(spell_id).."\n";
-            else
-                if (add_field_line(info, val, v[2]..": "..spell_lname(spell_id), is_diff, v[3], true)) then
-                    val_last = val;
+                if val_last == val then
+                    -- same value as previous thing, just add append this spell name
+                    -- info.str now ends with "\n", need to move it to appended string
+                    info.str = info.str:sub(1, -2)..", "..spell_lname(spell_id).."\n";
+                else
+                    if (add_field_line(info, val, v[2]..": "..spell_lname(spell_id), is_diff, v[3], true)) then
+                        val_last = val;
+                    end
                 end
             end
         end
