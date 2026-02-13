@@ -268,7 +268,7 @@ local function update_calc_list(was_rearranged, loadout, effects, effects_diffed
     frame.before_txt = stats_format(loadout, effects);
     frame.after_txt = stats_format(loadout, effects_diffed);
 
-    frame.diffs_fontstr:SetText(L["Effects"].."\n|cFF00FF00 +"..diffs_in.." |r|cFFFF0000 -"..diffs_out.."|r");
+    frame.diffs_fontstr:SetText(L["Changes"].."\n|cFF00FF00 +"..diffs_in.." |r|cFFFF0000 -"..diffs_out.."|r");
 
     if frame.diffs_txt ~= "" then
         frame.diffs_txt = stat_diffs_included_effects_str(true, true, true)..frame.diffs_txt;
@@ -1194,7 +1194,7 @@ local function create_sw_ui_spells_frame(pframe)
     -- Filter dropdown
     pframe.filter =
         --CreateFrame("Button", "pframe_filter", pframe, "UIDropDownMenuTemplate");
-        libDD:Create_UIDropDownMenu("pframe_filter", pframe);
+        libDD:Create_UIDropDownMenu(nil, pframe);
     pframe.filter:SetPoint("TOPLEFT", 340, pframe.y_offset+6);
     pframe.filter.init_func = function()
 
@@ -1218,11 +1218,7 @@ local function create_sw_ui_spells_frame(pframe)
                         text = txt,
                         checked = is_checked,
                         func = function(self)
-                            if config.settings[v.id] then
-                                config.settings[v.id] = false;
-                            else
-                                config.settings[v.id] = true;
-                            end
+                            config.settings[v.id] = not config.settings[v.id];
                             update_spells_frame(nil, nil, nil, true);
                         end,
                         keepShownOnClick = true,
@@ -3211,7 +3207,7 @@ end
 
 local function update_calculator_character_items(slot)
 
-    __sc_frame.calculator_frame.calculator_plan_changed = true
+    __sc_frame.calculator_frame.calculator_plan_changed = true;
     if not slot then
         for s, v in pairs(__sc_frame.calculator_frame.items.slots) do
 
@@ -5231,7 +5227,7 @@ local function create_sw_ui_calculator_frame(pframe)
     pframe.y_offset = pframe.y_offset - 3;
 
     multi_row_checkbutton(
-        {{id = "calc_list_use_highest_rank", txt = L["Use highest learned rank of spell"]}},
+        {{id = "calc_list_use_highest_rank", txt = L["Use highest learned rank"]}},
         pframe,
         2,
         function()
@@ -5239,13 +5235,63 @@ local function create_sw_ui_calculator_frame(pframe)
                 update_calc_list(true);
             end
         end,
-        5);
+        -5);
+
+
+    pframe.stat_diff_dd = libDD:Create_UIDropDownMenu(nil, pframe);
+
+    local stat_diff_opts = {
+        { "tooltip_item_stat_diff_tank",   L["Tank"]            },
+        { "tooltip_item_stat_diff_melee",  L["Melee"]           },
+        { "tooltip_item_stat_diff_ranged", L["Ranged"]          },
+        { "tooltip_item_stat_diff_caster", L["Caster"]          },
+        { "tooltip_item_stat_diff_healer", L["Healer"]          },
+        { "tooltip_item_stat_diff_spells", L["Ability effects"] },
+    };
+    pframe.stat_diff_dd:SetPoint("TOPLEFT", 200, pframe.y_offset+2);
+    pframe.stat_diff_dd.init_func = function()
+        libDD:UIDropDownMenu_Initialize(pframe.stat_diff_dd, function()
+
+            libDD:UIDropDownMenu_SetText(pframe.stat_diff_dd, L["Stats display"]);
+            libDD:UIDropDownMenu_SetWidth(pframe.stat_diff_dd, 100);
+
+            for _, v in ipairs(stat_diff_opts) do
+                local opt = v[1];
+                local lname = v[2];
+
+                libDD:UIDropDownMenu_AddButton(
+                    {
+                        text = lname,
+                        checked = config.settings[opt],
+                        keepShownOnClick = true,
+                        notCheckable = false,
+                        func = function()
+
+                            config.settings[opt] = not config.settings[opt];
+                            __sc_frame.calculator_frame.calculator_plan_changed = true;
+                        end
+                    }
+                );
+            end
+        end);
+    end;
+
+    pframe.stat_diff_dd:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+        GameTooltip:SetText(L["Tooltips show stats relevant to these categories."], 1, 1, 1);
+        GameTooltip:Show();
+    end);
+
+    pframe.stat_diff_dd:SetScript("OnLeave", function(self)
+        GameTooltip:Hide();
+    end);
+    pframe.stat_diff_dd.init_func();
 
     -- sim type button
     pframe.sim_type_button = libDD:Create_UIDropDownMenu("__sc_frame_setting_calc_fight_type", pframe);
 
     pframe.sim_type_button._type = "DropDownMenu";
-    pframe.sim_type_button:SetPoint("TOPRIGHT", 10, pframe.y_offset+2);
+    pframe.sim_type_button:SetPoint("TOPRIGHT", 20, pframe.y_offset+2);
     pframe.sim_type_button.init_func = function()
         libDD:UIDropDownMenu_Initialize(pframe.sim_type_button, function()
 
@@ -5258,7 +5304,7 @@ local function create_sw_ui_calculator_frame(pframe)
                 pframe.spell_diff_header_center:SetText(L["Effect"]);
                 pframe.spell_diff_header_right:SetText(L["Duration (sec)"]);
             end
-            libDD:UIDropDownMenu_SetWidth(pframe.sim_type_button, 130);
+            libDD:UIDropDownMenu_SetWidth(pframe.sim_type_button, 120);
 
             libDD:UIDropDownMenu_AddButton(
                 {

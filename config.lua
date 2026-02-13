@@ -68,6 +68,14 @@ local default_settings     = {
     tooltip_item_ignore_plate                                   = false,
     tooltip_item_stat_diff                                      = false,
 
+    -- stat diffs categories
+    tooltip_item_stat_diff_tank                                 = true,
+    tooltip_item_stat_diff_melee                                = true,
+    tooltip_item_stat_diff_ranged                               = true,
+    tooltip_item_stat_diff_caster                               = true,
+    tooltip_item_stat_diff_healer                               = true,
+    tooltip_item_stat_diff_spells                               = true,
+
     -- overlay
     overlay_display_normal                                      = false,
     overlay_display_crit                                        = false,
