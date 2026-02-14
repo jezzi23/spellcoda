@@ -381,7 +381,12 @@ local function gather_spell_icons()
                 local slotf = _G[btn_name];
 
                 if slotf then
-                    local idx = slotf.action or i;
+                    local idx;
+                    if slotf.action and slotf.action > 0 then
+                        idx = slotf.action;
+                    else
+                        idx = (i-1)*12 + j;
+                    end
 
                     action_bar_frame_names[idx] = btn_name;
                     highest_action_found = math.max(highest_action_found, idx);
@@ -399,8 +404,12 @@ local function gather_spell_icons()
             local btn_name = "DominosActionButton"..i;
             local slotf = _G[btn_name];
             if slotf then
-                --local idx = i;
-                local idx = slotf.action or i;
+                local idx;
+                if slotf.action and slotf.action > 0 and i > 12 then
+                    idx = slotf.action;
+                else
+                    idx = i;
+                end
 
                 action_bar_frame_names[idx] = btn_name;
                 highest_action_found = math.max(highest_action_found, idx);
