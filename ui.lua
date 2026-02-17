@@ -3628,6 +3628,386 @@ empty_effects(effects_diff_on_arrow_tooltip);
 local new_item_buffer = {};
 local old_item_buffer = {};
 
+local item_planner_gem_enchant_dropdown;
+local item_planner_gem_enchant_dropdown_entries = {};
+local item_planner_gem_enchant_dropdown_filtered = {};
+local item_planner_gem_enchant_dropdown_rows_count = 12;
+local item_planner_enchant_icon_tex = "Interface\\Icons\\Trade_Engraving";
+local item_planner_dropdown_check_tex = "Interface\\Buttons\\UI-CheckBox-Check";
+local item_planner_dropdown_none_tex = "Interface\\Buttons\\UI-GroupLoot-Pass-Up";
+
+local function item_planner_gem_enchant_dropdown_refresh_rows()
+    local frame = item_planner_gem_enchant_dropdown;
+    if not frame then
+        return;
+    end
+
+    local offset = math.floor(frame.slider:GetValue() or 0);
+    for i, row in ipairs(frame.rows) do
+        local entry = item_planner_gem_enchant_dropdown_filtered[offset + i];
+        if entry then
+            row.entry_id = entry.id;
+            if entry.is_none then
+                row.label:SetText(entry.lname);
+            else
+                row.label:SetText(entry.lname.." ("..entry.id..")");
+            end
+            row.label:SetTextColor(entry.r or 1, entry.g or 1, entry.b or 1, 1);
+            row.icon:SetTexture(entry.tex or item_planner_dropdown_none_tex);
+            row.icon:Show();
+            local is_active =
+                (entry.is_none and frame.active_id == 0) or
+                (not entry.is_none and frame.active_id == entry.id);
+            if is_active then
+                row.check:Show();
+            else
+                row.check:Hide();
+            end
+            row:Show();
+        else
+            row.entry_id = nil;
+            row.icon:Hide();
+            row.check:Hide();
+            row:Hide();
+        end
+    end
+end
+
+local function item_planner_gem_enchant_dropdown_filter(query)
+    local frame = item_planner_gem_enchant_dropdown;
+    if not frame then
+        return;
+    end
+
+    clear_table(item_planner_gem_enchant_dropdown_filtered);
+    query = string.lower(query or "");
+
+    if query == "" then
+        for i, v in ipairs(item_planner_gem_enchant_dropdown_entries) do
+            item_planner_gem_enchant_dropdown_filtered[i] = v;
+        end
+    else
+        local n = 0;
+        if item_planner_gem_enchant_dropdown_entries[1] and item_planner_gem_enchant_dropdown_entries[1].is_none then
+            n = 1;
+            item_planner_gem_enchant_dropdown_filtered[1] = item_planner_gem_enchant_dropdown_entries[1];
+        end
+        for i = 2, #item_planner_gem_enchant_dropdown_entries do
+            local v = item_planner_gem_enchant_dropdown_entries[i];
+            if string.find(v.search_lname, query, 1, true) or
+                string.find(v.search_id, query, 1, true) then
+                n = n + 1;
+                item_planner_gem_enchant_dropdown_filtered[n] = v;
+            end
+        end
+    end
+
+    local max_offset = math.max(0, #item_planner_gem_enchant_dropdown_filtered - item_planner_gem_enchant_dropdown_rows_count);
+    frame.slider:SetMinMaxValues(0, max_offset);
+    frame.slider:SetValue(math.min(frame.slider:GetValue() or 0, max_offset));
+    item_planner_gem_enchant_dropdown_refresh_rows();
+end
+
+local function item_planner_gem_enchant_dropdown_build_entries(mode, active_id)
+    clear_table(item_planner_gem_enchant_dropdown_entries);
+    local frame = item_planner_gem_enchant_dropdown;
+    if frame then
+        frame.active_id = tonumber(active_id) or 0;
+        if frame.active_id < 0 then
+            frame.active_id = 0;
+        end
+    end
+
+    local n = 0;
+    if mode == "gem" then
+        for item_id in pairs(sc.gem_items) do
+            local lname, _, quality, _, _, _, _, _, _, tex = GetItemInfo(item_id);
+            lname = tostring(lname or item_id);
+            local color = ITEM_QUALITY_COLORS[quality or 0] or ITEM_QUALITY_COLORS[1];
+            n = n + 1;
+            item_planner_gem_enchant_dropdown_entries[n] = {
+                id = item_id,
+                lname = lname,
+                search_lname = string.lower(lname),
+                search_id = tostring(item_id),
+                tex = tex,
+                r = color.r,
+                g = color.g,
+                b = color.b,
+            };
+        end
+    else
+        for enchant_id, lname in pairs(sc.enchant_id_to_lname) do
+            lname = tostring(lname or enchant_id);
+            n = n + 1;
+            item_planner_gem_enchant_dropdown_entries[n] = {
+                id = enchant_id,
+                lname = lname,
+                search_lname = string.lower(lname),
+                search_id = tostring(enchant_id),
+                tex = item_planner_enchant_icon_tex,
+                r = 1,
+                g = 1,
+                b = 1,
+            };
+        end
+    end
+
+    table.sort(item_planner_gem_enchant_dropdown_entries, function(a, b)
+        if a.search_lname == b.search_lname then
+            return a.id < b.id;
+        end
+        return a.search_lname < b.search_lname;
+    end);
+
+    table.insert(item_planner_gem_enchant_dropdown_entries, 1, {
+        id = 0,
+        lname = "None",
+        search_lname = "none",
+        search_id = "0",
+        tex = item_planner_dropdown_none_tex,
+        r = 1, g = 1, b = 1,
+        is_none = true,
+    });
+end
+
+local function item_planner_gem_enchant_dropdown_create(parent)
+    if item_planner_gem_enchant_dropdown then
+        item_planner_gem_enchant_dropdown:SetParent(parent);
+        return item_planner_gem_enchant_dropdown;
+    end
+
+    local click_catcher = CreateFrame("Frame", nil, UIParent);
+    click_catcher:SetAllPoints(UIParent);
+    click_catcher:EnableMouse(true);
+    click_catcher:SetFrameStrata("DIALOG");
+    click_catcher:Hide();
+
+    local frame = CreateFrame("Frame", nil, parent, "BackdropTemplate");
+    frame:SetSize(250, 250);
+    frame:SetFrameStrata("DIALOG");
+    frame:SetClampedToScreen(true);
+    frame:EnableMouse(true);
+    frame:SetScript("OnMouseDown", function()
+        -- Consume clicks inside dropdown so only outside clicks close it.
+    end);
+    frame:Hide();
+    frame.click_catcher = click_catcher;
+    click_catcher:SetFrameLevel(frame:GetFrameLevel() - 1);
+    click_catcher:SetScript("OnMouseDown", function()
+        frame:Hide();
+    end);
+    frame:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        edgeSize = 16,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 }
+    });
+    frame:SetBackdropColor(0, 0, 0, 0.95);
+    frame:SetBackdropBorderColor(1, 0.82, 0, 1);
+    frame:SetScript("OnHide", function(self)
+        self.click_catcher:Hide();
+        self.search:ClearFocus();
+        GameTooltip:Hide();
+    end);
+    frame:SetScript("OnShow", function(self)
+        self.click_catcher:Show();
+    end);
+
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal");
+    title:SetPoint("TOPLEFT", 8, -7);
+    title:SetText("Select");
+    frame.title = title;
+
+    local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton");
+    close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2);
+    close:SetScript("OnClick", function()
+        frame:Hide();
+    end);
+
+    local search = CreateFrame("EditBox", nil, frame, "InputBoxTemplate");
+    search:SetPoint("TOPLEFT", 8, -24);
+    search:SetSize(160, 15);
+    search:SetAutoFocus(false);
+    search:SetScript("OnTextChanged", function(self)
+        local txt = self:GetText() or "";
+        if txt == "" then
+            frame.search_empty_label:Show();
+        else
+            frame.search_empty_label:Hide();
+        end
+        item_planner_gem_enchant_dropdown_filter(txt);
+    end);
+    search:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus();
+        frame:Hide();
+    end);
+    frame.search = search;
+
+    local search_empty = frame:CreateFontString(nil, "OVERLAY", font);
+    search_empty:SetPoint("LEFT", search, 5, 0);
+    search_empty:SetText(L["Search name or ID"]);
+    frame.search_empty_label = search_empty;
+
+    local list = CreateFrame("Frame", nil, frame, "BackdropTemplate");
+    list:SetPoint("TOPLEFT", 8, -45);
+    list:SetSize(234, 197);
+    list:EnableMouseWheel(true);
+    list:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeSize = 1,
+    });
+    list:SetBackdropColor(0, 0, 0, 0.6);
+    list:SetBackdropBorderColor(0.4, 0.4, 0.4, 1);
+    frame.list = list;
+
+    local slider = CreateFrame("Slider", nil, list);
+    slider:SetOrientation("VERTICAL");
+    slider:SetPoint("TOPRIGHT", list, "TOPRIGHT", -2, -2);
+    slider:SetWidth(10);
+    slider:SetHeight(193);
+    slider:SetValueStep(1);
+    slider:SetMinMaxValues(0, 0);
+    slider:SetValue(0);
+    slider:SetObeyStepOnDrag(true);
+    slider:SetScript("OnValueChanged", function(self, value)
+        local snapped = math.floor(value + 0.5);
+        if snapped ~= value then
+            self:SetValue(snapped);
+            return;
+        end
+        item_planner_gem_enchant_dropdown_refresh_rows();
+    end);
+    local slider_bg = slider:CreateTexture(nil, "BACKGROUND");
+    slider_bg:SetAllPoints(slider);
+    slider_bg:SetColorTexture(0.15, 0.15, 0.15, 0.85);
+    slider:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob");
+    local thumb = slider:GetThumbTexture();
+    if thumb then
+        thumb:SetSize(10, 20);
+    end
+    frame.slider = slider;
+
+    list:SetScript("OnMouseWheel", function(self, delta)
+        local min_val, max_val = frame.slider:GetMinMaxValues();
+        local val = frame.slider:GetValue() - delta;
+        val = math.max(min_val, math.min(max_val, val));
+        if val ~= frame.slider:GetValue() then
+            frame.slider:SetValue(val);
+        end
+    end);
+
+    frame.rows = {};
+    for i = 1, item_planner_gem_enchant_dropdown_rows_count do
+        local row = CreateFrame("Button", nil, list);
+        row:SetSize(214, 15);
+        row:SetPoint("TOPLEFT", list, 3, -2 - (i - 1) * 15);
+        row:EnableMouse(true);
+
+        local bg = row:CreateTexture(nil, "BACKGROUND");
+        bg:SetAllPoints(row);
+        bg:SetColorTexture(1, 1, 1, 0.02);
+        row.bg = bg;
+
+        local hl = row:CreateTexture(nil, "HIGHLIGHT");
+        hl:SetAllPoints(row);
+        hl:SetColorTexture(1, 1, 1, 0.18);
+
+        local icon = row:CreateTexture(nil, "ARTWORK");
+        icon:SetSize(13, 13);
+        icon:SetPoint("LEFT", row, "LEFT", 1, 0);
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92);
+        row.icon = icon;
+
+        local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall");
+        label:SetPoint("LEFT", icon, "RIGHT", 3, 0);
+        label:SetWidth(182);
+        label:SetJustifyH("LEFT");
+        label:SetWordWrap(false);
+        row.label = label;
+
+        local check = row:CreateTexture(nil, "OVERLAY");
+        check:SetTexture(item_planner_dropdown_check_tex);
+        check:SetSize(12, 12);
+        check:SetPoint("RIGHT", row, "RIGHT", -2, 0);
+        check:SetVertexColor(0.2, 1.0, 0.2, 1.0);
+        check:Hide();
+        row.check = check;
+
+        row:SetScript("OnClick", function(self)
+            if not self.entry_id then
+                return;
+            end
+            print("Selected ID: "..self.entry_id);
+            frame:Hide();
+        end);
+        row:SetScript("OnEnter", function(self)
+            if not self.entry_id then
+                return;
+            end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+            if frame.mode == "gem" then
+                GameTooltip:SetItemByID(self.entry_id);
+            else
+                local title = sc.enchant_id_to_lname[self.entry_id];
+                if title then
+                    title = title.." ("..self.entry_id..")";
+                else
+                    title = tostring(self.entry_id);
+                end
+                GameTooltip:SetText(title);
+                local spell_ids = sc.enchants[self.entry_id];
+                if spell_ids then
+                    for _, spell_id in ipairs(spell_ids) do
+                        if spell_id > 0 then
+                            local spell_name = select(1, GetSpellInfo(spell_id));
+                            if spell_name then
+                                GameTooltip:AddLine(spell_name.." ("..spell_id..")");
+                            else
+                                GameTooltip:AddLine(tostring(spell_id));
+                            end
+                        end
+                    end
+                end
+            end
+            GameTooltip:Show();
+        end);
+        row:SetScript("OnLeave", function()
+            GameTooltip:Hide();
+        end);
+
+        frame.rows[i] = row;
+    end
+
+    item_planner_gem_enchant_dropdown = frame;
+    return frame;
+end
+
+local function item_planner_gem_enchant_dropdown_open(anchor, mode, active_id)
+    local pframe = __sc_frame.calculator_frame;
+    if not pframe or not pframe.items then
+        return;
+    end
+
+    local frame = item_planner_gem_enchant_dropdown_create(pframe.items);
+    frame.mode = mode;
+    if mode == "gem" then
+        frame.title:SetText("Select gem");
+    else
+        frame.title:SetText("Select enchant");
+    end
+    frame:ClearAllPoints();
+    frame:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2);
+
+    item_planner_gem_enchant_dropdown_build_entries(mode, active_id);
+    frame.search:SetText("");
+    frame.search_empty_label:Show();
+    frame.slider:SetValue(0);
+    item_planner_gem_enchant_dropdown_filter("");
+
+    frame:Show();
+end
 
 local function create_calculator_items_subframe(pframe)
 
@@ -3682,6 +4062,11 @@ local function create_calculator_items_subframe(pframe)
     pframe.items.slots = {};
     pframe.items:HookScript("OnShow", function()
         update_calculator_character_items();
+    end);
+    pframe.items:HookScript("OnHide", function()
+        if item_planner_gem_enchant_dropdown then
+            item_planner_gem_enchant_dropdown:Hide();
+        end
     end);
 
     local arrow_tex_path = "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up";
@@ -3916,14 +4301,25 @@ local function create_calculator_items_subframe(pframe)
                     GameTooltip:Show();
                 else
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-                    GameTooltip:SetText(L["Changing gems in here not implemented yet"]);
+                    GameTooltip:SetText(L["Click to add"]);
                     GameTooltip:Show();
                 end
             end);
             gemf:SetScript("OnLeave", function(self)
                 GameTooltip:Hide();
             end);
+            gemf:SetScript("OnMouseDown", function(self, btn)
+                if btn ~= "LeftButton" then
+                    return;
+                end
+                if not working_item_plan[self.slot_id] or not working_item_plan[self.slot_id].link then
+                    return;
+                end
+                item_planner_gem_enchant_dropdown_open(self, "gem", self.gem_item_id);
+            end);
 
+            gemf.slot_id = slot_id;
+            gemf.gem_index = i;
             gemsf[i] = gemf;
         end
 
@@ -4003,13 +4399,23 @@ local function create_calculator_items_subframe(pframe)
 
             else
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-                GameTooltip:SetText(L["Changing enchant in here not implemented yet"]);
+                GameTooltip:SetText(L["Click to add"]);
                 GameTooltip:Show();
             end
         end);
         enchantf:SetScript("OnLeave", function(self)
             GameTooltip:Hide();
         end);
+        enchantf:SetScript("OnMouseDown", function(self, btn)
+            if btn ~= "LeftButton" then
+                return;
+            end
+            if not working_item_plan[self.slot_id] or not working_item_plan[self.slot_id].link then
+                return;
+            end
+            item_planner_gem_enchant_dropdown_open(self, "enchant", self.enchant_id);
+        end);
+        enchantf.slot_id = slot_id;
 
         local cancelf = CreateFrame("Button", nil, slotf, "UIPanelButtonTemplate");
         cancelf:SetScript("OnClick", function(self)
@@ -6805,4 +7211,3 @@ ui.update_talents_frame                 = update_talents_frame;
 ui.ehp_tex                              = ehp_tex;
 
 sc.ui = ui;
-
