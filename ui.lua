@@ -3636,6 +3636,37 @@ local item_planner_enchant_icon_tex = "Interface\\Icons\\Trade_Engraving";
 local item_planner_dropdown_check_tex = "Interface\\Buttons\\UI-CheckBox-Check";
 local item_planner_dropdown_none_tex = "Interface\\Buttons\\UI-GroupLoot-Pass-Up";
 
+-- Set i'th colon-separated field in item links while preserving everything else.
+local function item_link_set_field(link, field_idx, field_value)
+    if type(link) ~= "string" or type(field_idx) ~= "number" or field_idx < 1 then
+        return link;
+    end
+
+    local prefix, fields_str, suffix = link:match("^(.-item:)([^|]*)(.*)$");
+    if not prefix then
+        return link;
+    end
+
+    local fields = {};
+    local start_idx = 1;
+    while true do
+        local split_idx = string.find(fields_str, ":", start_idx, true);
+        if not split_idx then
+            fields[#fields + 1] = string.sub(fields_str, start_idx);
+            break;
+        end
+        fields[#fields + 1] = string.sub(fields_str, start_idx, split_idx - 1);
+        start_idx = split_idx + 1;
+    end
+
+    while #fields < field_idx do
+        fields[#fields + 1] = "";
+    end
+    fields[field_idx] = field_value or "";
+
+    return prefix..table.concat(fields, ":")..suffix;
+end
+
 local function item_planner_gem_enchant_dropdown_refresh_rows()
     local frame = item_planner_gem_enchant_dropdown;
     if not frame then
@@ -3738,18 +3769,23 @@ local function item_planner_gem_enchant_dropdown_build_entries(mode, active_id)
         end
     else
         for enchant_id, lname in pairs(sc.enchant_id_to_lname) do
-            lname = tostring(lname or enchant_id);
-            n = n + 1;
-            item_planner_gem_enchant_dropdown_entries[n] = {
-                id = enchant_id,
-                lname = lname,
-                search_lname = string.lower(lname),
-                search_id = tostring(enchant_id),
-                tex = item_planner_enchant_icon_tex,
-                r = 1,
-                g = 1,
-                b = 1,
-            };
+            -- filter out some enchants intended as ilvl based suffix scaling effect
+            if sc.enchants[enchant_id] and
+                sc.enchant_effects[sc.enchants[enchant_id][1]] and
+                sc.enchant_effects[sc.enchants[enchant_id][1]][1][sc.aura_idx_value] ~= 0 then
+
+                n = n + 1;
+                item_planner_gem_enchant_dropdown_entries[n] = {
+                    id = enchant_id,
+                    lname = lname,
+                    search_lname = string.lower(lname),
+                    search_id = tostring(enchant_id),
+                    tex = item_planner_enchant_icon_tex,
+                    r = 1,
+                    g = 1,
+                    b = 1,
+                };
+            end
         end
     end
 
@@ -3936,10 +3972,57 @@ local function item_planner_gem_enchant_dropdown_create(parent)
         row.check = check;
 
         row:SetScript("OnClick", function(self)
-            if not self.entry_id then
+            if self.entry_id == nil then
                 return;
             end
-            print("Selected ID: "..self.entry_id);
+
+            local selected_id = tonumber(self.entry_id) or 0;
+            local slot_id = frame.slot_id;
+            local changed = false;
+
+            if slot_id and working_item_plan[slot_id] then
+                local slot_info = working_item_plan[slot_id];
+                if frame.mode == "gem" and frame.gem_index then
+                    local gem_key = "gem"..frame.gem_index;
+                    local old_id = tonumber(slot_info[gem_key]) or 0;
+                    if old_id ~= selected_id then
+                        if selected_id == 0 then
+                            slot_info[gem_key] = nil;
+                        else
+                            slot_info[gem_key] = selected_id;
+                        end
+                        if slot_info.link then
+                            slot_info.link = item_link_set_field(
+                                slot_info.link,
+                                2 + frame.gem_index,
+                                selected_id == 0 and "" or tostring(selected_id)
+                            );
+                        end
+                        changed = true;
+                    end
+                elseif frame.mode == "enchant" then
+                    local old_id = tonumber(slot_info.enchant_id) or 0;
+                    if old_id ~= selected_id then
+                        if selected_id == 0 then
+                            slot_info.enchant_id = nil;
+                        else
+                            slot_info.enchant_id = selected_id;
+                        end
+                        if slot_info.link then
+                            slot_info.link = item_link_set_field(
+                                slot_info.link,
+                                2,
+                                selected_id == 0 and "" or tostring(selected_id)
+                            );
+                        end
+                        changed = true;
+                    end
+                end
+            end
+
+            if changed then
+                update_calculator_item_planner();
+            end
             frame:Hide();
         end);
         row:SetScript("OnEnter", function(self)
@@ -3984,7 +4067,7 @@ local function item_planner_gem_enchant_dropdown_create(parent)
     return frame;
 end
 
-local function item_planner_gem_enchant_dropdown_open(anchor, mode, active_id)
+local function item_planner_gem_enchant_dropdown_open(anchor, mode, active_id, slot_id, gem_index)
     local pframe = __sc_frame.calculator_frame;
     if not pframe or not pframe.items then
         return;
@@ -3992,6 +4075,8 @@ local function item_planner_gem_enchant_dropdown_open(anchor, mode, active_id)
 
     local frame = item_planner_gem_enchant_dropdown_create(pframe.items);
     frame.mode = mode;
+    frame.slot_id = slot_id;
+    frame.gem_index = gem_index;
     if mode == "gem" then
         frame.title:SetText("Select gem");
     else
@@ -4298,10 +4383,12 @@ local function create_calculator_items_subframe(pframe)
                 if self.gem_item_id ~= 0 then
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
                     GameTooltip:SetItemByID(self.gem_item_id);
+                    GameTooltip:AddLine(" ");
+                    GameTooltip:AddLine(L["Click to change gem"], 1.0, 0.2, 0.2);
                     GameTooltip:Show();
                 else
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-                    GameTooltip:SetText(L["Click to add"]);
+                    GameTooltip:SetText(L["Click to add gem"], 1.0, 0.2, 0.2);
                     GameTooltip:Show();
                 end
             end);
@@ -4315,7 +4402,7 @@ local function create_calculator_items_subframe(pframe)
                 if not working_item_plan[self.slot_id] or not working_item_plan[self.slot_id].link then
                     return;
                 end
-                item_planner_gem_enchant_dropdown_open(self, "gem", self.gem_item_id);
+                item_planner_gem_enchant_dropdown_open(self, "gem", self.gem_item_id, self.slot_id, self.gem_index);
             end);
 
             gemf.slot_id = slot_id;
@@ -4395,11 +4482,13 @@ local function create_calculator_items_subframe(pframe)
                         end
                     end
                 end
+                GameTooltip:AddLine(" ");
+                GameTooltip:AddLine(L["Click to change enchant"], 1.0, 0.2, 0.2);
                 GameTooltip:Show();
 
             else
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-                GameTooltip:SetText(L["Click to add"]);
+                GameTooltip:SetText(L["Click to add enchant"], 1.0, 0.2, 0.2);
                 GameTooltip:Show();
             end
         end);
@@ -4413,7 +4502,7 @@ local function create_calculator_items_subframe(pframe)
             if not working_item_plan[self.slot_id] or not working_item_plan[self.slot_id].link then
                 return;
             end
-            item_planner_gem_enchant_dropdown_open(self, "enchant", self.enchant_id);
+            item_planner_gem_enchant_dropdown_open(self, "enchant", self.enchant_id, self.slot_id, nil);
         end);
         enchantf.slot_id = slot_id;
 
@@ -5320,7 +5409,7 @@ local function create_sw_ui_calculator_frame(pframe)
     pframe.y_offset = pframe.y_offset - 40;
 
     local tabs = {
-        {"items", L["Upgrade planner"]},
+        {"items", L["Item planner"]},
         {"stats", L["Stat changes"]},
         {"talents", L["Talents"]},
         {"buffs", L["Buffs"]},
