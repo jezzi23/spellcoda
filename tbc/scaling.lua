@@ -71,6 +71,7 @@ local cr_weights = {
     [CR_HASTE_SPELL]                    = 10,
 
     [CR_RESILIENCE_CRIT_TAKEN]          = 25,
+    [CR_RESILIENCE_PLAYER_DAMAGE_TAKEN] = 11.36363636,
 };
 
 

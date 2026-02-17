@@ -943,13 +943,13 @@ local function init_label_handler()
                 local mit;
                 if spell.direct then
                     if spell.direct.school1 == sc.schools.physical then
-                        mit = stats.target_armor_dr;
+                        mit = stats.target_dr;
                     else
                         mit = stats.target_avg_resi;
                     end
                 else
                     if spell.periodic.school1 == sc.schools.physical then
-                        mit = stats.target_armor_dr_ot;
+                        mit = stats.target_dr_ot;
                     else
                         mit = stats.target_avg_resi_ot;
                     end
@@ -1179,8 +1179,8 @@ local function cc_demo_dummy_fill(info, stats)
     info.ot_hit_normal1 = 1/3;
     info.crit1 = 1/3;
     info.ot_crit1 = 1/3;
-    stats.target_armor_dr = 0.2;
-    stats.target_armor_dr_ot = 0.2;
+    stats.target_dr = 0.2;
+    stats.target_dr_ot = 0.2;
     stats.target_avg_resi = 0.2;
     stats.target_avg_resi_ot = 0.2;
 end

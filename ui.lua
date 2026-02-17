@@ -4891,10 +4891,13 @@ local function create_calculator_stats_subframe(pframe)
         extra_mana = {
             label_str = L["Extra mana"],
         },
+        resilience_rating = {
+            label_str = L["Resilience"]
+        },
     };
 
     local comparison_stats_listing_order = {
-        "str", "agi", "stam", "int", "spirit", "mp5", "extra_mana", "armor", "defense_skill_rating", "dodge_rating", "parry_rating",
+        "str", "agi", "stam", "int", "spirit", "mp5", "extra_mana", "armor", "defense_skill_rating", "dodge_rating", "parry_rating", "resilience_rating",
         "crit_rating", "hit_rating", "haste_rating", "expertise_rating", "ap", "rap", "weapon_skill", "sp", "sd", "hp", "pen",
     };
 
@@ -6290,38 +6293,39 @@ local function create_sw_ui_loadout_frame(pframe)
 
     pframe.y_offset = pframe.y_offset - 25;
 
-    --f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    --f_txt:SetFontObject(GameFontNormal);
-    --f_txt:SetPoint("TOPLEFT", pframe, x_pad+5, pframe.y_offset);
-    --f_txt:SetText(L["Resiliance"]);
-    --f_txt:SetTextColor(1.0,  1.0,  1.0);
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(GameFontNormal);
+    f_txt:SetPoint("TOPLEFT", pframe, x_pad+5, pframe.y_offset);
+    f_txt:SetText(L["Resilience"]);
+    f_txt:SetTextColor(1.0,  1.0,  1.0);
 
-    --f = CreateFrame("EditBox", "__sc_frame_setting_loadout_target_pvpres", pframe, "InputBoxTemplate");
-    --f._type = "EditBox";
-    --f:SetPoint("LEFT", f_txt, "RIGHT", 10, 0);
-    --f:SetText("");
-    --f:SetSize(40, 15);
-    --f:SetAutoFocus(false);
-    --f.number_editbox = true;
-    --local editbox_target_pvpres_update = function(self)
-    --    local target_pvpres = tonumber(self:GetText());
-    --    local valid = target_pvpres and target_pvpres >= 0;
-    --    if valid then
-    --        config.settings.loadout_target_pvpres = target_pvpres;
-    --    end
-    --    return valid;
-    --end
-    --local editbox_target_pvpres_close = function(self)
+    f = CreateFrame("EditBox", "__sc_frame_setting_loadout_target_pvpres", pframe, "InputBoxTemplate");
+    f._type = "EditBox";
+    f:SetPoint("LEFT", f_txt, "RIGHT", 10, 0);
+    f:SetText("");
+    f:SetSize(40, 15);
+    f:SetAutoFocus(false);
+    f.number_editbox = true;
+    local editbox_target_pvpres_update = function(self)
+        sc.loadouts.force_update = true;
+        local target_pvpres = tonumber(self:GetText());
+        local valid = target_pvpres and target_pvpres >= 0;
+        if valid then
+            config.settings.loadout_target_pvpres = target_pvpres;
+        end
+        return valid;
+    end
+    local editbox_target_pvpres_close = function(self)
 
-    --    if not editbox_target_pvpres_update(self) then
-    --        self:SetText("0");
-    --        config.settings.loadout_target_pvpres = 0;
-    --    end
-    --    self:ClearFocus();
-    --    self:HighlightText(0,0);
-    --end
+        if not editbox_target_pvpres_update(self) then
+            self:SetText("0");
+            config.settings.loadout_target_pvpres = 0;
+        end
+        self:ClearFocus();
+        self:HighlightText(0,0);
+    end
 
-    --editbox_config(f, editbox_target_pvpres_update, editbox_target_pvpres_close);
+    editbox_config(f, editbox_target_pvpres_update, editbox_target_pvpres_close);
 
     pframe.y_offset = pframe.y_offset - 25;
 

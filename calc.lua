@@ -82,7 +82,7 @@ local CR_HIT_SPELL                      = combat_ratings.CR_HIT_SPELL;
 local CR_CRIT_SPELL                     = combat_ratings.CR_CRIT_SPELL;
 local CR_HASTE_SPELL                    = combat_ratings.CR_HASTE_SPELL;
 local CR_RESILIENCE_CRIT_TAKEN          = combat_ratings.CR_RESILIENCE_CRIT_TAKEN;
-local CR_RESILIENCE_SPELL_CRIT_TAKEN    = combat_ratings.CR_RESILIENCE_SPELL_CRIT_TAKEN;
+local CR_RESILIENCE_PLAYER_DAMAGE_TAKEN = combat_ratings.CR_RESILIENCE_PLAYER_DAMAGE_TAKEN;
 
 local evaluation_flags = {
     assume_single_effect                    = bit.lshift(1, 1),
@@ -322,6 +322,13 @@ local function stats_crit(extra, attack_skill, attack_skill_sheet, attack_subcla
             i = i + 1;
         end
     end
+
+    if bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 then
+        crit = crit
+            -
+            (0.01*loadout.target_pvpres/(loadout.cr_scaling * cr_weights[combat_ratings.CR_RESILIENCE_CRIT_TAKEN]));
+    end
+
     if bit.band(comp.flags, comp_flags.cant_crit) ~= 0 and
         (not effects.ability.ignore_cant_crit[bid] or
          effects.ability.ignore_cant_crit[bid] == 0) then
@@ -367,7 +374,16 @@ local function stats_crit_mod(attack_subclass, bid, comp, spell, loadout, effect
     end
 
     base_crit_mod = (1.0 + base_crit_mod) * (1.0 + crit_mod_extra) - 1.0;
-    return 1.0 + base_crit_mod * (1.0 + (effects.ability.crit_mod[bid] or 0.0));
+
+    local final_crit_mod = 1.0 + base_crit_mod * (1.0 + (effects.ability.crit_mod[bid] or 0.0));
+
+    if bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 then
+        final_crit_mod = final_crit_mod
+            *
+            (1.0 - math.max(0, math.min(0.33, 0.01*loadout.target_pvpres/(loadout.cr_scaling * cr_weights[combat_ratings.CR_RESILIENCE_PLAYER_DAMAGE_TAKEN]))));
+    end
+
+    return final_crit_mod;
 end
 
 local function stats_res(comp, spell, loadout, effects)
@@ -697,19 +713,20 @@ local function armor_dr_calc(armor, attacker_lvl)
     ));
 end
 
-local function stats_armor_dr(armor, comp, loadout)
+local function stats_dr(armor, comp, loadout)
 
     local dr = 0.0;
-    if comp.school1 ~= schools.physical then
-        return dr;
+    if comp.school1 ~= schools.physical and bit.band(comp.flags, comp_flags.periodic) ~= 0 then
+        dr = 0.01*loadout.target_pvpres/(loadout.cr_scaling * cr_weights[combat_ratings.CR_RESILIENCE_CRIT_TAKEN]);
 
-    elseif bit.band(comp.flags, bit.bor(comp_flags.ignores_mitigation, comp_flags.bleed)) == 0 then
+    elseif comp.school1 == schools.physical and bit.band(comp.flags, bit.bor(comp_flags.ignores_mitigation, comp_flags.bleed)) == 0 then
         dr = armor_dr_calc(armor, loadout.lvl);
     end
+
     return dr;
 end
 
-local function stats_spell_mod(armor_dr, attack_subclass, bid, comp, spell, effects, stats)
+local function stats_spell_mod(dr, attack_subclass, bid, comp, spell, effects, stats)
 
     local effect_mod = stats.effect_mod;
     if bit.band(comp.flags, comp_flags.periodic) ~= 0 then
@@ -748,7 +765,7 @@ local function stats_spell_mod(armor_dr, attack_subclass, bid, comp, spell, effe
 
 
         spell_mod =
-            (1.0 - armor_dr)
+            (1.0 - dr)
             *
             stats.target_vuln_mod_mul
             *
@@ -785,6 +802,8 @@ local function stats_spell_mod(armor_dr, attack_subclass, bid, comp, spell, effe
         end
 
         spell_mod =
+            (1.0 - dr)
+            *
             vuln_mul
             *
             mod_mul
@@ -1037,8 +1056,8 @@ local function spell_stats_direct(stats, spell, loadout, effects, eval_flags)
     stats.dodge, stats.parry, stats.block, stats.block_amount = stats_avoidances(stats.attack_skill, direct, spell, loadout, effects);
     stats.spell_power = stats_sp(benefit_id, direct, spell, loadout, effects);
     stats.coef, stats.coef_max = stats_coef(stats, benefit_id, direct, spell, loadout, effects, eval_flags);
-    stats.target_armor_dr = stats_armor_dr(stats.target_armor, direct, loadout);
-    stats.spell_mod = stats_spell_mod(stats.target_armor_dr, stats.attack_subclass, bid, direct, spell, effects, stats);
+    stats.target_dr = stats_dr(stats.target_armor, direct, loadout);
+    stats.spell_mod = stats_spell_mod(stats.target_dr, stats.attack_subclass, bid, direct, spell, effects, stats);
 
     write_attack_table(stats, true);
     -- hit used as probability to do any kind of damage, allowing procs of attack
@@ -1122,8 +1141,8 @@ local function spell_stats_periodic(stats, spell, loadout, effects, eval_flags)
     stats.dodge_ot, stats.parry_ot, stats.block_ot, stats.block_amount_ot = stats_avoidances(stats.attack_skill_ot, periodic, spell, loadout, effects);
     stats.spell_power_ot = stats_sp(benefit_id, periodic, spell, loadout, effects);
     stats.coef_ot, stats.coef_ot_max = stats_coef(stats, benefit_id, periodic, spell, loadout, effects, eval_flags);
-    stats.target_armor_dr_ot = stats_armor_dr(stats.target_armor, periodic, loadout);
-    stats.spell_mod_ot = stats_spell_mod(stats.target_armor_dr_ot, stats.attack_subclass_ot, bid, periodic, spell, effects, stats);
+    stats.target_dr_ot = stats_dr(stats.target_armor, periodic, loadout);
+    stats.spell_mod_ot = stats_spell_mod(stats.target_dr_ot, stats.attack_subclass_ot, bid, periodic, spell, effects, stats);
 
     write_attack_table(stats, false);
     -- hit used as probability to do any kind of damage, allowing procs of attack
@@ -1184,7 +1203,7 @@ local stats_needing_both_components = {
     "target_avg_resi",
     "threat_mod",
     "threat_mod_flat",
-    "target_armor_dr",
+    "target_dr",
 };
 
 local spell_stats_info;
@@ -2493,7 +2512,7 @@ local function only_threat_info(info, stats, spell, loadout, effects, eval_flags
         stats.block = 0;
         stats.crit = 0;
         stats.block_amount = 0;
-        stats.target_armor_dr = 0;
+        stats.target_dr = 0;
         stats.dodge, stats.parry = stats_avoidances(stats.attack_skill, direct, spell, loadout, effects);
         stats.hit = 1.0 - stats.miss - stats.dodge - stats.parry;
         -- TODO: avoidances
@@ -2653,7 +2672,14 @@ local function effective_hp_info(info, loadout, effects, eval_flags)
     end
 
     info.player_crit = math.min(1, math.max(0,
-        0.05 + effects.raw.attacker_melee_crit - per_def*skill_diff
+        0.05
+        +
+        effects.raw.attacker_melee_crit
+        -
+        per_def*skill_diff
+        -
+        0.01*(loadout.resilience_crit_taken_rating + effects.raw.resilience_crit_taken_rating_flat)/
+            (loadout.cr_scaling * cr_weights[combat_ratings.CR_RESILIENCE_CRIT_TAKEN])
     ));
 
     local crit = info.player_crit;
@@ -2669,6 +2695,12 @@ local function effective_hp_info(info, loadout, effects, eval_flags)
     info.player_crit_excess = crit - info.player_crit; -- crit pushed off attack table
     info.player_crush_excess = crush - info.player_crush; -- crush pushed off attack table
 
+    info.player_resil = loadout.resilience_crit_taken_rating + effects.raw.resilience_crit_taken_rating_flat;
+
+    info.player_crit_mod = 2.0 *
+        (1.0 - 0.01*(loadout.resilience_dmg_taken_rating + effects.raw.resilience_dmg_taken_rating_flat)/
+            (loadout.cr_scaling * cr_weights[combat_ratings.CR_RESILIENCE_PLAYER_DAMAGE_TAKEN]));
+
     -- the sum of the attack table probabilities is now 1.0 and we do weighted multipliers
     local avg_multiplier =
         info.player_miss    * 0.0 +
@@ -2676,7 +2708,7 @@ local function effective_hp_info(info, loadout, effects, eval_flags)
         info.player_parry   * 0.0 +
         info.player_block   * 1.0 + -- block value ignored, we generalize for any incoming damage number
         info.player_crush   * 1.5 +
-        info.player_crit    * 2.0 +
+        info.player_crit    * info.player_crit_mod +
         info.player_hit     * 1.0;
 
     info.player_armor = loadout.armor + effects.by_school.res_flat[schools.physical];

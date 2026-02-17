@@ -574,10 +574,14 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             if loadout.enemy_hp_perc ~= 1 then
                 en_hp = string.format(" | %.0f%% %s", 100 * loadout.enemy_hp_perc, L["Health"]);
             end
+            local extra_resil = "";
+            if loadout.target_pvpres ~= 0 then
+                extra_resil = string.format(" | %d %s", loadout.target_pvpres, L["Resil"]);
+            end
             add_line(
                 tooltip,
                 L["Target"]..":",
-                string.format("%s %s %s%d|r | %d %s | %d %s%s",
+                string.format("%s %s %s%d|r | %d %s | %d %s%s%s",
                     specified,
                     L["Level"],
                     color_by_lvl_diff(loadout.lvl, loadout.target_lvl),
@@ -586,6 +590,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                     L["Armor"],
                     (spell.direct and stats.target_resi) or stats.target_resi_ot,
                     L["Res"],
+                    extra_resil,
                     en_hp
                 ),
                 effect_color("target_info")
@@ -610,7 +615,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                         100 * stats.miss,
                         L["Miss"],
                         L["Mitigated"],
-                        100 * stats.target_armor_dr
+                        100 * stats.target_dr
                     ),
                     effect_color("avoidance_info")
                 );
@@ -626,7 +631,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                         100 * stats.miss,
                         L["Miss"],
                         L["Mitigated"],
-                        100 * stats.target_armor_dr
+                        100 * stats.target_dr
                     ),
                     effect_color("avoidance_info")
                 );
@@ -656,7 +661,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                     100 * stats.miss,
                     L["Miss"],
                     L["Mitigated"],
-                    100 * stats.target_avg_resi),
+                    100 * ((1.0 + stats.target_avg_resi)*(1.0 + stats.target_dr) - 1.0)),
                 effect_color("avoidance_info")
             );
         end
@@ -894,7 +899,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         bit.band(eval_flags, evaluation_flags.isolate_direct) == 0 and
         (not display_direct_avoidance or
             stats.target_avg_resi ~= stats.target_avg_resi_ot or
-            stats.target_armor_dr ~= stats.target_armor_dr_ot) then
+            stats.target_dr ~= stats.target_dr_ot) then
         if spell.periodic.school1 == sc.schools.physical then
             if bit.band(spell.periodic.flags, comp_flags.periodic) ~= 0 then
                 add_line(
@@ -935,7 +940,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                         100 * stats.miss_ot,
                         L["Miss"],
                         L["Mitigated"],
-                        100 * stats.target_armor_dr_ot
+                        100 * stats.target_dr_ot
                     ),
                     effect_color("avoidance_info")
                 );
@@ -965,7 +970,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                     100 * stats.miss_ot,
                     L["Miss"],
                     L["Mitigated"],
-                    100 * stats.target_avg_resi_ot),
+                    100 * ((1.0 + stats.target_avg_resi_ot)*(1.0 + stats.target_dr_ot) - 1.0)),
                 effect_color("avoidance_info")
             );
         end
@@ -1409,7 +1414,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         if spell.direct and info.min_noncrit_if_hit_base1 and
             spell.direct.min ~= info.min_noncrit_if_hit_base1 then
 
-            local armor_dr_adjusted = 1 / (1 - stats.target_armor_dr);
+            local armor_dr_adjusted = 1 / (1 - stats.target_dr);
             if info.min_noncrit_if_hit_base1 ~= info.max_noncrit_if_hit_base1 then
                 add_line(
                     tooltip,
@@ -1445,7 +1450,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         if spell.periodic and info.ot_min_noncrit_if_hit_base1 and
             spell.periodic.min ~= info.ot_min_noncrit_if_hit_base1 then
 
-            local armor_dr_adjusted = 1 / (1 - stats.target_armor_dr_ot);
+            local armor_dr_adjusted = 1 / (1 - stats.target_dr_ot);
             if info.ot_min_noncrit_if_hit_base1 ~= info.ot_max_noncrit_if_hit_base1 then
                 add_line(
                     tooltip,
@@ -1482,7 +1487,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
 
     if config.settings.tooltip_display_sp_effect_calc then
         if spell.direct and stats.coef > 0 and bit.band(eval_flags, evaluation_flags.isolate_periodic) == 0 then
-            local armor_dr_adjusted = 1 / (1 - stats.target_armor_dr);
+            local armor_dr_adjusted = 1 / (1 - stats.target_dr);
             add_line(
                 tooltip,
                 L["Direct"]..":   ",
@@ -1497,7 +1502,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             );
         end
         if spell.periodic and stats.coef_ot > 0 and bit.band(eval_flags, evaluation_flags.isolate_direct) == 0 then
-            local armor_dr_adjusted = 1 / (1 - stats.target_armor_dr_ot);
+            local armor_dr_adjusted = 1 / (1 - stats.target_dr_ot);
             add_line(
                 tooltip,
                 L["Periodic"]..":",
@@ -1740,7 +1745,7 @@ local function append_tooltip_ehp(tooltip, info, loadout)
     add_line(
         tooltip,
         string.format("%s:", L["Player"]),
-        string.format(" Defense skill %d | %d %s", info.player_defense, info.player_armor, L["Armor"]),
+        string.format(" Defense skill %d | %d %s | %d %s", info.player_defense, info.player_armor, L["Armor"], info.player_resil, L["Resilience"]),
         effect_color("target_info")
     );
     add_line(
@@ -1811,7 +1816,7 @@ local function append_tooltip_ehp(tooltip, info, loadout)
     end
     add_line(
         tooltip,
-        string.format("%s (2x):", L["Critical hit"]),
+        string.format("%s (%sx):", L["Critical hit"], string.format("%.3f", info.player_crit_mod):gsub("%.?0+$", "")),
         string.format("%s%s", format_percentage(info.player_crit), extra),
         effect_color("crit")
     );

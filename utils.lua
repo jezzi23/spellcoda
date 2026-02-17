@@ -310,21 +310,22 @@ end
 
 -- combat rating defs not in vanilla client but needed for generality
 local combat_ratings = {
-    CR_DEFENSE_SKILL                  = CR_DEFENSE_SKILL               or 2;
-    CR_DODGE                          = CR_DODGE                       or 3;
-    CR_PARRY                          = CR_PARRY                       or 4;
-    CR_BLOCK                          = CR_BLOCK                       or 5;
-    CR_HIT_MELEE                      = CR_HIT_MELEE                   or 6;
-    CR_HIT_RANGED                     = CR_HIT_RANGED                  or 7;
-    CR_HIT_SPELL                      = CR_HIT_SPELL                   or 8;
-    CR_CRIT_MELEE                     = CR_CRIT_MELEE                  or 9;
-    CR_CRIT_RANGED                    = CR_CRIT_RANGED                 or 10;
-    CR_CRIT_SPELL                     = CR_CRIT_SPELL                  or 11;
-    CR_RESILIENCE_CRIT_TAKEN          = CR_RESILIENCE_CRIT_TAKEN       or 15;
-    CR_HASTE_MELEE                    = CR_HASTE_MELEE                 or 18;
-    CR_HASTE_RANGED                   = CR_HASTE_RANGED                or 19;
-    CR_HASTE_SPELL                    = CR_HASTE_SPELL                 or 20;
-    CR_EXPERTISE                      = CR_EXPERTISE                   or 24;
+    CR_DEFENSE_SKILL                  = CR_DEFENSE_SKILL                    or 2,
+    CR_DODGE                          = CR_DODGE                            or 3,
+    CR_PARRY                          = CR_PARRY                            or 4,
+    CR_BLOCK                          = CR_BLOCK                            or 5,
+    CR_HIT_MELEE                      = CR_HIT_MELEE                        or 6,
+    CR_HIT_RANGED                     = CR_HIT_RANGED                       or 7,
+    CR_HIT_SPELL                      = CR_HIT_SPELL                        or 8,
+    CR_CRIT_MELEE                     = CR_CRIT_MELEE                       or 9,
+    CR_CRIT_RANGED                    = CR_CRIT_RANGED                      or 10,
+    CR_CRIT_SPELL                     = CR_CRIT_SPELL                       or 11,
+    CR_RESILIENCE_CRIT_TAKEN          = CR_RESILIENCE_CRIT_TAKEN            or 15,
+    CR_RESILIENCE_PLAYER_DAMAGE_TAKEN = CR_RESILIENCE_PLAYER_DAMAGE_TAKEN   or 16,
+    CR_HASTE_MELEE                    = CR_HASTE_MELEE                      or 18,
+    CR_HASTE_RANGED                   = CR_HASTE_RANGED                     or 19,
+    CR_HASTE_SPELL                    = CR_HASTE_SPELL                      or 20,
+    CR_EXPERTISE                      = CR_EXPERTISE                        or 24,
 };
 
 local function table_from_schema(dst, src, schema)

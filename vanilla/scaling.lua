@@ -83,6 +83,7 @@ local cr_weights = {
     [combat_ratings.CR_HASTE_SPELL]                    = 1,
 
     [combat_ratings.CR_RESILIENCE_CRIT_TAKEN]          = 1,
+    [combat_ratings.CR_RESILIENCE_PLAYER_DAMAGE_TAKEN] = 1,
 };
 
 scaling.dps_per_ap                       = dps_per_ap;

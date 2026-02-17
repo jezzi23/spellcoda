@@ -87,20 +87,22 @@ local loadout_numbers = {
 };
 
 local ratings = {
-    {combat_ratings.CR_DEFENSE_SKILL,      "defense_skill_rating"},
-    {combat_ratings.CR_DODGE,              "dodge_rating"},
-    {combat_ratings.CR_PARRY,              "parry_rating"},
-    {combat_ratings.CR_BLOCK,              "block_rating"},
-    {combat_ratings.CR_HASTE_SPELL,        "spell_haste_rating"},
-    {combat_ratings.CR_HASTE_MELEE,        "melee_haste_rating"},
-    {combat_ratings.CR_HASTE_RANGED,       "ranged_haste_rating"},
-    {combat_ratings.CR_HIT_SPELL,          "spell_hit_rating"},
-    {combat_ratings.CR_HIT_MELEE,          "melee_hit_rating"},
-    {combat_ratings.CR_HIT_RANGED,         "ranged_hit_rating"},
-    {combat_ratings.CR_CRIT_SPELL,         "spell_crit_rating"},
-    {combat_ratings.CR_CRIT_MELEE,         "melee_crit_rating"},
-    {combat_ratings.CR_CRIT_RANGED,        "ranged_crit_rating"},
-    {combat_ratings.CR_EXPERTISE,          "expertise_rating"},
+    {combat_ratings.CR_DEFENSE_SKILL,                   "defense_skill_rating"},
+    {combat_ratings.CR_DODGE,                           "dodge_rating"},
+    {combat_ratings.CR_PARRY,                           "parry_rating"},
+    {combat_ratings.CR_BLOCK,                           "block_rating"},
+    {combat_ratings.CR_HASTE_SPELL,                     "spell_haste_rating"},
+    {combat_ratings.CR_HASTE_MELEE,                     "melee_haste_rating"},
+    {combat_ratings.CR_HASTE_RANGED,                    "ranged_haste_rating"},
+    {combat_ratings.CR_HIT_SPELL,                       "spell_hit_rating"},
+    {combat_ratings.CR_HIT_MELEE,                       "melee_hit_rating"},
+    {combat_ratings.CR_HIT_RANGED,                      "ranged_hit_rating"},
+    {combat_ratings.CR_CRIT_SPELL,                      "spell_crit_rating"},
+    {combat_ratings.CR_CRIT_MELEE,                      "melee_crit_rating"},
+    {combat_ratings.CR_CRIT_RANGED,                     "ranged_crit_rating"},
+    {combat_ratings.CR_EXPERTISE,                       "expertise_rating"},
+    {combat_ratings.CR_RESILIENCE_CRIT_TAKEN,           "resilience_crit_taken_rating"},
+    {combat_ratings.CR_RESILIENCE_PLAYER_DAMAGE_TAKEN,  "resilience_dmg_taken_rating"},
 };
 for _, v in ipairs(ratings) do
     loadout_numbers[#loadout_numbers + 1] = v[2];
@@ -725,20 +727,23 @@ local function init_lnames()
         };
     };
     local rating_lnames = {
-        [combat_ratings.CR_DEFENSE_SKILL  ]   = { L["Defense skill rating"], stat_diff_flags.tank },
-        [combat_ratings.CR_DODGE          ]   = { L["Dodge rating"], stat_diff_flags.tank },
-        [combat_ratings.CR_PARRY          ]   = { L["Parry rating"], stat_diff_flags.tank },
-        [combat_ratings.CR_BLOCK          ]   = { L["Block rating"], stat_diff_flags.tank },
-        [combat_ratings.CR_HASTE_SPELL    ]   = { L["Spell haste rating"], bit.bor(stat_diff_flags.caster, stat_diff_flags.healer) },
-        [combat_ratings.CR_HASTE_MELEE    ]   = { L["Melee haste rating"], stat_diff_flags.melee },
-        [combat_ratings.CR_HASTE_RANGED   ]   = { L["Ranged haste rating"], stat_diff_flags.ranged },
-        [combat_ratings.CR_HIT_SPELL      ]   = { L["Spell hit rating"], stat_diff_flags.caster },
-        [combat_ratings.CR_HIT_MELEE      ]   = { L["Melee hit rating"], stat_diff_flags.melee },
-        [combat_ratings.CR_HIT_RANGED     ]   = { L["Ranged hit rating"], stat_diff_flags.ranged },
-        [combat_ratings.CR_CRIT_SPELL     ]   = { L["Spell critical rating"], bit.bor(stat_diff_flags.caster, stat_diff_flags.healer) },
-        [combat_ratings.CR_CRIT_MELEE     ]   = { L["Melee critical rating"], stat_diff_flags.melee },
-        [combat_ratings.CR_CRIT_RANGED    ]   = { L["Ranged critical rating"], stat_diff_flags.ranged },
-        [combat_ratings.CR_EXPERTISE      ]   = { L["Expertise critical rating"], stat_diff_flags.melee },
+        [combat_ratings.CR_DEFENSE_SKILL                    ]   = { L["Defense skill rating"], stat_diff_flags.tank },
+        [combat_ratings.CR_DODGE                            ]   = { L["Dodge rating"], stat_diff_flags.tank },
+        [combat_ratings.CR_PARRY                            ]   = { L["Parry rating"], stat_diff_flags.tank },
+        [combat_ratings.CR_BLOCK                            ]   = { L["Block rating"], stat_diff_flags.tank },
+        [combat_ratings.CR_HASTE_SPELL                      ]   = { L["Spell haste rating"], bit.bor(stat_diff_flags.caster, stat_diff_flags.healer) },
+        [combat_ratings.CR_HASTE_MELEE                      ]   = { L["Melee haste rating"], stat_diff_flags.melee },
+        [combat_ratings.CR_HASTE_RANGED                     ]   = { L["Ranged haste rating"], stat_diff_flags.ranged },
+        [combat_ratings.CR_HIT_SPELL                        ]   = { L["Spell hit rating"], stat_diff_flags.caster },
+        [combat_ratings.CR_HIT_MELEE                        ]   = { L["Melee hit rating"], stat_diff_flags.melee },
+        [combat_ratings.CR_HIT_RANGED                       ]   = { L["Ranged hit rating"], stat_diff_flags.ranged },
+        [combat_ratings.CR_CRIT_SPELL                       ]   = { L["Spell critical rating"], bit.bor(stat_diff_flags.caster, stat_diff_flags.healer) },
+        [combat_ratings.CR_CRIT_MELEE                       ]   = { L["Melee critical rating"], stat_diff_flags.melee },
+        [combat_ratings.CR_CRIT_RANGED                      ]   = { L["Ranged critical rating"], stat_diff_flags.ranged },
+        [combat_ratings.CR_EXPERTISE                        ]   = { L["Expertise critical rating"], stat_diff_flags.melee },
+
+        [combat_ratings.CR_RESILIENCE_CRIT_TAKEN            ]   = { L["Resilience rating"], bit.bnot(0) },
+        [combat_ratings.CR_RESILIENCE_PLAYER_DAMAGE_TAKEN   ]   = { L["Resilience rating"], 0 },
     };
     for k, _ in pairs(ratings) do
         ratings[k][3] =  rating_lnames[ratings[k][1]][1] or "";
@@ -786,6 +791,11 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
         num_in = 0;
         num_out = 0;
     };
+
+    if stat_flags == 0 then
+
+        return info.str, info.num_in + info.num_out, info.num_in, info.num_out;
+    end
 
     ---------------------------------
     --- Attributes
@@ -1603,6 +1613,7 @@ local function manual_effects_zero_diff()
         weapon_skill = 0,
         extra_mana = 0,
         armor = 0,
+        resilience_rating = 0,
     };
 end
 
@@ -1634,6 +1645,8 @@ local function effects_add_manual_diff(effects, diff)
     effects.raw.dodge_rating_flat = effects.raw.dodge_rating_flat + diff.dodge_rating;
     effects.raw.parry_rating_flat = effects.raw.parry_rating_flat + diff.parry_rating;
     effects.raw.defense_skill_rating_flat = effects.raw.defense_skill_rating_flat + diff.defense_skill_rating;
+    effects.raw.resilience_crit_taken_rating_flat = effects.raw.resilience_crit_taken_rating_flat + diff.resilience_rating;
+    effects.raw.resilience_dmg_taken_rating_flat = effects.raw.resilience_dmg_taken_rating_flat + diff.resilience_rating;
 
     for i = 1, 7 do
         effects.by_school.target_res_flat[i] = effects.by_school.target_res_flat[i] - diff.pen;
@@ -1981,6 +1994,8 @@ local function dynamic_loadout(loadout)
     loadout.target_defense = 5*loadout.target_lvl;
 
     loadout.base_armor, loadout.armor = UnitArmor("player");
+
+    loadout.target_pvpres = config.settings.loadout_target_pvpres;
 
     loadout.target_armor = config.settings.loadout_target_armor;
     if config.settings.loadout_target_automatic_armor then
