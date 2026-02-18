@@ -3,8 +3,28 @@ local _, sc = ...;
 local missing_strings = {};
 local obsolete_strings = {};
 
+local warned_missing_string = false;
+
 local locale_found = sc.L ~= nil;
 sc.L = sc.L or {};
+
+local function set_localization_fallback()
+
+    setmetatable(sc.L, {
+        __index = function(t, key)
+            if type(key) ~= "string" then
+                return nil
+            end
+
+            if __spellcoda_debug__ and not warned_missing_string then
+                warned_missing_string = true;
+                print("SpellCoda: Missing localization for at least key:", key)
+            end
+
+            return key;
+        end
+    });
+end
 
 local function load_localization()
 
@@ -13,6 +33,7 @@ local function load_localization()
         for k, _ in pairs(sc.localizable_strings) do
             sc.L[k] = k;
         end
+        set_localization_fallback();
         return;
     end
 
@@ -41,6 +62,8 @@ local function load_localization()
             sc.L[k] = v;
         end
     end
+
+    set_localization_fallback();
 end
 
 local function format_locale_dump(list)

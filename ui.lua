@@ -3808,10 +3808,6 @@ local function item_planner_gem_enchant_dropdown_build_entries(mode, active_id)
 end
 
 local function item_planner_gem_enchant_dropdown_create(parent)
-    if item_planner_gem_enchant_dropdown then
-        item_planner_gem_enchant_dropdown:SetParent(parent);
-        return item_planner_gem_enchant_dropdown;
-    end
 
     local click_catcher = CreateFrame("Frame", nil, UIParent);
     click_catcher:SetAllPoints(UIParent);
@@ -4073,7 +4069,7 @@ local function item_planner_gem_enchant_dropdown_open(anchor, mode, active_id, s
         return;
     end
 
-    local frame = item_planner_gem_enchant_dropdown_create(pframe.items);
+    local frame = item_planner_gem_enchant_dropdown;
     frame.mode = mode;
     frame.slot_id = slot_id;
     frame.gem_index = gem_index;
@@ -4095,6 +4091,8 @@ local function item_planner_gem_enchant_dropdown_open(anchor, mode, active_id, s
 end
 
 local function create_calculator_items_subframe(pframe)
+
+    item_planner_gem_enchant_dropdown_create(pframe.items);
 
     local f, f_txt;
 
@@ -5704,6 +5702,7 @@ local function create_sw_ui_calculator_frame(pframe)
 
     -- Item planner subframe
     create_calculator_items_subframe(pframe);
+
 
     -- Manual stats tabbed subframe
     create_calculator_stats_subframe(pframe);
