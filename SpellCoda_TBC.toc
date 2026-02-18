@@ -38,7 +38,7 @@ generated/tbc/shaman.lua
 generated/tbc/warlock.lua
 generated/tbc/warrior.lua
 
-locale/default.lua
+generated/locale_strings.lua
 
 locale/ptBR.lua
 locale/zhCN.lua

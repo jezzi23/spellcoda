@@ -1,0 +1,3 @@
+[submodule "generated"]
+	path = generated
+	url = https://github.com/jezzi23/spellcoda-generated.git
