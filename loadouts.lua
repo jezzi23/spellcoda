@@ -676,7 +676,6 @@ local stat_diff_flags = {
     spells        = bit.lshift(1, 6),
 };
 
-
 local lnames;
 local function init_lnames()
     -- this function is called once after localized strings have been loaded
@@ -727,27 +726,28 @@ local function init_lnames()
         };
     };
     local rating_lnames = {
-        [combat_ratings.CR_DEFENSE_SKILL                    ]   = { L["Defense skill rating"], stat_diff_flags.tank },
-        [combat_ratings.CR_DODGE                            ]   = { L["Dodge rating"], stat_diff_flags.tank },
-        [combat_ratings.CR_PARRY                            ]   = { L["Parry rating"], stat_diff_flags.tank },
-        [combat_ratings.CR_BLOCK                            ]   = { L["Block rating"], stat_diff_flags.tank },
-        [combat_ratings.CR_HASTE_SPELL                      ]   = { L["Spell haste rating"], bit.bor(stat_diff_flags.caster, stat_diff_flags.healer) },
-        [combat_ratings.CR_HASTE_MELEE                      ]   = { L["Melee haste rating"], stat_diff_flags.melee },
-        [combat_ratings.CR_HASTE_RANGED                     ]   = { L["Ranged haste rating"], stat_diff_flags.ranged },
-        [combat_ratings.CR_HIT_SPELL                        ]   = { L["Spell hit rating"], stat_diff_flags.caster },
-        [combat_ratings.CR_HIT_MELEE                        ]   = { L["Melee hit rating"], stat_diff_flags.melee },
-        [combat_ratings.CR_HIT_RANGED                       ]   = { L["Ranged hit rating"], stat_diff_flags.ranged },
-        [combat_ratings.CR_CRIT_SPELL                       ]   = { L["Spell critical rating"], bit.bor(stat_diff_flags.caster, stat_diff_flags.healer) },
-        [combat_ratings.CR_CRIT_MELEE                       ]   = { L["Melee critical rating"], stat_diff_flags.melee },
-        [combat_ratings.CR_CRIT_RANGED                      ]   = { L["Ranged critical rating"], stat_diff_flags.ranged },
-        [combat_ratings.CR_EXPERTISE                        ]   = { L["Expertise critical rating"], stat_diff_flags.melee },
+        [combat_ratings.CR_DEFENSE_SKILL                    ]   = { L["Defense skill rating"],              stat_diff_flags.tank, true},
+        [combat_ratings.CR_DODGE                            ]   = { L["Dodge rating"],                      stat_diff_flags.tank },
+        [combat_ratings.CR_PARRY                            ]   = { L["Parry rating"],                      stat_diff_flags.tank },
+        [combat_ratings.CR_BLOCK                            ]   = { L["Block rating"],                      stat_diff_flags.tank },
+        [combat_ratings.CR_HASTE_SPELL                      ]   = { L["Spell haste rating"],                bit.bor(stat_diff_flags.caster, stat_diff_flags.healer) },
+        [combat_ratings.CR_HASTE_MELEE                      ]   = { L["Melee haste rating"],                stat_diff_flags.melee },
+        [combat_ratings.CR_HASTE_RANGED                     ]   = { L["Ranged haste rating"],               stat_diff_flags.ranged },
+        [combat_ratings.CR_HIT_SPELL                        ]   = { L["Spell hit rating"],                  stat_diff_flags.caster },
+        [combat_ratings.CR_HIT_MELEE                        ]   = { L["Melee hit rating"],                  stat_diff_flags.melee },
+        [combat_ratings.CR_HIT_RANGED                       ]   = { L["Ranged hit rating"],                 stat_diff_flags.ranged },
+        [combat_ratings.CR_CRIT_SPELL                       ]   = { L["Spell critical rating"],             bit.bor(stat_diff_flags.caster, stat_diff_flags.healer) },
+        [combat_ratings.CR_CRIT_MELEE                       ]   = { L["Melee critical rating"],             stat_diff_flags.melee },
+        [combat_ratings.CR_CRIT_RANGED                      ]   = { L["Ranged critical rating"],            stat_diff_flags.ranged },
+        [combat_ratings.CR_EXPERTISE                        ]   = { L["Expertise critical rating"],         stat_diff_flags.melee, true},
 
-        [combat_ratings.CR_RESILIENCE_CRIT_TAKEN            ]   = { L["Resilience rating"], bit.bnot(0) },
-        [combat_ratings.CR_RESILIENCE_PLAYER_DAMAGE_TAKEN   ]   = { L["Resilience rating"], 0 },
+        [combat_ratings.CR_RESILIENCE_CRIT_TAKEN            ]   = { L["Resilience critical chance rating"], bit.bnot(0) },
+        [combat_ratings.CR_RESILIENCE_PLAYER_DAMAGE_TAKEN   ]   = { L["Resilience critical damage rating"], bit.bnot(0) },
     };
     for k, _ in pairs(ratings) do
-        ratings[k][3] =  rating_lnames[ratings[k][1]][1] or "";
-        ratings[k][4] =  rating_lnames[ratings[k][1]][2];
+        ratings[k][3] =  rating_lnames[ratings[k][1]][1] or ""; -- lname
+        ratings[k][4] =  rating_lnames[ratings[k][1]][2]; -- stat_diff_flags
+        ratings[k][5] =  rating_lnames[ratings[k][1]][3]; -- is percentage
     end
 end
 
@@ -797,6 +797,9 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
         return info.str, info.num_in + info.num_out, info.num_in, info.num_out;
     end
 
+    -- When diffed, attributes and ratings are grayed out a bit as to indicate
+    -- that when e.g. +1 agility is not additive to the consequent + crit%, dodge% and armor which is also displayed
+
     ---------------------------------
     --- Attributes
     ---------------------------------
@@ -818,23 +821,18 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
             local val = ((loadout and loadout[v[2]]) or 0)
                 +
                 effects.raw[v[2].."_flat"];
-            add_field_line(info, val, v[3], is_diff, nil, nil, nil, true);
+            local is_percentage = not v[5];
+            local rating_type = v[1];
+            local val_resolved = val/(cr_scaling * cr_weights[rating_type]);
+
+            if is_percentage then
+                add_field_line(info, val, string.format("(%s%%) %s",string.format("%.2f", val_resolved):gsub("%.?0+$", ""), v[3]), is_diff, nil, nil, nil, true);
+            else
+                add_field_line(info, val, string.format("(%.1f) %s", val_resolved, v[3]), is_diff, nil, nil, nil, true);
+            end
         end
     end
 
-    -- When diffed, attributes and ratings are grayed out a bit as to indicate
-    -- that when e.g. +1 agility is not additive to the consequent + crit%, dodge% and armor which is also displayed
-
-    ---------------------------------
-    --- Defense
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.tank) ~= 0 then
-
-        local val = ((loadout and loadout.defense) or 0)
-            +
-            effects.raw.defense_skill_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_DEFENSE_SKILL]);
-        add_field_line(info, val, L["Defense"], is_diff, nil, nil, nil, true);
-    end
     ---------------------------------
     --- Attack power
     ---------------------------------

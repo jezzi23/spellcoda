@@ -661,7 +661,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                     100 * stats.miss,
                     L["Miss"],
                     L["Mitigated"],
-                    100 * ((1.0 + stats.target_avg_resi)*(1.0 + stats.target_dr) - 1.0)),
+                    100 * (1.0 - (1.0 - stats.target_avg_resi)*(1.0 - stats.target_dr))),
                 effect_color("avoidance_info")
             );
         end
@@ -970,7 +970,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                     100 * stats.miss_ot,
                     L["Miss"],
                     L["Mitigated"],
-                    100 * ((1.0 + stats.target_avg_resi_ot)*(1.0 + stats.target_dr_ot) - 1.0)),
+                    100 * (1.0 - (1.0 - stats.target_avg_resi_ot)*(1.0 - stats.target_dr_ot))),
                 effect_color("avoidance_info")
             );
         end
