@@ -1,4 +1,4 @@
-name: Create release zip file from tagged versions
+name: Release Workflow
 
 on:
   push:
@@ -6,18 +6,22 @@ on:
       - 'v*'
 
 jobs:
-  build:
+  build-and-notify:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           ref: ${{ github.ref }}
+          submodules: true
 
-      - name: SpellCoda must be name of top level dir containing addon
+      - name: Prepare SpellCoda directory
         run: |
-          mkdir -p SpellCoda
-          mv * SpellCoda
+          shopt -s extglob
+          mkdir -p topdir
+          rm README.md
+          mv !(topdir) topdir/
+          mv topdir SpellCoda
 
       - name: Get tag name
         id: get_tag
@@ -28,10 +32,36 @@ jobs:
         run: |
           zip -r ${{ steps.get_tag.outputs.TAG_NAME }}.zip SpellCoda/
 
-      - name: Upload release
-        uses: actions/upload-release-asset@v1
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./${{ steps.get_tag.outputs.TAG_NAME }}.zip
-          asset_name: ${{ steps.get_tag.outputs.TAG_NAME }}.zip
-          asset_content_type: application/zip
+          tag_name: ${{ steps.get_tag.outputs.TAG_NAME }}
+          name: Release ${{ steps.get_tag.outputs.TAG_NAME }}
+          generate_release_notes: true
+          draft: false
+          files: |
+            ${{ steps.get_tag.outputs.TAG_NAME }}.zip
+
+      - name: Notify Discord via Webhook
+        run: |
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '{
+              "content": "A new release has been published!",
+              "embeds": [
+                {
+                  "title": "Release ${{ steps.get_tag.outputs.TAG_NAME }}",
+                  "url": "https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_tag.outputs.TAG_NAME }}",
+                  "description": "Check out the latest release",
+                  "color": 2105893,
+                  "footer": {
+                    "text": "Release Notification",
+                    "icon_url": "https://cdn.discordapp.com/avatars/487431320314576937/bd64361e4ba6313d561d54e78c9e7171.png"
+                  },
+                  "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+                }
+              ]
+            }' \
+            ${{ secrets.WEBHOOK_URL }}
