@@ -15,6 +15,10 @@ jobs:
           ref: ${{ github.ref }}
           submodules: true
 
+      - name: Update submodule to latest
+        run: |
+          git submodule update --remote --merge generated
+
       - name: Prepare SpellCoda directory
         run: |
           shopt -s extglob
