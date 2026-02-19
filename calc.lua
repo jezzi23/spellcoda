@@ -557,7 +557,7 @@ local function stats_avoidances(attack_skill, comp, spell, loadout, effects)
     local expertise_reduction =
         0.0025
         *
-        effects.raw.expertise_rating_flat/(loadout.cr_scaling * cr_weights[CR_EXPERTISE]);
+        (math.max(0, loadout.expertise_rating + effects.raw.expertise_rating_flat))/(loadout.cr_scaling * cr_weights[CR_EXPERTISE]);
 
     dodge = dodge - expertise_reduction;
     parry = parry - expertise_reduction;
