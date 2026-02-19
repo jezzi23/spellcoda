@@ -7,7 +7,6 @@ on:
 jobs:
   build-and-notify:
     runs-on: ubuntu-latest
-    if: github.event.base_ref == 'refs/heads/release-autotagged'
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
