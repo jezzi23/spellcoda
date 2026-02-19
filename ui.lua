@@ -3635,6 +3635,7 @@ local item_planner_gem_enchant_dropdown_rows_count = 12;
 local item_planner_enchant_icon_tex = "Interface\\Icons\\Trade_Engraving";
 local item_planner_dropdown_check_tex = "Interface\\Buttons\\UI-CheckBox-Check";
 local item_planner_dropdown_none_tex = "Interface\\Buttons\\UI-GroupLoot-Pass-Up";
+local item_planner_dropdown_missing_tex = "Interface\\Icons\\INV_Misc_QuestionMark";
 
 -- Set i'th colon-separated field in item links while preserving everything else.
 local function item_link_set_field(link, field_idx, field_value)
@@ -3669,9 +3670,6 @@ end
 
 local function item_planner_gem_enchant_dropdown_refresh_rows()
     local frame = item_planner_gem_enchant_dropdown;
-    if not frame then
-        return;
-    end
 
     local offset = math.floor(frame.slider:GetValue() or 0);
     for i, row in ipairs(frame.rows) do
@@ -3684,7 +3682,7 @@ local function item_planner_gem_enchant_dropdown_refresh_rows()
                 row.label:SetText(entry.lname.." ("..entry.id..")");
             end
             row.label:SetTextColor(entry.r or 1, entry.g or 1, entry.b or 1, 1);
-            row.icon:SetTexture(entry.tex or item_planner_dropdown_none_tex);
+            row.icon:SetTexture(entry.tex or item_planner_dropdown_missing_tex);
             row.icon:Show();
             local is_active =
                 (entry.is_none and frame.active_id == 0) or
@@ -3704,14 +3702,11 @@ local function item_planner_gem_enchant_dropdown_refresh_rows()
     end
 end
 
-local function item_planner_gem_enchant_dropdown_filter(query)
+local function item_planner_gem_enchant_dropdown_filter()
     local frame = item_planner_gem_enchant_dropdown;
-    if not frame then
-        return;
-    end
 
     clear_table(item_planner_gem_enchant_dropdown_filtered);
-    query = string.lower(query or "");
+    query = string.lower(frame.search:GetText() or "");
 
     if query == "" then
         for i, v in ipairs(item_planner_gem_enchant_dropdown_entries) do
@@ -3740,19 +3735,23 @@ local function item_planner_gem_enchant_dropdown_filter(query)
 end
 
 local function item_planner_gem_enchant_dropdown_build_entries(mode, active_id)
+
     clear_table(item_planner_gem_enchant_dropdown_entries);
+
     local frame = item_planner_gem_enchant_dropdown;
-    if frame then
-        frame.active_id = tonumber(active_id) or 0;
-        if frame.active_id < 0 then
-            frame.active_id = 0;
-        end
+    frame.active_id = tonumber(active_id) or 0;
+    if frame.active_id < 0 then
+        frame.active_id = 0;
     end
 
     local n = 0;
+    local retry_needed = false;
     if mode == "gem" then
         for item_id in pairs(sc.gem_items) do
             local lname, _, quality, _, _, _, _, _, _, tex = GetItemInfo(item_id);
+            if not lname then
+                retry_needed = true;
+            end
             lname = tostring(lname or item_id);
             local color = ITEM_QUALITY_COLORS[quality or 0] or ITEM_QUALITY_COLORS[1];
             n = n + 1;
@@ -3805,6 +3804,7 @@ local function item_planner_gem_enchant_dropdown_build_entries(mode, active_id)
         r = 1, g = 1, b = 1,
         is_none = true,
     });
+    return retry_needed;
 end
 
 local function item_planner_gem_enchant_dropdown_create(parent)
@@ -3868,7 +3868,7 @@ local function item_planner_gem_enchant_dropdown_create(parent)
         else
             frame.search_empty_label:Hide();
         end
-        item_planner_gem_enchant_dropdown_filter(txt);
+        item_planner_gem_enchant_dropdown_filter();
     end);
     search:SetScript("OnEscapePressed", function(self)
         self:ClearFocus();
@@ -4063,29 +4063,49 @@ local function item_planner_gem_enchant_dropdown_create(parent)
     return frame;
 end
 
-local function item_planner_gem_enchant_dropdown_open(anchor, mode, active_id, slot_id, gem_index)
-    local pframe = __sc_frame.calculator_frame;
-    if not pframe or not pframe.items then
-        return;
+
+local failed_retries = 0;
+local max_retries = 5;
+-- C_Timer cannot call with arguments
+local gem_enchant_dd_mode, gem_enchant_dd_active_id;
+local function item_planner_gem_enchant_dropdown_refresh()
+
+    local mode = gem_enchant_dd_mode;
+    local active_id = gem_enchant_dd_active_id;
+
+    local retry_needed = item_planner_gem_enchant_dropdown_build_entries(mode, active_id);
+    item_planner_gem_enchant_dropdown_filter();
+    if retry_needed and failed_retries < max_retries then
+        failed_retries = failed_retries + 1;
+        C_Timer.After(0.5, item_planner_gem_enchant_dropdown_refresh);
+        item_planner_gem_enchant_dropdown.title:SetText(L["Loading gems ..."]);
+    else
+        failed_retries = 0;
+        if mode == "gem" then
+            item_planner_gem_enchant_dropdown.title:SetText(L["Select gem"]);
+        else
+            item_planner_gem_enchant_dropdown.title:SetText(L["Select enchant"]);
+        end
     end
+
+end
+
+local function item_planner_gem_enchant_dropdown_open(anchor, mode, active_id, slot_id, gem_index)
 
     local frame = item_planner_gem_enchant_dropdown;
     frame.mode = mode;
     frame.slot_id = slot_id;
     frame.gem_index = gem_index;
-    if mode == "gem" then
-        frame.title:SetText("Select gem");
-    else
-        frame.title:SetText("Select enchant");
-    end
     frame:ClearAllPoints();
     frame:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2);
 
-    item_planner_gem_enchant_dropdown_build_entries(mode, active_id);
     frame.search:SetText("");
     frame.search_empty_label:Show();
     frame.slider:SetValue(0);
-    item_planner_gem_enchant_dropdown_filter("");
+
+    gem_enchant_dd_mode = mode;
+    gem_enchant_dd_active_id = active_id;
+    item_planner_gem_enchant_dropdown_refresh();
 
     frame:Show();
 end
