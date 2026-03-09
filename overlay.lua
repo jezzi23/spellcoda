@@ -1100,9 +1100,8 @@ border.flash:SetScript("OnFinished", function(self)
     self:Play();
 end);
 
-border.disabled_txt = border:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
-border.disabled_txt:SetPoint("TOP", 0, -10);
-border.disabled_txt:SetText("DISABLED: Currently casting spell info");
+border.txt = border:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
+border.txt:SetPoint("TOP", 0, -10);
 
 ccf_parent.border = border;
 local ccf_labels;
@@ -1710,29 +1709,27 @@ local function init_ccfs()
 
     ccfs = {overlay.cc_f1, overlay.cc_f2};
 
+    border.txt:SetText(L["Currently casting spell info. Move me!"]);
     __sc_frame.overlay_frame:SetScript("OnShow", function()
-        if not __sc_frame:IsShown() then
-            return;
-        end
         ccf_parent.config_mode = true;
-        ccf_parent.border:Show();
-        if config.settings.overlay_disable_cc_info or sc.core.mute_overlay then
-            ccf_parent.border.disabled_txt:Show();
-        else
-            ccf_parent.border.disabled_txt:Hide();
-        end
-        ccf_parent.border:Show();
-        ccf_parent.border.flash:Play();
         ccf_parent:SetMovable(true);
         ccf_parent:EnableMouse(true);
-        cc_demo();
+        ccf_parent.border.flash:Play();
+        if __sc_frame:IsShown() and not config.settings.overlay_disable_cc_info then
+            ccf_parent.border:Show();
+            ccf_parent.border.txt:Show();
+            cc_demo();
+        else
+            ccf_parent.border:Hide();
+            ccf_parent.border.txt:Hide();
+        end
     end);
     __sc_frame.overlay_frame:SetScript("OnHide", function()
         cc_new_spell(0);
         ccf_parent.border.flash:Stop();
         ccf_parent:SetMovable(false);
         ccf_parent:EnableMouse(false);
-        ccf_parent.border.disabled_txt:Hide();
+        ccf_parent.border.txt:Hide();
         ccf_parent.border:Hide();
         overlay.cc_f1.icon_frame:Hide();
         overlay.cc_f2.icon_frame:Hide();

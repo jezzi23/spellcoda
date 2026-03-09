@@ -2640,13 +2640,14 @@ local function create_sw_ui_overlay_frame(pframe)
                 id = "overlay_disable_cc_info",
                 txt = L["Disable spell cast info frame"],
                 func = function(self)
-                    if sc.overlay.ccf_parent.config_mode then
-                        if self:GetChecked() then
-                            sc.overlay.ccf_parent.border.disabled_txt:Show();
-                        else
-                            sc.overlay.ccf_parent.border.disabled_txt:Hide();
-                        end
+
+                    if sc.overlay.ccf_parent.config_mode and not config.settings.overlay_disable_cc_info then
+                        sc.overlay.ccf_parent.border.txt:Show();
+                        sc.overlay.ccf_parent.border:Show();
                         sc.overlay.cc_demo();
+                    else
+                        sc.overlay.ccf_parent.border.txt:Hide();
+                        sc.overlay.ccf_parent.border:Hide();
                     end
 
                     local alpha = 1.0;
@@ -2676,7 +2677,7 @@ local function create_sw_ui_overlay_frame(pframe)
                 txt = L["Remove transition cooldown"],
                 func = function()
 
-                    if sc.overlay.ccf_parent.config_mode then
+                    if sc.overlay.ccf_parent.config_mode and not config.settings.overlay_disable_cc_info then
                         sc.overlay.cc_demo();
                     end
                 end,
@@ -2687,7 +2688,7 @@ local function create_sw_ui_overlay_frame(pframe)
                 txt = L["Horizontal transition"],
                 func = function()
                     sc.overlay.ccf_anim_reconfig();
-                    if sc.overlay.ccf_parent.config_mode then
+                    if sc.overlay.ccf_parent.config_mode and not config.settings.overlay_disable_cc_info then
                         sc.overlay.cc_demo();
                     end
                 end
@@ -2783,7 +2784,7 @@ local function create_sw_ui_overlay_frame(pframe)
         config.settings.overlay_cc_hanging_time = val;
         self.val_txt:SetText(string.format("%.2fs", val))
         sc.overlay.ccf_anim_reconfig();
-        if sc.overlay.ccf_parent.config_mode then
+        if sc.overlay.ccf_parent.config_mode and not config.settings.overlay_disable_cc_info then
             sc.overlay.cc_demo();
         end
     end);
@@ -2819,7 +2820,7 @@ local function create_sw_ui_overlay_frame(pframe)
         config.settings.overlay_cc_transition_time = val;
         self.val_txt:SetText(string.format("%.2fs", val))
         sc.overlay.ccf_anim_reconfig();
-        if sc.overlay.ccf_parent.config_mode then
+        if sc.overlay.ccf_parent.config_mode and not config.settings.overlay_disable_cc_info then
             sc.overlay.cc_demo();
         end
     end);
@@ -2854,7 +2855,7 @@ local function create_sw_ui_overlay_frame(pframe)
         config.settings.overlay_cc_transition_length = val;
         self.val_txt:SetText(string.format("%.1f", val))
         sc.overlay.ccf_anim_reconfig();
-        if sc.overlay.ccf_parent.config_mode then
+        if sc.overlay.ccf_parent.config_mode and not config.settings.overlay_disable_cc_info then
             sc.overlay.cc_demo();
         end
     end);
