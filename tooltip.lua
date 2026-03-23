@@ -2194,9 +2194,6 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         if tt.new_item.subclass_id == 1 and not_caster_class and tt.new_item.inv_type ~= "INVTYPE_CLOAK" then
             -- cloth
             return;
-        elseif tt.new_item.subclass_id == 4 and (not_melee_class or not_ranged_class) then
-            -- plate
-            return;
         end
     end
     if config.settings.tooltip_item_ignore_unequippable then
