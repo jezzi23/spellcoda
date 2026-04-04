@@ -66,6 +66,16 @@ if sc.class == sc.classes.mage then
         end
     end
 
+    for _, v in pairs(rank_seqs[spids.ice_barrier]) do
+        spells[v].direct.coef = spell_coef_lvl_adjusted(0.3, spells[v].lvl_req);
+    end
+    for _, v in pairs(rank_seqs[spids.frost_ward]) do
+        spells[v].direct.coef = spell_coef_lvl_adjusted(0.3, spells[v].lvl_req);
+    end
+    for _, v in pairs(rank_seqs[spids.fire_ward]) do
+        spells[v].direct.coef = spell_coef_lvl_adjusted(0.3, spells[v].lvl_req);
+    end
+
     -- THREAT
     add_threat_flat_by_rank({
         { spids.counterspell, {300} },
@@ -221,6 +231,10 @@ elseif sc.class == sc.classes.warlock then
     -- Lifetap ranks 1 and 2 unusual in client data
     spells[rank_seqs[spids.life_tap][1]].direct.min = 30;
     spells[rank_seqs[spids.life_tap][2]].direct.min = 75;
+
+    for _, v in pairs(rank_seqs[spids.shadow_ward]) do
+        spells[v].direct.coef = spell_coef_lvl_adjusted(0.3, spells[v].lvl_req);
+    end
 
     -- THREAT
     add_threat_mod_all_ranks({
@@ -382,5 +396,10 @@ elseif sc.class == sc.classes.hunter then
         spells[v].flags =
             bit.band(spells[v].flags, bit.bnot(spell_flags.eval));
     end
+end
+
+for _, v in ipairs(sc.player_buffs[34456]) do
+    -- ferocious inspiration is missing its value in generated data but signature is correct
+    v[sc.aura_idx_value] = 0.03;
 end
 

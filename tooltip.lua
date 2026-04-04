@@ -2182,6 +2182,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         GetItemInfo(tt.new_item.link);
 
     if not tt.new_item.inv_type or
+        not tt.new_item.tex or
         not tt.new_item.quality or tt.new_item.quality < config.settings.tooltip_item_quality_threshold then
         return;
     end
