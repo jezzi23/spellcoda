@@ -235,6 +235,7 @@ local function post_login_load()
 end
 
 local function get_buff_by_lname(loadout, unit, lname, only_self_buff, require_ownership)
+
     if unit ~= "" and
         (not loadout.calculator_mode or not sandbox_buffs_cfg.use_custom or sandbox_buffs_cfg.preserve_active) then
 
@@ -242,36 +243,38 @@ local function get_buff_by_lname(loadout, unit, lname, only_self_buff, require_o
         if buff and (not require_ownership or buff.player_owned) then
             return buff.id;
         end
-    else
-        if loadout.calculator_mode and sandbox_buffs_cfg.use_custom and
-            sc.ui.forced_buffs_lname_to_id[lname] then
-
-            if only_self_buff and
-                sandbox_buffs_cfg.player_buffs[sc.ui.forced_buffs_lname_to_id[lname]] then
-                return sc.ui.forced_buffs_lname_to_id[lname]
-            elseif sandbox_buffs_cfg.target_buffs[sc.ui.forced_buffs_lname_to_id[lname]] then
-                return sc.ui.forced_buffs_lname_to_id[lname]
-            end
-        end
     end
+    if loadout.calculator_mode and
+        sandbox_buffs_cfg.use_custom and
+        sc.ui.forced_buffs_lname_to_id[lname] and
+         ((only_self_buff and
+            sandbox_buffs_cfg.player_buffs[sc.ui.forced_buffs_lname_to_id[lname]])
+            or
+            sandbox_buffs_cfg.target_buffs[sc.ui.forced_buffs_lname_to_id[lname]]) then
+
+        return sc.ui.forced_buffs_lname_to_id[lname]
+    end
+
     return nil;
 end
 
 local function get_buff(loadout, unit, id, only_self_buff, require_ownership)
+
     if unit ~= "" and
         (not loadout.calculator_mode or not sandbox_buffs_cfg.use_custom or sandbox_buffs_cfg.preserve_active) then
+
         local buff = loadout.dynamic_buffs[unit][id];
         if buff and (not require_ownership or buff.player_owned) then
             return buff.id;
         end
-    else
-        if loadout.calculator_mode and sandbox_buffs_cfg.use_custom then
-            if only_self_buff and sandbox_buffs_cfg.player_buffs[id] then
-                return id;
-            elseif sandbox_buffs_cfg.target_buffs[id] then
-                return id;
-            end
-        end
+    end
+
+    if loadout.calculator_mode and
+        sandbox_buffs_cfg.use_custom and
+         ((only_self_buff and sandbox_buffs_cfg.player_buffs[id]) or
+            sandbox_buffs_cfg.target_buffs[id]) then
+
+        return id;
     end
 
     return nil;

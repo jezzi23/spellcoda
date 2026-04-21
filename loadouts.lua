@@ -2038,7 +2038,9 @@ local function apply_effect(effects, spid, auras, forced, stacks, undo, player_o
 
         if bit.band(aura[flags_idx], sc.aura_flags.apply_aura) ~= 0 then
             for _, k in pairs(aura[subject_idx]) do
-                apply_effect(effects, k, sc[aura[effect_idx]][k], forced, stacks, undo);
+                if sc[aura[effect_idx]][k] then
+                    apply_effect(effects, k, sc[aura[effect_idx]][k], forced, stacks, undo);
+                end
             end
         elseif bit.band(aura[flags_idx], sc.aura_flags.requires_ownership) ~= 0 and not player_owned then
             -- skip
@@ -2275,6 +2277,8 @@ local function update_loadout_and_effects_diffed_from_ui()
 
     local updated = update_id > last_ui_diff_update_id;
 
+    loadout.calculator_mode = true;
+
     local calc_frame = __sc_frame.calculator_frame;
     if calc_frame.calculator_plan_changed then
 
@@ -2310,8 +2314,6 @@ local function update_loadout_and_effects_diffed_from_ui()
         sc.talents.apply_talents(loadout, diffed, loadout.talents.code, true, true);
         sc.talents.apply_talents(loadout, diffed, talents_cfg.custom_code, true, false);
     end
-
-    loadout.calculator_mode = true;
 
     cpy_effects(diffed_finalized, diffed);
     effects_finalize_forced(loadout, diffed_finalized);

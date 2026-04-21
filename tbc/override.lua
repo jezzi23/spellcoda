@@ -183,6 +183,7 @@ elseif sc.class == sc.classes.druid then
         {spids.maul, 0.75},
         {spids.swipe, 0.75},
     });
+    lookups.tree_of_life_friendly_aura = 34123;
 
 elseif sc.class == sc.classes.priest then
 
@@ -398,8 +399,17 @@ elseif sc.class == sc.classes.hunter then
     end
 end
 
-for _, v in ipairs(sc.player_buffs[34456]) do
-    -- ferocious inspiration is missing its value in generated data but signature is correct
-    v[sc.aura_idx_value] = 0.03;
+-- ferocious inspiration is missing its value in generated data but signature is correct
+if sc.player_buffs[34456] then
+    for _, v in ipairs(sc.player_buffs[34456]) do
+        v[sc.aura_idx_value] = 0.03;
+    end
+end
+
+-- tree of life aura needs special handling, disable what we get from generator
+if sc.friendly_buffs[34123] then
+    for _, v in ipairs(sc.friendly_buffs[34123]) do
+        v[sc.aura_idx_value] = 0.0;
+    end
 end
 

@@ -565,7 +565,7 @@ local function stats_avoidances(attack_skill, comp, spell, loadout, effects)
     return math.max(0.0, dodge),math.max(0.0, parry), math.max(0.0, block), block_amount;
 end
 
-local function stats_sp(bid, comp, spell, loadout, effects)
+local function stats_sp(sp_extra, bid, comp, spell, loadout, effects)
 
     local sp;
 
@@ -596,7 +596,7 @@ local function stats_sp(bid, comp, spell, loadout, effects)
         sp = sp_school;
     end
 
-    sp = sp + (effects.ability.sp_flat[bid] or 0);
+    sp = sp + sp_extra + (effects.ability.sp_flat[bid] or 0);
 
     return sp;
 end
@@ -1054,7 +1054,7 @@ local function spell_stats_direct(stats, spell, loadout, effects, eval_flags)
     stats.threat_mod_flat, stats.threat_mod = stats_threat_mod(bid, direct, spell, effects);
     stats.glance, stats.glance_min, stats.glance_max = stats_glance(stats, bid, loadout);
     stats.dodge, stats.parry, stats.block, stats.block_amount = stats_avoidances(stats.attack_skill, direct, spell, loadout, effects);
-    stats.spell_power = stats_sp(benefit_id, direct, spell, loadout, effects);
+    stats.spell_power = stats_sp(stats.extra_spell_power, benefit_id, direct, spell, loadout, effects);
     stats.coef, stats.coef_max = stats_coef(stats, benefit_id, direct, spell, loadout, effects, eval_flags);
     stats.target_dr = stats_dr(stats.target_armor, direct, loadout);
     stats.spell_mod = stats_spell_mod(stats.target_dr, stats.attack_subclass, bid, direct, spell, effects, stats);
@@ -1139,7 +1139,7 @@ local function spell_stats_periodic(stats, spell, loadout, effects, eval_flags)
     stats.glance_ot, stats.glance_min_ot, stats.glance_max_ot = stats_glance(stats, bid, loadout);
 
     stats.dodge_ot, stats.parry_ot, stats.block_ot, stats.block_amount_ot = stats_avoidances(stats.attack_skill_ot, periodic, spell, loadout, effects);
-    stats.spell_power_ot = stats_sp(benefit_id, periodic, spell, loadout, effects);
+    stats.spell_power_ot = stats_sp(stats.extra_spell_power, benefit_id, periodic, spell, loadout, effects);
     stats.coef_ot, stats.coef_ot_max = stats_coef(stats, benefit_id, periodic, spell, loadout, effects, eval_flags);
     stats.target_dr_ot = stats_dr(stats.target_armor, periodic, loadout);
     stats.spell_mod_ot = stats_spell_mod(stats.target_dr_ot, stats.attack_subclass_ot, bid, periodic, spell, effects, stats);
@@ -1472,6 +1472,7 @@ local function stats_for_spell(stats, spell, loadout, effects, eval_flags)
     stats.base_mod_ot_flat = effects.ability.base_mod_ot_flat[benefit_id] or 0.0;
 
     stats.extra_crit = 0.0;
+    stats.extra_spell_power = 0.0;
 
     stats.target_armor = math.max(0, (loadout.target_armor + effects.by_school.target_res_flat[schools.physical]) * (1.0 + effects.by_school.target_res[schools.physical]));
 

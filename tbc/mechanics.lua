@@ -107,6 +107,16 @@ local class_stats_spell = (function()
         end
     elseif class == classes.druid then
         return function(anycomp, bid, stats, spell, loadout, effects)
+
+            if bit.band(spell.flags, spell_flags.heal) ~= 0 then
+
+                if get_buff(loadout, "player", spids.tree_of_life, true) and
+                    get_buff(loadout, loadout.friendly_towards, lookups.tree_of_life_friendly_aura, false, false) then
+
+                    local spirit = loadout.stats[attr.spirit] + effects.by_attr.stat_flat[attr.spirit];
+                    stats.extra_spell_power = stats.extra_spell_power + 0.25*spirit;
+                end
+            end
         end
     end
 end)();
