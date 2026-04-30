@@ -38,6 +38,7 @@ local num_overlay_components_toggled = 0;
 local action_id_frames = {};
 local num_actions = 120;
 local external_overlay_frames = {};
+local action_bar_paging_overrides = {};
 
 local loadout, effects;
 
@@ -337,6 +338,7 @@ local function use_base_bars()
     return highest_action_found;
 end
 
+local set_paging_override;
 
 local function gather_spell_icons()
 
@@ -372,6 +374,19 @@ local function gather_spell_icons()
             action_bar_frame_names[i] = "BT4Button"..i;
         end
 
+        set_paging_override = function(overrides)
+
+            for k = 2, 10 do
+                local bar = _G["BT4Bar".. k];
+                if bar and bar.config and bar.config.states and bar.config.states.stance and
+                    bar.config.states.stance[sc.class] and next(bar.config.states.stance[sc.class]) then
+                    overrides[k] = 1;
+                else
+                    overrides[k] = nil;
+                end
+            end
+        end
+
     elseif IsAddOnLoaded("ElvUI") then
 
         local highest_action_found = 0;
@@ -382,7 +397,7 @@ local function gather_spell_icons()
 
                 if slotf then
                     local idx;
-                    if slotf.action and slotf.action > 0 then
+                    if slotf.action and slotf.action > 0 and i > 12 then
                         idx = slotf.action;
                     else
                         idx = (i-1)*12 + j;
@@ -394,6 +409,19 @@ local function gather_spell_icons()
             end
         end
         num_actions = math.max(num_actions, highest_action_found);
+
+        set_paging_override = function(overrides)
+
+            for k = 2, 15 do
+                local bar = _G["ElvUI_Bar".. k];
+                if bar and bar.db and bar.db.paging and bar.db.paging[sc.class] then
+                    overrides[k] = 1;
+                else
+                    overrides[k] = nil;
+                end
+            end
+        end
+
 
     elseif IsAddOnLoaded("Dominos") then
 
@@ -472,6 +500,19 @@ local function reassign_overlay_icon_spell(action_id, spell_id)
     action_id_frames[action_id].spell_id = spell_id;
 end
 
+local function handle_mirrored_action_button(bar_id, action_id, spell_id)
+
+    local mirrored_action_location = (action_id-1)%12 + (bar_id - 1)*12 + 1;
+    local mirrored_action = action_id_frames[mirrored_action_location];
+    if mirrored_action then
+        local mirrored_action_id = action_id_of_button(mirrored_action.frame);
+        if mirrored_action_id and mirrored_action_id == action_id then
+            -- was mirrored, update that as well
+            reassign_overlay_icon_spell(mirrored_action_location, spell_id)
+        end
+    end
+end
+
 local function reassign_overlay_icon(action_id)
 
     --action_id might not have a named frame (e.g. blizzard bars) at high IDs
@@ -496,15 +537,10 @@ local function reassign_overlay_icon(action_id)
     -- with Bar 1 due to shapeshifts, and forms taking over Bar 1
     -- so check if the action slot in bar 1 is the same
     if action_id > 12 then
-        local mirrored_bar_id = (action_id-1)%12 + 1;
-        local mirrored_action = action_id_frames[mirrored_bar_id];
-        if mirrored_action then
-            local mirrored_action_id = action_id_of_button(mirrored_action.frame);
-            if mirrored_action_id and mirrored_action_id == action_id then
-                -- was mirrored, update that as well
-                reassign_overlay_icon_spell(mirrored_bar_id, spell_id)
-            end
-        end
+        handle_mirrored_action_button(1, action_id, spell_id);
+    end
+    for bar in pairs(action_bar_paging_overrides) do
+        handle_mirrored_action_button(bar, action_id, spell_id);
     end
 
     if action_bar_frame_names[action_id] then
@@ -515,9 +551,11 @@ local function reassign_overlay_icon(action_id)
     end
 end
 
-local function on_special_action_bar_changed()
+local function recheck_action_bar(bar_id)
 
-    for i = 1, 12 do
+    local action_id_button_first = (bar_id-1)*12 + 1;
+    local action_id_button_last = action_id_button_first + 11;
+    for i = action_id_button_first, action_id_button_last do
 
         -- Hopefully the Actionbar host has updated the new action id of its 1-12 action id bar
         local frame = action_id_frames[i].frame;
@@ -531,6 +569,16 @@ local function on_special_action_bar_changed()
             end
             reassign_overlay_icon_spell(i, spell_id);
         end
+
+    end
+
+end
+
+local function on_special_action_bar_changed()
+
+    recheck_action_bar(1); -- always do bar 1
+    for bar in pairs(action_bar_paging_overrides) do
+        recheck_action_bar(bar);
     end
 end
 
@@ -601,6 +649,9 @@ local function update_icon_overlay_settings()
     -- hide existing overlay frames that should no longer exist
     clear_overlays();
 
+    if set_paging_override then
+        set_paging_override(action_bar_paging_overrides)
+    end
     active_overlays = {};
     sc.core.old_ranks_checks_needed = true;
     scan_action_frames();
@@ -1454,7 +1505,6 @@ end
 local function ccf_anim_reconfig()
 
     for _, v in pairs(ccfs) do
-        -- v
         if config.settings.overlay_cc_horizontal then
             v.icon_frame.anim_new_spell.slide_in:SetDuration(config.settings.overlay_cc_transition_time);
             v.icon_frame.anim_new_spell.slide_in:SetOffset(config.settings.overlay_cc_transition_length, 0);
@@ -1825,7 +1875,6 @@ end
 
 local function update_overlay()
 
-    --local loadout, effects_before, effects, update_id;
     local effects_before, update_id;
     local updated = false;
     local eval_flags = overlay_eval_flags();
