@@ -125,11 +125,24 @@ elseif sc.class == sc.classes.druid then
         --spells[v].periodic.coef_ap = 0.11215;
     end
     for _, v in pairs(rank_seqs[spids.rip]) do
-        spells[v].periodic.coef_ap_min = 0.04;
+        spells[v].periodic.per_cp_dur = 0.0;
+
     end
-    if bit.band(sc.game_mode, sc.game_modes.season_of_discovery) == 0 then
+    if bit.band(sc.game_mode, sc.game_modes.season_of_discovery) ~= 0 then
+
+        -- in SoD rip has special ap scaling
+        for _, v in pairs(rank_seqs[spids.rip]) do
+            spells[v].periodic.coef_ap_by_cp = {0.01, 0.02, 0.03, 0.04, 0.04};
+        end
+
+    else
         -- new moonkin passive id in SOD, no way to detect if this is active or not at runtime
         sc.shapeshift_passives[443359] = nil;
+
+        -- TODO: unclear if vanilla rip should have SoD's rip scaling or not
+        for _, v in pairs(rank_seqs[spids.rip]) do
+            spells[v].periodic.coef_ap_min = 0.04;
+        end
     end
 
     do
