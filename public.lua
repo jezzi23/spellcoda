@@ -79,7 +79,7 @@ end
 ---@class CurrentlyCastingSpellData
 ---@field spell_id number Spell ID. = 0 if SpellCoda does not care for this spell
 ---@field spell table|nil Raw base data for spell. = nil if spell_id is 0.
----     Table structure can be seen in e.g. generated/vanilla/mage.lua
+---     Table structure can be seen in e.g. generated/Vanilla/mage.lua
 ---@field info table|nil Calculated spell data. = nil if not evaluable spell
 ---     May contain any amount direct and periodic (ot for "over time") subcomponents.
 ---@field stats table|nil Calculated spell stats. = nil if not evaluable spell
@@ -112,7 +112,7 @@ end
 
 ---@class SpellFeedEntry
 ---@field spell table        -- Raw spell data
----     Table structure can be seen in e.g. generated/vanilla/mage.lua
+---     Table structure can be seen in e.g. generated/Vanilla/mage.lua
 ---@field info table         -- Calculated info fields (filtered by info_schema)
 ---     May contain any amount direct and periodic (ot for "over time") subcomponents.
 ---@field stats table        -- Calculated stat fields (filtered by stats_schema)
@@ -216,7 +216,7 @@ local function print_spell_feed(feed)
    -- Spells from IDs
    print("Spells:")
    for spell_id, data in pairs(feed.spells) do
-      local spell_txt = string.format("%s (%d) Rank %d ", GetSpellInfo(spell_id), spell_id, (data.spell and data.spell.rank) or 0, data.info, data.stats)
+      local spell_txt = string.format("%s (%d) Rank %d ", C_Spell.GetSpellName(spell_id), spell_id, (data.spell and data.spell.rank) or 0, data.info, data.stats)
       
       
       if bit.band(data.spell.flags, SpellCoda.spell_flags.eval) ~= 0 then
@@ -231,14 +231,14 @@ local function print_spell_feed(feed)
       -- data.spell may be nil if no rank of this spell is learned!
       local spell_txt = ""
       if data.spell then
-         spell_txt = spell_txt..string.format("%s Rank %d ", GetSpellInfo(spell_id), data.spell.rank, data.info, data.stats)
+         spell_txt = spell_txt..string.format("%s Rank %d ", C_Spell.GetSpellName(spell_id), data.spell.rank, data.info, data.stats)
          
          if bit.band(data.spell.flags, SpellCoda.spell_flags.eval) ~= 0 then
             spell_txt = spell_txt..string.format("Effect %.1f", data.info.expected)
          end
          
       else
-         spell_txt = string.format("%s (%d) no rank learned!", GetSpellInfo(spell_id), spell_id)
+         spell_txt = string.format("%s (%d) no rank learned!", C_Spell.GetSpellName(spell_id), spell_id)
          
       end
       print("       ", spell_txt)

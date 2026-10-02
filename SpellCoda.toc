@@ -1,3 +1,79 @@
-## Interface: 00000
-## Title: SpellCoda is not supported for this client!
-## Notes: SpellCoda is not supported for this client!
+## Interface: 11509, 20506, 16001
+## AllowLoadGameType: vanilla, tbc, camelot
+## Title: SpellCoda
+## Notes: All things Spells!
+## Notes-enUS: All things Spells!
+## Notes-enGB: All things Spells!
+## Notes-frFR: Tout sur les sorts !
+## Notes-deDE: Alles über Zauber!
+## Notes-itIT: Tutto sugli incantesimi!
+## Notes-koKR: 모든 주문 정보!
+## Notes-zhCN: 全部法术一览！
+## Notes-zhTW: 法術大全！
+## Notes-ruRU: Всё о заклинаниях!
+## Notes-esES: ¡Todo sobre hechizos!
+## Notes-esMX: ¡Todo sobre hechizos!
+## Notes-ptBR: Tudo sobre feitiços!
+## SavedVariablesPerCharacter: __sc_p_char
+## SavedVariables: __sc_p_acc
+## OptionalDeps: LibStub, CallbackHandler-1.0, LibUIDropDownMenu
+
+lib/LibStub/Libstub.lua
+lib/CallbackHandler-1.0/CallbackHandler-1.0.xml
+lib/LibDataBroker-1.1/LibDataBroker-1.1.lua
+lib/LibDBIcon-1.0/LibDBIcon-1.0.lua
+lib/LibUIDropDownMenu/LibUIDropDownMenu.xml
+lib/LibUIDropDownMenu/LibUIDropDownMenu.lua
+
+generated/[Game]/defs.lua
+generated/[Game]/localized_defs.lua
+generated/[Game]/all.lua
+          
+generated/[Game]/druid.lua
+generated/[Game]/hunter.lua
+generated/[Game]/mage.lua
+generated/[Game]/paladin.lua
+generated/[Game]/priest.lua
+generated/[Game]/rogue.lua
+generated/[Game]/shaman.lua
+generated/[Game]/warlock.lua
+generated/[Game]/warrior.lua
+
+generated/locale_strings.lua
+
+locale/ptBR.lua
+locale/zhCN.lua
+locale/zhTW.lua
+locale/frFR.lua
+locale/deDE.lua
+locale/itIT.lua
+locale/esMX.lua
+locale/ptPT.lua
+locale/koKR.lua
+locale/ruRU.lua
+locale/esES.lua
+
+localization.lua
+
+utils.lua
+
+override.lua
+
+[Game]/override.lua
+[Game]/scaling.lua
+
+config.lua
+loadouts.lua
+equipment.lua
+buffs.lua
+talents.lua
+calc_defs.lua
+[Game]/mechanics.lua
+calc.lua
+overlay.lua
+tooltip.lua
+ui.lua
+spells_feed.lua
+core.lua
+public.lua
+

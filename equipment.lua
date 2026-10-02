@@ -591,7 +591,7 @@ local function apply_equipment(loadout, effects)
             end
         end
         if wpn_strs[item] then
-            local wpn_subclass = item_link and select(7, GetItemInfoInstant(item_link));
+            local wpn_subclass = item_link and select(7, C_Item.GetItemInfoInstant(item_link));
             if item_link and not wpn_subclass then
                 found_anything = false;
             end
@@ -609,7 +609,7 @@ local function apply_equipment(loadout, effects)
     end
     local offhand_link = loadout.item_links[slots.SecondaryHandSlot];
     if offhand_link then
-        local _, _, _, _, _, class_id, subclass_id = GetItemInfoInstant(offhand_link);
+        local _, _, _, _, _, class_id, subclass_id = C_Item.GetItemInfoInstant(offhand_link);
         if class_id == 4 and subclass_id == 6 then
             -- shield
             effects.raw.can_block = effects.raw.can_block + 1;

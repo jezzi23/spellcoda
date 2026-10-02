@@ -1,13 +1,6 @@
 local _, sc               = ...;
 
-local class               = sc.class;
-local classes             = sc.classes;
-
 local apply_effect        = sc.loadouts.apply_effect;
-
-local has_enchant         = sc.equipment.has_enchant;
-
-local config              = sc.config;
 
 ----------------------------------------------------------------------------------------------------
 local buffs_export        = {};
@@ -26,7 +19,7 @@ for k, _ in pairs(sc.class_buffs) do
     if not unique_buffs[k] then
         unique_buffs[k] = {
             id = k,
-            lname = GetSpellInfo(k),
+            lname = C_Spell.GetSpellName(k),
             cat = buff_category.class,
         };
     end
@@ -35,7 +28,7 @@ for k, _ in pairs(sc.player_buffs) do
     if not unique_buffs[k] then
         unique_buffs[k] = {
             id = k,
-            lname = GetSpellInfo(k),
+            lname = C_Spell.GetSpellName(k),
             cat = buff_category.player,
         };
     end
@@ -46,8 +39,8 @@ for k, _ in pairs(sc.enchant_effects) do
     if k > 0 and not unique_buffs[k] then
         unique_buffs[k] = {
             id = k,
-            --lname = GetSpellInfo(sc.enchant_effects[k]),
-            lname = GetSpellInfo(k),
+            --lname = C_Spell.GetSpellName(sc.enchant_effects[k]),
+            lname = C_Spell.GetSpellName(k),
             cat = buff_category.enchant,
         };
     end
@@ -56,7 +49,7 @@ for k, _ in pairs(sc.hostile_buffs) do
     if not unique_target_buffs[k] then
         unique_target_buffs[k] = {
             id = k,
-            lname = GetSpellInfo(k),
+            lname = C_Spell.GetSpellName(k),
             cat = buff_category.hostile,
         };
     end
@@ -65,7 +58,7 @@ for k, _ in pairs(sc.friendly_buffs) do
     if not unique_target_buffs[k] then
         unique_target_buffs[k] = {
             id = k,
-            lname = GetSpellInfo(k),
+            lname = C_Spell.GetSpellName(k),
             cat = buff_category.friendly,
         };
     end

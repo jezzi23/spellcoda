@@ -7,6 +7,10 @@ local spell_flags                   = sc.spell_flags;
 local rank_seqs                     = sc.rank_seqs;
 ---------------------------------------------------------------------------------------------------
 
+local function client_matches(mask)
+    return bit.band(sc.client_flag, mask) ~= 0;
+end
+
 local function deep_table_copy(obj, seen)
   if type(obj) ~= 'table' then
       return obj;
@@ -32,6 +36,7 @@ end
 
 local function spell_cost(spell_id)
 
+    -- TODO forever-transition: GetSpellPowerCost is missing in Forever, C_Spell.GetSpellPowerCost is verified to give the same shape (costs[1].cost, costs[1].name)
     local costs = GetSpellPowerCost(spell_id);
     if costs then
         local cost_table = costs[1];
@@ -47,7 +52,7 @@ end
 
 local function spell_cast_time(spell_id)
 
-    local cast_time = select(4, GetSpellInfo(spell_id));
+    local cast_time = C_Spell.GetSpellInfo(spell_id).castTime;
     if cast_time  then
         cast_time = cast_time/1000;
     end
@@ -246,7 +251,7 @@ local lname_cache = {};
 local function spell_lname(spell_id)
     local lname = lname_cache[spell_id];
     if not lname then
-        local name = GetSpellInfo(spell_id);
+        local name = C_Spell.GetSpellName(spell_id);
         lname_cache[spell_id] = name;
         return name;
     else
@@ -302,8 +307,8 @@ local function write_item_info_from_link(info, link)
     info.gem3 = tonumber(gem3);
     info.gem4 = tonumber(gem4);
 
-    _, _, _, info.inv_type, _, info.class_id, info.subclass_id = GetItemInfoInstant(link);
-    _, _, info.quality, info.ilvl = GetItemInfo(link); -- might not work when data is cold
+    _, _, _, info.inv_type, _, info.class_id, info.subclass_id = C_Item.GetItemInfoInstant(link);
+    _, _, info.quality, info.ilvl = C_Item.GetItemInfo(link); -- might not work when data is cold
 
     return true;
 end
@@ -342,6 +347,7 @@ local function table_from_schema(dst, src, schema)
 end
 
 --------------------------------------------------------------------------------
+utils.client_matches                = client_matches;
 utils.deep_table_copy               = deep_table_copy;
 utils.clear_table                   = clear_table;
 utils.spell_cost                    = spell_cost;

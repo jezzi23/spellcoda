@@ -7,7 +7,7 @@ local apply_effect          = sc.loadouts.apply_effect;
 local talents_export        = {};
 
 local expansion_short = "classic";
-if sc.expansion == sc.expansions.tbc then
+if sc.utils.client_matches(sc.client_flags.tbc) then
     expansion_short = "tbc";
 end
 
@@ -34,10 +34,15 @@ local function wowhead_talent_code()
 
     local sub_codes = { "", "", "" };
     for i = 1, 3 do
-        -- NOTE: GetNumTalents(i) will return 0 on early calls after logging in,
-        --       but works fine after reload
-        for _, v in pairs(sc.talent_order[i]) do
-            local _, _, _, _, pts, _, _, _ = GetTalentInfo(i, v);
+        local query = {};
+        for j, v in ipairs(sc.talent_order[i]) do
+            query.groupIndex = sc.core.active_spec;
+            query.specializationIndex = i;
+            query.talentIndex = v;
+            query.tier = sc.talent_rows[i*100 + j];
+            query.column = sc.talent_columns[i*100 + j];
+            local pts = C_SpecializationInfo.GetTalentInfo(query).rank;
+
             sub_codes[i] = sub_codes[i]..tostring(pts);
         end
         local num_redundant = 0;

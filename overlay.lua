@@ -350,18 +350,20 @@ local function gather_spell_icons()
     else -- default spellbook frames
         for i = 1, 12 do
 
-            if not spell_book_frames[i] then
+            local frame = _G["SpellButton"..i];
+            -- TODO forever-transition: SpellButtonN frames do not exist, part of the spellbook port
+            if not spell_book_frames[i] and frame then
                 spell_book_frames[i] = {
-                    frame = _G["SpellButton"..i];
+                    frame = frame;
                 };
-                if spell_book_frames[i].frame then
-                    spell_book_frames[i].frame:HookScript("OnMouseWheel", sc.tooltip.eval_mode_scroll_fn);
-                end
+                frame:HookScript("OnMouseWheel", sc.tooltip.eval_mode_scroll_fn);
             end
         end
     end
     for i = 1, 12 do
-        init_frame_overlay(spell_book_frames[i]);
+        if spell_book_frames[i] then
+            init_frame_overlay(spell_book_frames[i]);
+        end
     end
 
     -- gather action bar icons
@@ -1036,7 +1038,7 @@ local function init_label_handler()
             color_tag = "expectation",
             requires_spell_flags = spell_flags.ehp,
             non_standard = true,
-            tooltip = L["Puts effective health calculation into passive spell "]..select(1, GetSpellInfo(spids.dodge)),
+            tooltip = L["Puts effective health calculation into passive spell "]..C_Spell.GetSpellName(spids.dodge),
         },
     };
     sc.overlay.label_handler = overlay_label_handler;
@@ -1285,7 +1287,7 @@ local function spell_tracking(dt)
         -- degrade to autorepeat or 0
         local is_repeating = false;
         for _, id in pairs(auto_repeat_spells_tracking) do
-            if IsCurrentSpell(id) then
+            if C_Spell.IsCurrentSpell(id) then
                 is_repeating = true;
                 set_cc_spell(id);
                 break;
@@ -1391,7 +1393,7 @@ local function update_ccf(frame, spell, info, stats, spell_id)
         not ccf_parent.config_mode then
         return;
     end
-    frame.icon_texture:SetTexture(GetSpellTexture(spell.base_id));
+    frame.icon_texture:SetTexture((C_Spell.GetSpellTexture(spell.base_id)));
 
     if ccf_parent.config_mode then
         cc_demo_dummy_fill(info, stats);
@@ -1836,6 +1838,8 @@ local function update_spell_icons(loadout, effects, eval_flags)
                 local spell_name = v.frame.SpellName:GetText();
                 local spell_rank_name = v.frame.SpellSubName:GetText();
 
+                -- TODO forever-transition: GetSpellInfo(name, rank) is removed and C_Spell.GetSpellInfo has no rank argument nor a spell id return value
+                -- this lookup of the spell id from the spellbook button name+rank needs a replacement, see also SpellBookFrame TODOs
                 local _, _, _, _, _, _, id = GetSpellInfo(spell_name, spell_rank_name);
 
                 local remaining_spells_in_page = 12;

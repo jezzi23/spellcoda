@@ -1,5 +1,5 @@
 -- Overrides on generator data shared for all clients go here if any
--- Most are client specific, under e.g ./vanilla/overrides.lua
+-- Most are client specific, under e.g ./Vanilla/override.lua
 local _, sc = ...;
 
 local spells                        = sc.spells;
@@ -23,8 +23,8 @@ if sc.class == classes.mage then
     end
 
 elseif class == classes.paladin then
-    lookups.greater_bol_lname = GetSpellInfo(spids.greater_blessing_of_light);
-    lookups.bol_lname = GetSpellInfo(spids.blessing_of_light);
+    lookups.greater_bol_lname = C_Spell.GetSpellName(spids.greater_blessing_of_light);
+    lookups.bol_lname = C_Spell.GetSpellName(spids.blessing_of_light);
     lookups.bol_rank_to_hl_coef_subtract = {
         [1] = 1.0 - (1 - (20 - 1) * 0.0375) * 2.5 / 3.5, -- lvl 1 hl coef used
         [2] = 1.0 - 0.4,
@@ -32,15 +32,15 @@ elseif class == classes.paladin then
     };
 elseif class == classes.warlock then
 
-    lookups.isb_lname = GetSpellInfo(17800);
+    lookups.isb_lname = C_Spell.GetSpellName(17800);
 elseif class == classes.shaman then
 
 elseif class == classes.druid then
 
-    lookups.rejuvenation_lname = GetSpellInfo(spids.rejuvenation);
-    lookups.regrowth_lname = GetSpellInfo(spids.regrowth);
-    lookups.lifebloom_lname = GetSpellInfo(spids.lifebloom);
-    lookups.wild_growth_lname = GetSpellInfo(spids.wild_growth);
+    lookups.rejuvenation_lname = C_Spell.GetSpellName(spids.rejuvenation);
+    lookups.regrowth_lname = C_Spell.GetSpellName(spids.regrowth);
+    lookups.lifebloom_lname = C_Spell.GetSpellName(spids.lifebloom);
+    lookups.wild_growth_lname = C_Spell.GetSpellName(spids.wild_growth);
 elseif class == classes.priest then
 
     lookups.priest_t3 = 525;

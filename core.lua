@@ -2,12 +2,10 @@ local _, sc = ...;
 
 local L                                     = sc.L;
 
-local spells                                = sc.spells;
-local spell_flags                           = sc.spell_flags;
-
-local clear_table                           = sc.utils.clear_table;
-
 local load_localization                     = sc.loc.load_localization;
+
+local client_matches                        = sc.utils.client_matches;
+local client_flags                          = sc.client_flags;
 
 local load_sw_ui                            = sc.ui.load_sw_ui;
 local create_sw_base_ui                     = sc.ui.create_sw_base_ui;
@@ -21,7 +19,6 @@ local config                                = sc.config;
 local load_config                           = sc.config.load_config;
 local save_config                           = sc.config.save_config;
 local set_active_settings                   = sc.config.set_active_settings;
-local set_active_loadout                    = sc.config.set_active_loadout;
 local activate_settings                     = sc.config.activate_settings;
 
 local reassign_overlay_icon                 = sc.overlay.reassign_overlay_icon;
@@ -42,7 +39,7 @@ sc.core                         = core;
 core.addon_name                 = "SpellCoda";
 
 local version_major             = 0;
-local version_minor             = 10;
+local version_minor             = 11;
 local version_build             = sc.addon_build_id;
 
 core.version_id                 = version_build + version_minor*100000 + version_major*100000000;
@@ -301,7 +298,7 @@ local event_dispatch = {
         sc.loadouts.init_lnames();
         sc.overlay.init_label_handler();
         sc.overlay.init_ccfs();
-        core.active_spec = GetActiveTalentGroup();
+        core.active_spec = C_SpecializationInfo.GetActiveSpecGroup();
         set_active_settings();
         load_sw_ui();
         activate_settings();
@@ -312,7 +309,7 @@ local event_dispatch = {
         sc.overlay.setup_action_bars();
         core.sw_addon_loaded = true;
         table.insert(UISpecialFrames, __sc_frame:GetName()) -- Allows ESC to close frame
-        if sc.expansion == sc.expansions.vanilla and C_Engraving.IsEngravingEnabled then
+        if client_matches(client_flags.vanilla) and C_Engraving.IsEngravingEnabled then
             --after fresh login the runes cannot be queried until
             --character frame has been opened!!!
 
@@ -409,7 +406,7 @@ local event_dispatch = {
             return;
         end
 
-        core.active_spec = GetActiveTalentGroup();
+        core.active_spec = C_SpecializationInfo.GetActiveSpecGroup();
         update_profile_frame();
         activate_settings();
         core.update_action_bar_needed = true;
@@ -429,11 +426,11 @@ local event_dispatch = {
         core.old_ranks_checks_needed = true;
         sc.loadouts.force_update = true;
     end,
-    ["LEARNED_SPELL_IN_TAB"] = function()
-        sc.spells_feed.external_feed_highest_ranks_update();
-        core.old_ranks_checks_needed = true;
-        sc.loadouts.force_update = true;
-    end,
+    --["LEARNED_SPELL_IN_TAB"] = function()
+    --    sc.spells_feed.external_feed_highest_ranks_update();
+    --    core.old_ranks_checks_needed = true;
+    --    sc.loadouts.force_update = true;
+    --end,
     ["SPELLS_CHANGED"] = function()
         sc.spells_feed.external_feed_highest_ranks_update();
         core.old_ranks_checks_needed = true;
@@ -476,25 +473,29 @@ local event_dispatch = {
     end,
 };
 
-local event_dispatch_client_exceptions = {
-    ["ENGRAVING_MODE_CHANGED"] = sc.expansions.vanilla,
-    ["RUNE_UPDATED"]           = sc.expansions.vanilla,
+local event_client_filters = {
+    ["ENGRAVING_MODE_CHANGED"] = client_flags.vanilla,
+    ["RUNE_UPDATED"]           = client_flags.vanilla,
+
+    ["GLYPH_ADDED"]            = client_flags.wotlk,
+    ["GLYPH_REMOVED"]          = client_flags.wotlk,
+    ["GLYPH_UPDATED"]          = client_flags.wotlk,
 };
 
 core.event_dispatch = event_dispatch;
-core.event_dispatch_client_exceptions = event_dispatch_client_exceptions;
+core.event_client_filters = event_client_filters;
 
 
-GameTooltip:HookScript("OnTooltipSetSpell", function()
+local function on_tooltip_set_spell()
     if not config.settings.tooltip_disable then
         core.activate_tooltip_refresh();
         sc.tooltip_mod = key_mod_flags()
         write_spell_tooltip();
     end
-end);
+end
 
 local item_tooltip_mod = 0;
-GameTooltip:HookScript("OnTooltipSetItem", function(self)
+local function on_tooltip_set_item(self)
     if not config.settings.tooltip_disable_item then
         core.activate_tooltip_refresh();
         local mod = key_mod_flags();
@@ -502,7 +503,25 @@ GameTooltip:HookScript("OnTooltipSetItem", function(self)
         item_tooltip_mod = mod;
         write_item_tooltip(self, mod, mod_change);
     end
-end);
+end
+
+if GameTooltip:HasScript("OnTooltipSetSpell") then
+    GameTooltip:HookScript("OnTooltipSetSpell", on_tooltip_set_spell);
+    GameTooltip:HookScript("OnTooltipSetItem", on_tooltip_set_item);
+else
+    -- Retail based clients removed OnTooltipSetSpell/OnTooltipSetItem scripts
+    -- Post calls fire for every tooltip, restrict to GameTooltip like the script hooks
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Spell, function(self)
+        if self == GameTooltip then
+            on_tooltip_set_spell();
+        end
+    end);
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(self)
+        if self == GameTooltip then
+            on_tooltip_set_item(self);
+        end
+    end);
+end
 
 hooksecurefunc(ItemRefTooltip, "SetHyperlink", function(self, link)
     if not config.settings.tooltip_disable_item then
@@ -573,7 +592,7 @@ sc.ext.version_id = core.version_id;
 -- but remains due to external things relying on it
 __SC = sc.ext;
 
---__spellcoda_debug__ = 1;
+__spellcoda_debug__ = 1;
 --__spellcoda_test_all_data__ = 1;
 --__spellcoda_test_all_spells__ = 1;
 

@@ -256,9 +256,12 @@ local special_abilities;
 if class == classes.shaman then
     special_abilities = {
     };
---elseif class == classes.priest then
---    special_abilities = {
---    };
+elseif class == classes.priest then
+    special_abilities = {
+        [spids.mana_burn] = function(_, _, _, _, effects)
+            effects.mul.vuln_mod = effects.mul.vuln_mod * 0.5;
+        end,
+    };
 --elseif class == classes.druid then
 --    special_abilities = {
 --    };

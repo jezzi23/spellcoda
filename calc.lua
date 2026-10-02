@@ -22,6 +22,8 @@ local best_rank_by_lvl                              = sc.utils.best_rank_by_lvl;
 local spell_lname                                   = sc.utils.spell_lname;
 local dummy_value                                   = sc.utils.dummy_value;
 local combat_ratings                                = sc.utils.combat_ratings;
+local client_matches                                = sc.utils.client_matches;
+local client_flags                                  = sc.client_flags;
 
 local config                                        = sc.config;
 
@@ -2794,14 +2796,14 @@ local ranged_stat_weights = {
 };
 
 -- vanilla only
-if sc.expansion == sc.expansions.vanilla then
+if client_matches(client_flags.vanilla) then
     for _, v in ipairs({melee_stat_weights, ranged_stat_weights}) do
         v[#v+1] = {display = "Skill", key = "weapon_skill"};
     end
 end
 
 -- tbc and beyond
-if sc.expansion ~= sc.expansions.vanilla then
+if client_matches(bit.bnot(client_flags.vanilla)) then
     for _, v in ipairs({dmg_magic_stat_weights, heal_stat_weights, melee_stat_weights, ranged_stat_weights}) do
         v[#v+1] = {display = "Haste", key = "haste_rating"};
     end
@@ -3040,7 +3042,7 @@ end
 
 local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_finalized, effects_d, eval_flags)
 
-    out.name = GetSpellInfo(spell_id);
+    out.name = C_Spell.GetSpellName(spell_id);
 
     if bit.band(spell.flags, bit.bor(spell_flags.finishing_move_dmg, spell_flags.finishing_move_dur)) ~= 0 then
 
@@ -3062,7 +3064,7 @@ local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_fin
 
     out.disp = out.name..out.extra;
     out.id = spell_id;
-    out.tex = GetSpellTexture(spell_id);
+    out.tex = C_Spell.GetSpellTexture(spell_id);
 
     out.heal_like = bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) ~= 0;
     out.tank_like = false;

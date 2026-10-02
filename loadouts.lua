@@ -26,6 +26,8 @@ local spirit_mana_regen                 = sc.scaling.spirit_mana_regen;
 
 local write_item_info_from_link         = sc.utils.write_item_info_from_link;
 local combat_ratings                    = sc.utils.combat_ratings;
+local client_matches                    = sc.utils.client_matches;
+local client_flags                      = sc.client_flags;
 local spell_lname                       = sc.utils.spell_lname;
 
 local config                            = sc.config;
@@ -1831,7 +1833,7 @@ local function dynamic_loadout(loadout)
         loadout.base_mana = sc.base_mana_by_lvl[loadout.lvl];
     end
 
-    if sc.expansion ~= sc.expansions.vanilla then
+    if client_matches(bit.bnot(client_flags.vanilla)) then
         for _, v in ipairs(ratings) do
             loadout[v[2]] = GetCombatRating(v[1]);
         end
@@ -1858,7 +1860,7 @@ local function dynamic_loadout(loadout)
     --    loadout.phys_hit = 0.01*phys_hit;
     --end
 
-    if sc.expansion ~= sc.expansions.wotlk then
+    if client_matches(bit.bnot(client_flags.wotlk)) then
         loadout.healing_power = GetSpellBonusHealing();
         for i = 1, 7 do
             loadout.spell_dmg_by_school[i] = GetSpellBonusDamage(i);

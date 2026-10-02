@@ -1865,10 +1865,10 @@ local function write_tooltip_spell_info(tooltip, spell, spell_id, loadout, effec
         return;
     end
 
-    if config.settings.tooltip_clear_original or tooltip ~= GameTooltip or not GetSpellInfo(spell.base_id) then
+    if config.settings.tooltip_clear_original or tooltip ~= GameTooltip or not C_Spell.DoesSpellExist(spell.base_id) then
         local txt_left = getglobal("GameTooltipTextLeft1");
         if txt_left then
-            local lname = GetSpellInfo(spell.base_id);
+            local lname = C_Spell.GetSpellName(spell.base_id);
             if not lname then
                 lname = "" .. spell.base_id;
             end
@@ -2179,7 +2179,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     end
 
     _, _, tt.new_item.quality, tt.new_item.ilvl, _, _, _, _, tt.new_item.inv_type, tt.new_item.tex, _, tt.new_item.class_id, tt.new_item.subclass_id =
-        GetItemInfo(tt.new_item.link);
+        C_Item.GetItemInfo(tt.new_item.link);
 
     if not tt.new_item.inv_type or
         not tt.new_item.tex or
@@ -2271,7 +2271,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             if old_item.link then
 
                 _, _, old_item.quality, old_item.ilvl, _, _, _, _, old_item.inv_type, old_item.tex, _, old_item.class_id, old_item.subclass_id =
-                    GetItemInfo(old_item.link);
+                    C_Item.GetItemInfo(old_item.link);
             else
                 old_item.tex = empty_tex;
             end
@@ -2291,7 +2291,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 (inv == "INVTYPE_WEAPON" and slot == slots.SecondaryHandSlot) then
 
                 local mh_link = loadout.item_links[slots.MainHandSlot];
-                if mh_link and select(4, GetItemInfoInstant(mh_link)) == "INVTYPE_2HWEAPON" then
+                if mh_link and select(4, C_Item.GetItemInfoInstant(mh_link)) == "INVTYPE_2HWEAPON" then
                     -- offhand knocks out 2H
                     slot_knocked_out = slots.MainHandSlot;
                 end
@@ -2310,7 +2310,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 if knocked_slot_data.link then
 
                     _, _, knocked_slot_data.quality, knocked_slot_data.ilvl, _, _, _, _, knocked_slot_data.inv_type, knocked_slot_data.tex, _, knocked_slot_data.class_id, knocked_slot_data.subclass_id =
-                        GetItemInfo(knocked_slot_data.link);
+                        C_Item.GetItemInfo(knocked_slot_data.link);
                 else
                     knocked_slot_data.tex = empty_tex;
                 end
@@ -2728,7 +2728,7 @@ local function on_show_tooltip(tooltip)
     local spell_name, _ = tooltip:GetSpell();
     if not spell_name then
         -- Attack tooltip may be a dummy, so link it to its actual spell id
-        local attack_lname = GetSpellInfo(sc.auto_attack_spell_id);
+        local attack_lname = C_Spell.GetSpellName(sc.auto_attack_spell_id);
         local txt = getglobal("GameTooltipTextLeft1");
         if txt and txt:GetText() == attack_lname then
             spell_name = attack_lname;

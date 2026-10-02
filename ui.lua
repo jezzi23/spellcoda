@@ -10,6 +10,8 @@ local format_locale_dump                        = sc.loc.format_locale_dump;
 
 local clear_table                               = sc.utils.clear_table;
 local assign_color_tag                          = sc.utils.assign_color_tag;
+local client_matches                            = sc.utils.client_matches;
+local client_flags                              = sc.client_flags;
 local highest_learned_rank                      = sc.utils.highest_learned_rank;
 local effect_color                              = sc.utils.effect_color;
 local write_item_info_from_link                 = sc.utils.write_item_info_from_link;
@@ -413,7 +415,7 @@ local function filtered_spell_view(spell_ids, name_filter, loadout, effects, eva
                 known = spells[highest].rank > spells[id].rank;
             end
         end
-        if name_filter ~= "" and not string.find(string.lower(GetSpellInfo(id)), string.lower(name_filter)) then
+        if name_filter ~= "" and not string.find(string.lower(C_Spell.GetSpellName(id)), string.lower(name_filter)) then
         elseif config.settings.spells_filter_already_known and known then
             filtered[i] = {spell_id = id, trigger = spell_filters.spells_filter_already_known};
         elseif config.settings.spells_filter_available and
@@ -570,7 +572,7 @@ local function populate_scrollable_spell_view(view, starting_idx)
         if v.spell_id then
             --line.spell_icon.__id = v.spell_id;
             line.tooltip_area.__id = v.spell_id;
-            line.spell_tex:SetTexture(GetSpellTexture(v.spell_id));
+            line.spell_tex:SetTexture((C_Spell.GetSpellTexture(v.spell_id)));
             line.spell_icon:Show();
             line.spell_tex:Show();
             line.tooltip_area:Show();
@@ -579,11 +581,11 @@ local function populate_scrollable_spell_view(view, starting_idx)
 
             if spells[v.spell_id].rank ~= 0 then
                 line.spell_name:SetText(string.format("%s ("..L["Rank"].." %d)",
-                    GetSpellInfo(v.spell_id),
+                    C_Spell.GetSpellName(v.spell_id),
                     spells[v.spell_id].rank
                 ));
             else
-                line.spell_name:SetText(GetSpellInfo(v.spell_id));
+                line.spell_name:SetText(C_Spell.GetSpellName(v.spell_id));
             end
             if v.trigger == spell_filters.spells_filter_already_known then
                 line.spell_name:SetTextColor(138 / 255, 134 / 255, 125 / 255);
@@ -610,7 +612,7 @@ local function populate_scrollable_spell_view(view, starting_idx)
                 if v.trigger == spell_filters.spells_filter_already_known or v.is_dual then
                 else
                     line.book_icon.__id = -spells[v.spell_id].train;
-                    line.book_tex:SetTexture(GetItemIcon(-spells[v.spell_id].train));
+                    line.book_tex:SetTexture(C_Item.GetItemIconByID(-spells[v.spell_id].train));
                     line.book_tex:Show();
                     line.book_icon:Show();
                 end
@@ -769,7 +771,7 @@ local function create_sw_spell_id_viewer()
             __sc_frame.spell_id_viewer_editbox_label:Hide();
         end
         local id = tonumber(txt);
-        if GetSpellInfo(id) or spells[id] then
+        if C_Spell.DoesSpellExist(id) or spells[id] then
             self:SetTextColor(0, 1, 0);
         else
             self:SetTextColor(1, 0, 0);
@@ -793,7 +795,7 @@ local function create_sw_spell_id_viewer()
             self:SetText(tostring(spids[txt]));
         end
         local id = tonumber(txt);
-        if id and id <= bit.lshift(1, 31) and (GetSpellInfo(id) or spells[id]) then
+        if id and id <= bit.lshift(1, 31) and (C_Spell.DoesSpellExist(id) or spells[id]) then
             self:SetTextColor(0, 1, 0);
         else
             self:SetTextColor(1, 0, 0);
@@ -801,14 +803,14 @@ local function create_sw_spell_id_viewer()
         end
 
         if id == 0 then
-            __sc_frame.spell_icon_tex:SetTexture(GetSpellTexture(265));
-        elseif not GetSpellInfo(id) then
+            __sc_frame.spell_icon_tex:SetTexture((C_Spell.GetSpellTexture(265)));
+        elseif not C_Spell.DoesSpellExist(id) then
             __sc_frame.spell_icon_tex:SetTexture(135791);
         else
-            __sc_frame.spell_icon_tex:SetTexture(GetSpellTexture(id));
+            __sc_frame.spell_icon_tex:SetTexture((C_Spell.GetSpellTexture(id)));
         end
         GameTooltip:SetOwner(__sc_frame.spell_icon, "ANCHOR_BOTTOMRIGHT");
-        if not GetSpellInfo(id) and spells[id] then
+        if not C_Spell.DoesSpellExist(id) and spells[id] then
 
             GameTooltip:SetSpellByID(__sc_frame.spell_viewer_invalid_spell_id);
         else
@@ -831,7 +833,7 @@ local function create_sw_spell_id_viewer()
 
     local tex = __sc_frame.spell_icon:CreateTexture(nil);
     tex:SetAllPoints(__sc_frame.spell_icon);
-    tex:SetTexture(GetSpellTexture(265));
+    tex:SetTexture((C_Spell.GetSpellTexture(265)));
     __sc_frame.spell_icon_tex = tex;
 
     local tooltip_viewer_on = function(self)
@@ -843,7 +845,7 @@ local function create_sw_spell_id_viewer()
             id = 0;
         end
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT");
-        if not GetSpellInfo(id) and spells[id] then
+        if not C_Spell.DoesSpellExist(id) and spells[id] then
 
             GameTooltip:SetSpellByID(__sc_frame.spell_viewer_invalid_spell_id);
         else
@@ -882,7 +884,7 @@ local function create_sw_item_id_viewer()
             __sc_frame.item_id_viewer_editbox_label:Hide();
         end
         local id = tonumber(txt);
-        if id and GetItemInfo(id) then
+        if id and C_Item.GetItemInfo(id) then
             self:SetTextColor(0, 1, 0);
         else
             self:SetTextColor(1, 0, 0);
@@ -891,7 +893,7 @@ local function create_sw_item_id_viewer()
     end
 
     local invalid_item_id = 1728;
-    local invalid_item_tex = GetItemIcon(1728);
+    local invalid_item_tex = C_Item.GetItemIconByID(1728);
 
     __sc_frame.item_id_viewer_editbox:SetScript("OnEnterPressed", tooltip_overwrite_editbox);
     __sc_frame.item_id_viewer_editbox:SetScript("OnEscapePressed", tooltip_overwrite_editbox);
@@ -910,7 +912,7 @@ local function create_sw_item_id_viewer()
             __sc_frame.item_id_viewer_editbox_label:Hide();
         end
         local id = tonumber(txt);
-        if id and id <= bit.lshift(1, 31) and GetItemInfo(id) then
+        if id and id <= bit.lshift(1, 31) and C_Item.GetItemInfo(id) then
             self:SetTextColor(0, 1, 0);
         else
             self:SetTextColor(1, 0, 0);
@@ -922,7 +924,7 @@ local function create_sw_item_id_viewer()
             __sc_frame.item_icon.id = invalid_item_id;
             GameTooltip:Hide();
         else
-            __sc_frame.item_icon_tex:SetTexture(GetItemIcon(id));
+            __sc_frame.item_icon_tex:SetTexture(C_Item.GetItemIconByID(id));
 
             __sc_frame.item_icon.id = id;
             GameTooltip:SetOwner(__sc_frame.item_icon, "ANCHOR_BOTTOMRIGHT");
@@ -943,7 +945,7 @@ local function create_sw_item_id_viewer()
         if not self.id or not IsModifiedClick("CHATLINK") or btn ~= "LeftButton" then
             return;
         end
-        local _, link = GetItemInfo(self.id);
+        local _, link = C_Item.GetItemInfo(self.id);
         if not link then
             return;
         end
@@ -963,7 +965,7 @@ local function create_sw_item_id_viewer()
         elseif not id then
             id = 0;
         end
-        if GetItemInfo(id) then
+        if C_Item.GetItemInfo(id) then
             GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT");
             GameTooltip:SetItemByID(id);
             GameTooltip:Show();
@@ -3165,7 +3167,7 @@ local working_name = "";
 
 local function item_planner_add_slot(item_link)
 
-    local inv_loc = select(4, GetItemInfoInstant(item_link));
+    local inv_loc = select(4, C_Item.GetItemInfoInstant(item_link));
     if not inv_loc then
         return false;
     end
@@ -3207,7 +3209,7 @@ local function item_planner_add_slot(item_link)
             -- offhand knocks out 2H
 
             local mh = working_item_plan[slots.MainHandSlot];
-            if mh and mh.link and select(4, GetItemInfoInstant(mh.link)) == "INVTYPE_2HWEAPON" then
+            if mh and mh.link and select(4, C_Item.GetItemInfoInstant(mh.link)) == "INVTYPE_2HWEAPON" then
 
                 working_item_plan[slots.MainHandSlot] = {};
             end
@@ -3224,7 +3226,7 @@ local function update_calculator_item_frame(frame, allow_empty)
     local quality, tex, ilvl;
 
     if link then
-        _, _, quality, ilvl, _, _, _, _, _, tex = GetItemInfo(link);
+        _, _, quality, ilvl, _, _, _, _, _, tex = C_Item.GetItemInfo(link);
     end
 
     if tex and quality then
@@ -3334,7 +3336,7 @@ local function update_item_plan_slot_gems(frames, slot_info)
             frames.gems[i].icon:Hide();
         else
             frames.gems[i].gem_item_id = gem_item_id;
-            local tex = select(10, GetItemInfo(gem_item_id));
+            local tex = select(10, C_Item.GetItemInfo(gem_item_id));
             frames.gems[i].icon:SetTexture(tex);
             frames.gems[i].icon:Show();
         end
@@ -3503,7 +3505,7 @@ local function update_buffs_frame()
                 end
             end
 
-            v.icon.tex:SetTexture(GetSpellTexture(buff_info.id));
+            v.icon.tex:SetTexture((C_Spell.GetSpellTexture(buff_info.id)));
 
             local buff_name_max_len = 28;
             local name_appear =  buff_info.lname;
@@ -3800,7 +3802,7 @@ local function item_planner_gem_enchant_dropdown_build_entries(mode, active_id)
     local retry_needed = false;
     if mode == "gem" then
         for item_id in pairs(sc.gem_items) do
-            local lname, _, quality, _, _, _, _, _, _, tex = GetItemInfo(item_id);
+            local lname, _, quality, _, _, _, _, _, _, tex = C_Item.GetItemInfo(item_id);
             if not lname then
                 retry_needed = true;
             end
@@ -4092,7 +4094,7 @@ local function item_planner_gem_enchant_dropdown_create(parent)
                 if spell_ids then
                     for _, spell_id in ipairs(spell_ids) do
                         if spell_id > 0 then
-                            local spell_name = select(1, GetSpellInfo(spell_id));
+                            local spell_name = C_Spell.GetSpellName(spell_id);
                             if spell_name then
                                 GameTooltip:AddLine(spell_name.." ("..spell_id..")");
                             else
@@ -4548,7 +4550,7 @@ local function create_calculator_items_subframe(pframe)
                 if spell_ids then
                     for _, spell_id in ipairs(spell_ids) do
                         if spell_id > 0 then
-                            GameTooltip:AddLine(select(1, GetSpellInfo(spell_id)).." ("..spell_id..")");
+                            GameTooltip:AddLine(C_Spell.GetSpellName(spell_id).." ("..spell_id..")");
                         end
                     end
                 end
@@ -5059,7 +5061,7 @@ local function create_calculator_stats_subframe(pframe)
     f:SetWidth(120);
     f:SetText(L["Clear stats"]);
 
-    if sc.expansion == sc.expansions.vanilla then
+    if client_matches(client_flags.vanilla) then
         pframe.stats.stat_fields.expertise_rating.editbox:Hide();
         pframe.stats.stat_fields.expertise_rating.label:Hide();
     end
@@ -5336,12 +5338,12 @@ local function create_calculator_buffs_subframe(pframe)
                 if view.side == "lhs" then
                     for _, v in ipairs(view.buffs) do
                         working_buffs.player_buffs[v.id] = 1;
-                        forced_buffs_lname_to_id[GetSpellInfo(v.id)] = v.id;
+                        forced_buffs_lname_to_id[C_Spell.GetSpellName(v.id)] = v.id;
                     end
                 else
                     for _, v in ipairs(view.buffs) do
                         working_buffs.target_buffs[v.id] = 1;
-                        forced_buffs_lname_to_id[GetSpellInfo(v.id)] = v.id;
+                        forced_buffs_lname_to_id[C_Spell.GetSpellName(v.id)] = v.id;
                     end
                 end
             else
@@ -5404,11 +5406,11 @@ local function create_calculator_buffs_subframe(pframe)
                     if not config_buffs[self.buff_id] then
                         config_buffs[self.buff_id] = 1;
 
-                        forced_buffs_lname_to_id[GetSpellInfo(self.buff_id)] = self.buff_id;
+                        forced_buffs_lname_to_id[C_Spell.GetSpellName(self.buff_id)] = self.buff_id;
                         pframe.buffs[view.side].num_checked = pframe.buffs[view.side].num_checked + 1;
                     else
                         config_buffs[self.buff_id] = nil;
-                        forced_buffs_lname_to_id[GetSpellInfo(self.buff_id)] = nil;
+                        forced_buffs_lname_to_id[C_Spell.GetSpellName(self.buff_id)] = nil;
                         pframe.buffs[view.side].num_checked = pframe.buffs[view.side].num_checked - 1;
                     end
 
@@ -7089,15 +7091,10 @@ local function create_sw_base_ui()
     end
 
     for k, _ in pairs(sc.core.event_dispatch) do
-        if not sc.core.event_dispatch_client_exceptions[k] or
-                sc.core.event_dispatch_client_exceptions[k] == sc.expansion then
+        local client_filter = sc.core.event_client_filters[k];
+        if not client_filter or client_matches(client_filter) then
 
-            --__sc_frame:RegisterEvent(k);
-            --BROKEN PTR TEMPORARY FIX: remember to grep for this phrase to remove later, event missing
-            local ok, err = pcall(function() __sc_frame:RegisterEvent(k) end);
-            if __spellcoda_debug__ and not ok then
-                print("DEBUG: Event does not exist:", k);
-            end
+            __sc_frame:RegisterEvent(k);
         end
     end
 

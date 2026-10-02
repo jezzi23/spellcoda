@@ -215,6 +215,10 @@ elseif sc.class == sc.classes.druid then
     });
 
 elseif sc.class == sc.classes.priest then
+
+    for _, v in pairs(rank_seqs[spids.mana_burn]) do
+        spells[v].direct.coef = spell_coef_lvl_adjusted(0.1, spells[v].lvl_req);
+    end
     for _, v in pairs(rank_seqs[spids.power_word_shield]) do
         spells[v].direct.coef = spell_coef_lvl_adjusted(0.1, spells[v].lvl_req);
     end
