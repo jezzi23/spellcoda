@@ -2996,6 +2996,7 @@ spell_stats_info = function(info, stats, spell, loadout, effects, eval_flags, sp
                                    true,
                                    info, stats, spell, loadout, effects, eval_flags, spell_id);
         elseif spell.base_id == spids.tigers_fury then
+            -- TODO forever-transition: make these things client specific
             eval_spell_buff_diffed(alias_info,
                                    spell.alias,
                                    effects.ability.base_mod_flat,

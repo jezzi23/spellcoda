@@ -11,6 +11,25 @@ local function client_matches(mask)
     return bit.band(sc.client_flag, mask) ~= 0;
 end
 
+-- Forever returns secret numbers for e.g. UnitHealth/UnitPower, which addons cannot do arithmetic on
+local is_secret = issecretvalue or function() return false; end;
+
+local function any_secret(...)
+    for i = 1, select("#", ...) do
+        if is_secret((select(i, ...))) then
+            return true;
+        end
+    end
+    return false;
+end
+
+local function spell_book_shown()
+    if SpellBookFrame then
+        return SpellBookFrame:IsShown();
+    end
+    return PlayerSpellsFrame and PlayerSpellsFrame.SpellBookFrame:IsVisible();
+end
+
 local function deep_table_copy(obj, seen)
   if type(obj) ~= 'table' then
       return obj;
@@ -36,8 +55,7 @@ end
 
 local function spell_cost(spell_id)
 
-    -- TODO forever-transition: GetSpellPowerCost is missing in Forever, C_Spell.GetSpellPowerCost is verified to give the same shape (costs[1].cost, costs[1].name)
-    local costs = GetSpellPowerCost(spell_id);
+    local costs = C_Spell.GetSpellPowerCost(spell_id);
     if costs then
         local cost_table = costs[1];
         if cost_table then
@@ -348,6 +366,9 @@ end
 
 --------------------------------------------------------------------------------
 utils.client_matches                = client_matches;
+utils.spell_book_shown              = spell_book_shown;
+utils.is_secret                     = is_secret;
+utils.any_secret                    = any_secret;
 utils.deep_table_copy               = deep_table_copy;
 utils.clear_table                   = clear_table;
 utils.spell_cost                    = spell_cost;

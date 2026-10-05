@@ -40,11 +40,12 @@ local class_stats_spell = (function()
         return function(anycomp, bid, stats, spell, loadout, effects)
             if bit.band(spell.flags, spell_flags.heal) ~= 0 then
 
+                -- TODO forever-transition: 109 is Purifying Power on Camelot (illumination is 111), check if it still applies
                 -- illumination
-                local pts = talent_pts(effects, 109);
-                if pts ~= 0 then
-                    stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + pts * 0.2 * stats.original_base_cost;
-                end
+                --local pts = talent_pts(effects, 109);
+                --if pts ~= 0 then
+                --    stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + pts * 0.2 * stats.original_base_cost;
+                --end
 
                 if has_enchant(effects, lookups.rune_fanaticism) and spell.direct then
                     add_extra_effect(
@@ -109,14 +110,15 @@ local class_stats_spell = (function()
     elseif class == classes.shaman then
         return function(anycomp, bid, stats, spell, loadout, effects)
 
+            -- TODO forever-transition: 106 is Elemental Devastation on Camelot (elemental focus is 107), check if it still applies
             -- shaman clearcast
-            if bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 then
-                -- clearcast
-                local pts = talent_pts(effects, 106);
-                if pts ~= 0 then
-                    stats.clearcast_p = stats.clearcast_p + 0.1;
-                end
-            end
+            --if bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 then
+            --    -- clearcast
+            --    local pts = talent_pts(effects, 106);
+            --    if pts ~= 0 then
+            --        stats.clearcast_p = stats.clearcast_p + 0.1;
+            --    end
+            --end
 
             if num_set_pieces(effects, 1816) >= 2 and spell.direct and get_buff(loadout, "player", lookups.water_shield, true) then
 
@@ -259,7 +261,6 @@ if class == classes.shaman then
 elseif class == classes.priest then
     special_abilities = {
         [spids.mana_burn] = function(_, _, _, _, effects)
-            effects.mul.vuln_mod = effects.mul.vuln_mod * 0.5;
         end,
     };
 --elseif class == classes.druid then
@@ -274,8 +275,10 @@ elseif class == classes.priest then
 elseif class == classes.mage then
     special_abilities = {
         [spids.mana_shield] = function(spell, info, loadout, stats, effects)
-            local pts = talent_pts(effects, 110);
-            local drain_mod = 0.1 * pts;
+            -- TODO forever-transition: 110 is Arcane Blast on Camelot, Improved Mana Shield is not in the Forever tree
+            --local pts = talent_pts(effects, 110);
+            --local drain_mod = 0.1 * pts;
+            local drain_mod = 0.0;
             if has_enchant(effects, lookups.rune_advanced_warding) then
                 drain_mod = drain_mod + 0.5;
             end
@@ -309,7 +312,13 @@ local function stats_glance(stats, bid, loadout)
 end
 
 local function caster_coef_multiplier(slvl, mlvl, clvl)
-    return 1;
+
+    --return 1;
+
+    -- this formula is speculated, and likely subject to change
+    local mod = 1 - (((clvl - 17) - slvl) * 0.05);
+
+    return math.max(0, math.min(1, mod));
 end
 
 --------------------------------------------------------------------------------

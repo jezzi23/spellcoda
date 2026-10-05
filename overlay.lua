@@ -8,6 +8,7 @@ local effect_color                                  = sc.utils.effect_color;
 local format_number                                 = sc.utils.format_number;
 local format_dur                                    = sc.utils.format_dur;
 local table_from_schema                             = sc.utils.table_from_schema;
+local spell_book_shown                              = sc.utils.spell_book_shown;
 
 local spells                                        = sc.spells;
 local spids                                         = sc.spids;
@@ -174,10 +175,8 @@ local function overlay_reconfig()
         return;
     end
 
-    for i = 1, 12 do
-        if spell_book_frames[i] then
-            overlay_frames_config(spell_book_frames[i].overlay_frames);
-        end
+    for _, v in pairs(spell_book_frames) do
+        overlay_frames_config(v.overlay_frames);
     end
     for _, v in pairs(action_id_frames) do
         if v.frame then
@@ -204,11 +203,9 @@ local function clear_overlays()
     end
     for _, v in pairs(spell_book_frames) do
         v.old_rank_marked = false;
-        if v.frame then
-            for i = 1, 3 do
-                v.overlay_frames[i]:SetText("");
-                v.overlay_frames[i]:Hide();
-            end
+        for i = 1, 3 do
+            v.overlay_frames[i]:SetText("");
+            v.overlay_frames[i]:Hide();
         end
     end
     for _, v in pairs(external_overlay_frames) do
@@ -340,29 +337,78 @@ end
 
 local set_paging_override;
 
+local function spell_book_frame_info(frame, overlay_parent)
+    local v = spell_book_frames[frame];
+    if not v then
+        v = { frame = overlay_parent };
+        spell_book_frames[frame] = v;
+        init_frame_overlay(v);
+    end
+    return v;
+end
+
+-- calls fn(frame, overlay_parent, spell_id) for every spell slot on the displayed spellbook page
+local for_each_spell_book_spell;
+if SpellBookFrame then
+    for_each_spell_book_spell = function(fn)
+        local current_tab = SpellBookFrame.selectedSkillLine;
+        local num_spells_in_tab = select(4, GetSpellTabInfo(current_tab));
+        local page, page_max = SpellBook_GetCurrentPage(current_tab);
+        local remaining_spells_in_page = 12;
+        if page == page_max then
+            remaining_spells_in_page = 1 + (num_spells_in_tab-1)%12;
+        end
+        for k = 1, 12 do
+            local frame = _G["SpellButton"..k];
+            if frame then
+                local _, _, _, _, _, _, id = GetSpellInfo(frame.SpellName:GetText(), frame.SpellSubName:GetText());
+                local rearranged_k = 1 + 5*(1-k%2) + (k-k%2)/2;
+                if rearranged_k > remaining_spells_in_page then
+                    id = nil;
+                end
+                fn(frame, frame, id);
+            end
+        end
+    end;
+else
+    for_each_spell_book_spell = function(fn)
+        PlayerSpellsFrame.SpellBookFrame:ForEachDisplayedSpell(function(entry)
+            local info = entry.slotIndex and C_SpellBook.GetSpellBookItemInfo(entry.slotIndex, entry.spellBank);
+            fn(entry, entry.Button, info and info.spellID);
+        end);
+    end;
+end
+
+local spell_book_hooked = false;
+local function hook_spell_book()
+    if spell_book_hooked or not PlayerSpellsFrame then
+        return;
+    end
+    spell_book_hooked = true;
+    -- the paged frame recycles its buttons on every page/tab change
+    hooksecurefunc(PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame, "DisplayViewsForCurrentPage", function()
+        clear_overlays();
+        sc.loadouts.force_update = true;
+    end);
+end
+
 local function gather_spell_icons()
 
     active_overlays = {};
 
     -- gather spell book icons
-    if false then -- check for some common addons if they overrite spellbook frames
+    if not SpellBookFrame then
+        hook_spell_book();
+
+    elseif false then -- check for some common addons if they overrite spellbook frames
 
     else -- default spellbook frames
         for i = 1, 12 do
-
             local frame = _G["SpellButton"..i];
-            -- TODO forever-transition: SpellButtonN frames do not exist, part of the spellbook port
-            if not spell_book_frames[i] and frame then
-                spell_book_frames[i] = {
-                    frame = frame;
-                };
+            if frame and not spell_book_frames[frame] then
+                spell_book_frame_info(frame, frame);
                 frame:HookScript("OnMouseWheel", sc.tooltip.eval_mode_scroll_fn);
             end
-        end
-    end
-    for i = 1, 12 do
-        if spell_book_frames[i] then
-            init_frame_overlay(spell_book_frames[i]);
         end
     end
 
@@ -1824,35 +1870,16 @@ local function update_spell_icons(loadout, effects, eval_flags)
     end
 
     -- update spell book icons
-    local current_tab = SpellBookFrame.selectedSkillLine;
-    local num_spells_in_tab = select(4, GetSpellTabInfo(current_tab));
-    local page, page_max = SpellBook_GetCurrentPage(current_tab);
-    if SpellBookFrame:IsShown() then
-
-        for k, v in pairs(spell_book_frames) do
-
-            if v.frame then
-                for _, ov in pairs(v.overlay_frames) do
-                    ov:Hide();
-                end
-                local spell_name = v.frame.SpellName:GetText();
-                local spell_rank_name = v.frame.SpellSubName:GetText();
-
-                -- TODO forever-transition: GetSpellInfo(name, rank) is removed and C_Spell.GetSpellInfo has no rank argument nor a spell id return value
-                -- this lookup of the spell id from the spellbook button name+rank needs a replacement, see also SpellBookFrame TODOs
-                local _, _, _, _, _, _, id = GetSpellInfo(spell_name, spell_rank_name);
-
-                local remaining_spells_in_page = 12;
-                if page == page_max then
-                    remaining_spells_in_page = 1 + (num_spells_in_tab-1)%12;
-                end
-                local rearranged_k = 1 + 5*(1-k%2) + (k-k%2)/2;
-
-                if id and spells[id] and v.frame:IsShown() and rearranged_k <= remaining_spells_in_page then
-                    update_overlay_frame(v, loadout, effects, id, eval_flags);
-                end
+    if spell_book_shown() then
+        for_each_spell_book_spell(function(frame, overlay_parent, id)
+            local v = spell_book_frame_info(frame, overlay_parent);
+            for _, ov in pairs(v.overlay_frames) do
+                ov:Hide();
             end
-        end
+            if id and spells[id] and frame:IsShown() then
+                update_overlay_frame(v, loadout, effects, id, eval_flags);
+            end
+        end);
     end
 
     -- update action bar icons
@@ -1955,6 +1982,7 @@ end
 overlay.spell_book_frames                           = spell_book_frames;
 overlay.action_id_frames                            = action_id_frames;
 overlay.setup_action_bars                           = setup_action_bars;
+overlay.hook_spell_book                             = hook_spell_book;
 overlay.update_overlay                              = update_overlay;
 overlay.update_icon_overlay_settings                = update_icon_overlay_settings;
 overlay.reassign_overlay_icon                       = reassign_overlay_icon;

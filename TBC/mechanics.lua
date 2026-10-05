@@ -128,7 +128,6 @@ if class == classes.shaman then
 elseif class == classes.priest then
     special_abilities = {
         [spids.mana_burn] = function(_, _, _, _, effects)
-            effects.mul.vuln_mod = effects.mul.vuln_mod * 0.5;
         end,
     };
 --elseif class == classes.druid then

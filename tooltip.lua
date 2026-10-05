@@ -92,15 +92,15 @@ local function format_bounce_spell(min_hit, max_hit, bounces, falloff)
     local bounce_str = "     + ";
     for _ = 1, bounces - 1 do
         bounce_str = bounce_str .. string.format(" %.0f %s %.0f  + ",
-            falloff * math.floor(min_hit),
+            math.floor(falloff * min_hit),
             L["to"],
-            falloff * math.ceil(max_hit));
+            math.ceil(falloff * max_hit));
         falloff = falloff * falloff;
     end
     bounce_str = bounce_str .. string.format(" %.0f %s %.0f",
-        falloff * math.floor(min_hit),
+        math.floor(falloff * min_hit),
             L["to"],
-        falloff * math.ceil(max_hit));
+        math.ceil(falloff * max_hit));
     return bounce_str;
 end
 
@@ -2725,21 +2725,24 @@ local function on_hide_tooltip(tooltip)
 end
 
 local function on_show_tooltip(tooltip)
+    local t = GetTime();
+    if t > last_needs_update_time + tooltip_update_cd then
+        spell_tooltip_cached.needs_update = true;
+        last_needs_update_time = t;
+    end
+end
+
+local function on_show_tooltip_legacy(tooltip)
     local spell_name, _ = tooltip:GetSpell();
     if not spell_name then
         -- Attack tooltip may be a dummy, so link it to its actual spell id
         local attack_lname = C_Spell.GetSpellName(sc.auto_attack_spell_id);
         local txt = getglobal("GameTooltipTextLeft1");
         if txt and txt:GetText() == attack_lname then
-            spell_name = attack_lname;
             tooltip:SetSpellByID(sc.auto_attack_spell_id);
         end
     end
-    local t = GetTime();
-    if t > last_needs_update_time + tooltip_update_cd then
-        spell_tooltip_cached.needs_update = true;
-        last_needs_update_time = t;
-    end
+    on_show_tooltip(tooltip);
 end
 
 tooltip_export.sort_stat_weights                = sort_stat_weights;
@@ -2751,6 +2754,7 @@ tooltip_export.append_tooltip_spell_rank        = append_tooltip_spell_rank;
 tooltip_export.eval_mode_scroll_fn              = eval_mode_scroll_fn;
 tooltip_export.on_clear_tooltip                 = on_clear_tooltip;
 tooltip_export.on_show_tooltip                  = on_show_tooltip;
+tooltip_export.on_show_tooltip_legacy           = on_show_tooltip_legacy;
 tooltip_export.on_hide_tooltip                  = on_hide_tooltip;
 tooltip_export.stat_diffs_included_effects_str  = stat_diffs_included_effects_str;
 tooltip_export.colored_diff_str                 = colored_diff_str;

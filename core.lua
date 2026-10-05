@@ -30,6 +30,7 @@ local write_spell_tooltip                   = sc.tooltip.write_spell_tooltip;
 local write_item_tooltip                    = sc.tooltip.write_item_tooltip;
 local on_clear_tooltip                      = sc.tooltip.on_clear_tooltip;
 local on_show_tooltip                       = sc.tooltip.on_show_tooltip;
+local on_show_tooltip_legacy                = sc.tooltip.on_show_tooltip_legacy;
 local on_hide_tooltip                       = sc.tooltip.on_hide_tooltip;
 
 -------------------------------------------------------------------------
@@ -284,6 +285,8 @@ local event_dispatch = {
         if arg == "SpellCoda" then
             load_config();
             load_localization();
+        elseif arg == "Blizzard_PlayerSpells" and client_matches(client_flags.forever) then
+            sc.overlay.hook_spell_book();
         end
     end,
     ["PLAYER_LOGOUT"] = function()
@@ -505,7 +508,8 @@ local function on_tooltip_set_item(self)
     end
 end
 
-if GameTooltip:HasScript("OnTooltipSetSpell") then
+local legacy_tooltip_scripts = GameTooltip:HasScript("OnTooltipSetSpell");
+if legacy_tooltip_scripts then
     GameTooltip:HookScript("OnTooltipSetSpell", on_tooltip_set_spell);
     GameTooltip:HookScript("OnTooltipSetItem", on_tooltip_set_item);
 else
@@ -550,9 +554,12 @@ GameTooltip:HookScript("OnHide", function(self)
     core.deactivate_tooltip_refresh();
 end);
 GameTooltip:HookScript("OnShow", function(self)
-    on_show_tooltip(self);
+    if legacy_tooltip_scripts then
+        on_show_tooltip_legacy(self);
+    else
+        on_show_tooltip(self);
+    end
 end);
-
 
 local function command(arg)
     arg = string.lower(arg);

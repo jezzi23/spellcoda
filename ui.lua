@@ -507,13 +507,13 @@ local function filtered_spell_view(spell_ids, name_filter, loadout, effects, eva
     end
     local cost_str = "";
     if avail_cost ~= 0 then
-        cost_str = cost_str.."   |cFF00FF00"..L["Available cost:"].."|r "..GetCoinTextureString(avail_cost);
+        cost_str = cost_str.."   |cFF00FF00"..L["Available cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(avail_cost);
     end
     if next_cost ~= 0 then
-        cost_str = cost_str.."   |cFFFF8C00"..L["Next level"].." "..next_lvl..L[" cost:"].."|r "..GetCoinTextureString(next_cost);
+        cost_str = cost_str.."   |cFFFF8C00"..L["Next level"].." "..next_lvl..L[" cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(next_cost);
     end
     if total_cost ~= 0 then
-        cost_str = cost_str.."   |cFFFF0000"..L["Total cost:"].."|r "..GetCoinTextureString(total_cost);
+        cost_str = cost_str.."   |cFFFF0000"..L["Total cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(total_cost);
     end
     __sc_frame.spells_frame.footer_cost:SetText(cost_str);
 
@@ -605,7 +605,7 @@ local function populate_scrollable_spell_view(view, starting_idx)
                 if v.trigger == spell_filters.spells_filter_already_known or v.is_dual then
                     line.cost_str:SetText("");
                 else
-                    line.cost_str:SetText(GetCoinTextureString(spells[v.spell_id].train));
+                    line.cost_str:SetText(C_CurrencyInfo.GetCoinTextureString(spells[v.spell_id].train));
                 end
                 line.cost_str:Show();
             elseif spells[v.spell_id].train < -1 then
@@ -771,7 +771,7 @@ local function create_sw_spell_id_viewer()
             __sc_frame.spell_id_viewer_editbox_label:Hide();
         end
         local id = tonumber(txt);
-        if C_Spell.DoesSpellExist(id) or spells[id] then
+        if id and C_Spell.DoesSpellExist(id) or spells[id] then
             self:SetTextColor(0, 1, 0);
         else
             self:SetTextColor(1, 0, 0);

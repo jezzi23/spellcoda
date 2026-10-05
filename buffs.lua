@@ -1,6 +1,9 @@
 local _, sc               = ...;
 
 local apply_effect        = sc.loadouts.apply_effect;
+local is_secret           = sc.utils.is_secret;
+local client_matches      = sc.utils.client_matches;
+local client_flags        = sc.client_flags;
 
 ----------------------------------------------------------------------------------------------------
 local buffs_export        = {};
@@ -77,6 +80,20 @@ end
 unique_buffs = nil;
 unique_target_buffs = nil;
 
+local aura_getters = {
+    { get = C_UnitAuras.GetBuffDataByIndex, filter = "HELPFUL" },
+    { get = C_UnitAuras.GetDebuffDataByIndex, filter = "HARMFUL" },
+};
+local should_aura_index_be_secret = C_Secrets and C_Secrets.ShouldUnitAuraIndexBeSecret;
+
+local is_player_owned;
+if client_matches(client_flags.forever) then
+    -- AuraData has no sourceUnit on Forever
+    is_player_owned = function(aura) return aura.isFromPlayerOrPlayerPet; end;
+else
+    is_player_owned = function(aura) return aura.sourceUnit == "player"; end;
+end
+
 local function detect_buffs(loadout)
     loadout.dynamic_buffs["player"] = {};
     loadout.dynamic_buffs["target"] = {};
@@ -98,40 +115,29 @@ local function detect_buffs(loadout)
     end
 
     for k, v in pairs(loadout.dynamic_buffs) do
-        local i = 1;
-        while true do
-            local lname, _, count, _, _, exp_time, src, _, _, spell_id = UnitBuff(k, i);
-            if not spell_id then
-                break;
+        for _, getter in ipairs(aura_getters) do
+            local i = 1;
+            while true do
+                -- querying a restricted aura index errors, stop reading auras of this unit
+                if should_aura_index_be_secret and should_aura_index_be_secret(k, i, getter.filter) then
+                    break;
+                end
+                local aura = getter.get(k, i);
+                if not aura then
+                    break;
+                end
+                local spell_id = aura.spellId;
+                if not is_secret(spell_id) and not is_secret(aura.name) then
+                    -- player owned takes priority
+                    local player_owned = is_player_owned(aura);
+                    if not v[spell_id] or player_owned then
+                        local buff_info = { count = aura.applications, id = spell_id, player_owned = player_owned };
+                        v[spell_id] = buff_info;
+                        loadout.dynamic_buffs_lname[k][aura.name] = buff_info;
+                    end
+                end
+                i = i + 1;
             end
-            if not exp_time then
-                exp_time = 0.0;
-            end
-            -- player owned takes priority
-            local player_owned = src == "player";
-            if not v[spell_id] or player_owned then
-                local buff_info = { count = count, id = spell_id, player_owned = player_owned };
-                v[spell_id] = buff_info
-                loadout.dynamic_buffs_lname[k][lname] = buff_info;
-            end
-            i = i + 1;
-        end
-        local i = 1;
-        while true do
-            local lname, _, count, _, _, exp_time, src, _, _, spell_id = UnitDebuff(k, i);
-            if not spell_id then
-                break;
-            end
-            if not exp_time then
-                exp_time = 0.0;
-            end
-            local player_owned = src == "player";
-            if not v[spell_id] or player_owned then
-                local buff_info = { count = count, id = spell_id, player_owned = player_owned };
-                v[spell_id] = buff_info;
-                loadout.dynamic_buffs_lname[k][lname] = buff_info;
-            end
-            i = i + 1;
         end
     end
 end
