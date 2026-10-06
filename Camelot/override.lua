@@ -38,18 +38,6 @@ sc.dual_wield_class =
     sc.class == sc.classes.warrior or
     sc.class == sc.classes.rogue;
 
-sc.npc_armor_by_lvl = {
-    -- "Intended as typical 100% of Heavy armor values"
-    20,     21,     46,     82,     126,    180,    245,    322,    412,    518,    -- npc level 1-10
-    545,    580,    615,    650,    685,    721,    756,    791,    826,    861,    -- npc level 11-20
-    897,    932,    967,    1002,   1037,   1072,   1108,   1142,   1172,   1212,   -- npc level 21-30
-    1247,   1283,   1317,   1353,   1387,   1494,   1607,   1724,   1849,   1980,   -- npc level 31-40
-    2117,   2262,   2414,   2574,   2742,   2798,   2853,   2907,   2963,   3018,   -- npc level 41-50
-    3072,   3128,   3183,   3237,   3292,   3348,   3402,   3457,   3512,   3566,   -- npc level 51-60
-    3622,   3677,   3731, --4870,   5050,   5230,   5410,   5590,   5770,   5950,   -- npc level 61-70
---  6533,   7116,   7700,   8000,   8300,   8600,   8900,   9200,   9500,   9729,   -- npc level 71-80
---  10033, 10338, 10643,                                                            -- npc level 81-90
-};
 
 -- Threat data for special abilities needs some fixing
 
@@ -355,9 +343,9 @@ elseif sc.class == sc.classes.paladin then
         spells[v].direct.coef = spell_coef_lvl_adjusted(0.714, spells[v].lvl_req);
     end
 
-    sc.passives[lookups.exorcist] = {
-		{"ability", "crit", 1.0, {spids.exorcism, spids.exorcism_2}, 0, 0},
-    };
+    --sc.passives[lookups.exorcist] = {
+	--	{"ability", "crit", 1.0, {spids.exorcism}, 0, 0},
+    --};
 
     -- THREAT
     --add_threat_flat_by_rank({

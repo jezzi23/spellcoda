@@ -6,6 +6,8 @@ local aura_idx_value                   = sc.aura_idx_value;
 local special_item_properties          = sc.special_item_properties;
 
 local apply_effect                     = sc.loadouts.apply_effect;
+local apply_flat_scaled                = sc.loadouts.apply_flat_scaled;
+local write_item_info_from_link        = sc.utils.write_item_info_from_link;
 local cpy_effects                      = sc.loadouts.cpy_effects;
 
 
@@ -88,6 +90,7 @@ local inv_type_to_rand_prop_points_index = {
     INVTYPE_WAIST          = 2,
     INVTYPE_FEET           = 2,
     INVTYPE_HAND           = 2,
+    INVTYPE_TRINKET        = 2,
     INVTYPE_NECK           = 3,
     INVTYPE_WRIST          = 3,
     INVTYPE_FINGER         = 3,
@@ -168,7 +171,150 @@ local item_stats_handler = {
     end,
 };
 
-local function apply_weapon(effects, id, slot, subclass_id, undo)
+local function rand_prop_points(item_info, idx)
+    local by_quality = sc.ilvl_to_quality_rand_prop_points[item_info.ilvl];
+    return by_quality and idx and by_quality[math.max(2, math.min(4, item_info.quality))][idx];
+end
+
+-- Item values come either per item from the client data (old clients) or from formulas of ilvl and quality
+-- (Forever, whose item data has no damage or armor columns). The generated tables decide which.
+
+-- min, max, delay, school or nil
+local weapon_stats;
+if sc.weapons then
+    weapon_stats = function(item_info)
+        local wpn = sc.weapons[item_info.id];
+        if wpn then
+            return wpn[1], wpn[2], wpn[3], wpn[4];
+        end
+    end;
+else
+    weapon_stats = function(item_info)
+        local wpn = sc.scaled_weapons[item_info.id];
+        if not wpn or not item_info.ilvl then
+            return;
+        end
+        local ilvl_to_quality_dps;
+        if item_info.class_id == 2 and item_info.subclass_id == 19 then
+            ilvl_to_quality_dps = sc.ilvl_to_quality_wand_dps;
+        else
+            ilvl_to_quality_dps = sc.inv_type_to_ilvl_to_quality_dps[item_info.inv_type];
+        end
+        local by_quality = ilvl_to_quality_dps and ilvl_to_quality_dps[item_info.ilvl];
+        if not by_quality then
+            return;
+        end
+        local dps = by_quality[item_info.quality];
+        if wpn[4] == 1 then
+            dps = dps - sc.inv_type_to_ilvl_to_quality_dps.INVTYPE_WEAPON[item_info.ilvl][item_info.quality] * (1/3);
+        end
+        local delay, variance = wpn[1], wpn[2];
+        local avg = dps * delay;
+        return math.floor(avg * (1 - 0.5 * variance)), math.floor(avg * (1 + 0.5 * variance) + 0.5), delay, wpn[3];
+    end;
+end
+
+-- the tooltip's "adds x damage per second" or nil
+local ammo_dps;
+if sc.weapons then
+    ammo_dps = function(item_info)
+        local ammo = sc.weapons[item_info.id];
+        return ammo and 0.5 * (ammo[1] + ammo[2]);
+    end;
+else
+    ammo_dps = function(item_info)
+        local by_quality = item_info.ilvl and sc.ilvl_to_quality_ammo_dps[item_info.ilvl];
+        return by_quality and by_quality[item_info.quality];
+    end;
+end
+
+local item_armor;
+if sc.armor then
+    item_armor = function(item_info)
+        return sc.armor[item_info.id];
+    end;
+else
+    item_armor = function(item_info)
+        local ilvl, quality, subclass = item_info.ilvl, item_info.quality, item_info.subclass_id;
+        if item_info.class_id ~= 4 or not ilvl then
+            return nil;
+        end
+        if subclass == 6 then
+            local by_quality = sc.ilvl_to_quality_shield_armor[ilvl];
+            return by_quality and by_quality[quality];
+        end
+        local by_subclass = sc.ilvl_to_armor_subclass_armor[ilvl];
+        local inv_type_mods = sc.inv_type_to_armor_subclass_mod[item_info.inv_type];
+        local quality_mods = sc.ilvl_to_quality_armor_mod[ilvl];
+        if not by_subclass or not by_subclass[subclass] or not inv_type_mods or not quality_mods then
+            return nil;
+        end
+        return math.floor(by_subclass[subclass] * inv_type_mods[subclass] * quality_mods[quality] + 0.5);
+    end;
+end
+
+local function round(x)
+    return math.floor(x + 0.5);
+end
+
+-- item stats are rounded, the implicit spell power of caster weapons is floored
+local function apply_pct_stats(effects, pcts, points, undo, rounding)
+    if not pcts or not points then
+        return;
+    end
+    for i = 1, #pcts, 2 do
+        local stat, pct = pcts[i], pcts[i+1];
+        local amount = rounding(0.0001 * points * math.abs(pct));
+        -- negative stats round like positive ones
+        if pct < 0 then
+            amount = -amount;
+        end
+        if undo then
+            amount = -amount;
+        end
+        apply_flat_scaled(effects, sc.item_stat_effects[stat], amount);
+    end
+end
+
+local apply_item_stats;
+if sc.item_stat_pcts then
+    apply_item_stats = function(effects, item_info, _, undo)
+        if not item_info.ilvl then
+            return;
+        end
+        apply_pct_stats(effects, sc.item_stat_pcts[item_info.id],
+                        rand_prop_points(item_info, inv_type_to_rand_prop_points_index[item_info.inv_type]), undo, round);
+        apply_pct_stats(effects, sc.caster_weapon_stat_pcts[item_info.id], rand_prop_points(item_info, 1), undo, math.floor);
+    end;
+else
+    apply_item_stats = function(effects, item_info, forced, undo)
+        if not item_info.link then
+            return;
+        end
+        local item_stats = GetItemStats(item_info.link);
+        if item_stats then
+            for k, v in pairs(item_stats) do
+                if item_stats_handler[k] then
+                    item_stats_handler[k](effects, v, forced, undo);
+                end
+            end
+        end
+    end;
+end
+
+-- false for items released after the generated data was made
+local item_in_data;
+if sc.item_stat_pcts then
+    item_in_data = function(item_id)
+        return sc.item_stat_pcts[item_id] ~= nil;
+    end;
+else
+    item_in_data = function()
+        return true;
+    end;
+end
+
+local function apply_weapon(effects, item_info, slot, undo)
 
     local mod;
     if undo then
@@ -187,23 +333,23 @@ local function apply_weapon(effects, id, slot, subclass_id, undo)
     --        subclass_id = 0;
     --    end
     --end
-    subclass_id = subclass_id or 13;
+    local subclass_id = item_info.subclass_id or 13;
     effects.raw["wpn_subclass_"..wpn_strs[slot]] = effects.raw["wpn_subclass_"..wpn_strs[slot]] + mod*subclass_id;
 
-    if not id then
+    if not item_info.id then
         return;
     end
 
-    local wpn_effect = sc.weapons[id];
-    if not wpn_effect then
+    local min, max, delay, school = weapon_stats(item_info);
+    if not min then
         return;
     end
 
-    effects.raw["wpn_min_"..wpn_strs[slot]] = effects.raw["wpn_min_"..wpn_strs[slot]] + mod*wpn_effect[1];
-    effects.raw["wpn_max_"..wpn_strs[slot]] = effects.raw["wpn_max_"..wpn_strs[slot]] + mod*wpn_effect[2];
-    effects.raw["wpn_delay_"..wpn_strs[slot]] = effects.raw["wpn_delay_"..wpn_strs[slot]] + mod*wpn_effect[3];
+    effects.raw["wpn_min_"..wpn_strs[slot]] = effects.raw["wpn_min_"..wpn_strs[slot]] + mod*min;
+    effects.raw["wpn_max_"..wpn_strs[slot]] = effects.raw["wpn_max_"..wpn_strs[slot]] + mod*max;
+    effects.raw["wpn_delay_"..wpn_strs[slot]] = effects.raw["wpn_delay_"..wpn_strs[slot]] + mod*delay;
     if slot == slots.RangedSlot then
-        effects.raw["wpn_school_"..wpn_strs[slot]] = effects.raw["wpn_school_"..wpn_strs[slot]] + mod*wpn_effect[4];
+        effects.raw["wpn_school_"..wpn_strs[slot]] = effects.raw["wpn_school_"..wpn_strs[slot]] + mod*school;
     end
 end
 
@@ -218,21 +364,19 @@ local function apply_damage_enchant(effects, dmg_effect, slot, undo)
     effects.raw["wpn_max_"..wpn_strs[slot]] = effects.raw["wpn_max_"..wpn_strs[slot]] + mod*dmg_effect[2];
 end
 
-local function apply_ammo(effects, ammo_effect, undo)
-    if not ammo_effect then
+local function apply_ammo(effects, item_info, undo)
+    local dps = ammo_dps(item_info);
+    if not dps then
         return;
     end
-    local mod;
     if undo then
-        mod = -1;
-    else
-        mod = 1;
+        dps = -dps;
     end
-    effects.raw.ammo_dps = effects.raw.ammo_dps + mod*ammo_effect[1];
+    effects.raw.ammo_dps = effects.raw.ammo_dps + dps;
 end
 
-local function apply_armor(effects, item_id, undo)
-    local armor = sc.armor[item_id];
+local function apply_armor(effects, item_info, undo)
+    local armor = item_armor(item_info);
     if not armor then
         return;
     end
@@ -243,23 +387,6 @@ local function apply_armor(effects, item_id, undo)
         mod = 1;
     end
     effects.raw.base_res_phys_flat = effects.raw.base_res_phys_flat + mod*armor;
-end
-
-local function apply_item_stats(effects, item_info, forced, undo)
-
-    if not item_info.link then
-        return nil;
-    end
-    local item_stats = GetItemStats(item_info.link);
-
-    if item_stats then
-        for k, v in pairs(item_stats) do
-            if item_stats_handler[k] then
-                item_stats_handler[k](effects, v, forced, undo);
-            end
-        end
-    end
-    return item_stats;
 end
 
 local gems_buffer = {};
@@ -363,7 +490,7 @@ local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems,
 
     if wpn_strs[slot] then
         -- need to be able to reset unarmed subclass here even if no item id
-        apply_weapon(effects, item_info.id, slot, item_info.subclass_id, undo);
+        apply_weapon(effects, item_info, slot, undo);
     end
 
     if not item_info.id then
@@ -396,7 +523,7 @@ local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems,
         end
     end
 
-    local item_stats = apply_item_stats(effects, item_info, true, undo);
+    apply_item_stats(effects, item_info, true, undo);
 
     if should_apply_gems then
         apply_gems(effects, true, undo, item_info.id,
@@ -459,11 +586,10 @@ local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems,
             end
         end
     end
-    apply_armor(effects, item_info.id, undo);
+    apply_armor(effects, item_info, undo);
 
     if slot == slots.AmmoSlot then
-        -- ammo
-        apply_ammo(effects, sc.weapons[item_info.id], undo);
+        apply_ammo(effects, item_info, undo);
     end
 end
 
@@ -541,6 +667,9 @@ local function apply_items_cmp(loadout, effects, new_items, old_items,
     end
 end
 
+local equipped_wpn_info = {};
+local equipped_ammo_info = {};
+
 local function apply_equipment(loadout, effects)
 
     for _, slot in pairs(slots) do
@@ -591,21 +720,17 @@ local function apply_equipment(loadout, effects)
             end
         end
         if wpn_strs[item] then
-            local wpn_subclass = item_link and select(7, C_Item.GetItemInfoInstant(item_link));
-            if item_link and not wpn_subclass then
+            write_item_info_from_link(equipped_wpn_info, item_link);
+            equipped_wpn_info.id = id;
+            if item_link and not equipped_wpn_info.subclass_id then
                 found_anything = false;
             end
 
-            apply_weapon(effects,
-                         id,
-                         item,
-                         wpn_subclass,
-                         false);
+            apply_weapon(effects, equipped_wpn_info, item, false);
         end
     end
-    if loadout.items[slots.AmmoSlot] and sc.weapons[loadout.items[slots.AmmoSlot]] then
-        -- ammo equipped
-        apply_ammo(effects, sc.weapons[loadout.items[slots.AmmoSlot]], false);
+    if write_item_info_from_link(equipped_ammo_info, loadout.item_links[slots.AmmoSlot]) then
+        apply_ammo(effects, equipped_ammo_info, false);
     end
     local offhand_link = loadout.item_links[slots.SecondaryHandSlot];
     if offhand_link then
@@ -680,5 +805,6 @@ equipment.apply_items_cmp               = apply_items_cmp;
 equipment.wpn_skill_for_slot            = wpn_skill_for_slot;
 equipment.slots                         = slots;
 equipment.inv_type_to_slot_ids          = inv_type_to_slot_ids;
+equipment.item_in_data                  = item_in_data;
 
 sc.equipment = equipment;

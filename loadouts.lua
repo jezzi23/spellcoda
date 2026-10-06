@@ -19,9 +19,10 @@ local curve_idx                         = sc.aura_idx_curve;
 
 local mana_per_int                      = sc.scaling.mana_per_int;
 local hp_per_stam                       = sc.scaling.hp_per_stam;
-local ap_per_str                        = sc.scaling.ap_per_str;
-local ap_per_agi                        = sc.scaling.ap_per_agi;
-local rap_per_agi                       = sc.scaling.rap_per_agi;
+local ap_per_str                        = sc.ap_per_str;
+local ap_per_agi                        = sc.ap_per_agi;
+local rap_per_agi                       = sc.rap_per_agi;
+local cat_form_ap_per_agi               = sc.cat_form_ap_per_agi;
 local armor_per_agi                     = sc.scaling.armor_per_agi;
 local cr_weights                        = sc.scaling.cr_weights;
 local spirit_mana_regen                 = sc.scaling.spirit_mana_regen;
@@ -1767,15 +1768,15 @@ local function effects_finalize_forced(loadout, effects)
     local dodge_from_agi = 0.01*(sc.dodge_to_agi[loadout.lvl] or 0)*effects.by_attr.stat_flat[attr.agility];
     effects.raw.dodge = effects.raw.dodge + dodge_from_agi;
 
-    local agi_ap_class = class;
+    local agi_ap = ap_per_agi;
     if class == classes.druid and loadout.shapeshift == 3 then
         -- cat form
-        agi_ap_class = classes.rogue;
+        agi_ap = cat_form_ap_per_agi;
     end
 
     local added_ap =
-        effects.by_attr.stat_flat[attr.strength] * ap_per_str[class] +
-        effects.by_attr.stat_flat[attr.agility] * ap_per_agi[agi_ap_class];
+        effects.by_attr.stat_flat[attr.strength] * ap_per_str +
+        effects.by_attr.stat_flat[attr.agility] * agi_ap;
 
     effects.raw.ap_flat = 
         (1.0 + effects.raw.ap_mod + effects.raw.ap_mod_forced)
@@ -1787,7 +1788,7 @@ local function effects_finalize_forced(loadout, effects)
         );
 
 
-    local added_rap = effects.by_attr.stat_flat[attr.agility] * rap_per_agi[class];
+    local added_rap = effects.by_attr.stat_flat[attr.agility] * rap_per_agi;
     effects.raw.rap_flat = 
         (1.0 + effects.raw.rap_mod + effects.raw.rap_mod_forced)
         *
@@ -1856,7 +1857,7 @@ local function dynamic_loadout(loadout)
         loadout.base_mana = sc.base_mana_by_lvl[loadout.lvl];
     end
 
-    if client_matches(bit.bnot(client_flags.vanilla)) then
+    if client_matches(bit.bnot(bit.bor(client_flags.vanilla, client_flags.forever))) then
         for _, v in ipairs(ratings) do
             loadout[v[2]] = keep_if_secret(GetCombatRating(v[1]), loadout[v[2]]);
         end

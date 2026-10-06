@@ -16,41 +16,44 @@ local function spirit_mana_regen(spirit, intellect)
     return mp2;
 end
 
-local ap_per_str = {
-    [classes.warrior] = 2,
-    [classes.paladin] = 2,
-    [classes.hunter]  = 1,
-    [classes.rogue]   = 1,
-    [classes.priest]  = 1,
-    [classes.shaman]  = 2,
-    [classes.mage]    = 1,
-    [classes.warlock] = 1,
-    [classes.druid]   = 2,
-};
-
-local ap_per_agi = {
-    [classes.warrior] = 0,
-    [classes.paladin] = 0,
-    [classes.hunter]  = 1,
-    [classes.rogue]   = 1,
-    [classes.priest]  = 0,
-    [classes.shaman]  = 0,
-    [classes.mage]    = 0,
-    [classes.warlock] = 0,
-    [classes.druid]   = 0, -- when in cat form, druid is treated as rogue
-};
-
-local rap_per_agi = {
-    [classes.warrior] = 1,
-    [classes.paladin] = 0,
-    [classes.hunter]  = 1,
-    [classes.rogue]   = 1,
-    [classes.priest]  = 0,
-    [classes.shaman]  = 0,
-    [classes.mage]    = 0,
-    [classes.warlock] = 0,
-    [classes.druid]   = 0,
-};
+if class == classes.warrior then
+    sc.ap_per_str = 2;
+    sc.ap_per_agi = 0;
+    sc.rap_per_agi = 1;
+elseif class == classes.paladin then
+    sc.ap_per_str = 2;
+    sc.ap_per_agi = 0;
+    sc.rap_per_agi = 0;
+elseif class == classes.hunter then
+    sc.ap_per_str = 1;
+    sc.ap_per_agi = 1;
+    sc.rap_per_agi = 1;
+elseif class == classes.rogue then
+    sc.ap_per_str = 1;
+    sc.ap_per_agi = 1;
+    sc.rap_per_agi = 1;
+elseif class == classes.priest then
+    sc.ap_per_str = 1;
+    sc.ap_per_agi = 0;
+    sc.rap_per_agi = 0;
+elseif class == classes.shaman then
+    sc.ap_per_str = 2;
+    sc.ap_per_agi = 0;
+    sc.rap_per_agi = 0;
+elseif class == classes.mage then
+    sc.ap_per_str = 1;
+    sc.ap_per_agi = 0;
+    sc.rap_per_agi = 0;
+elseif class == classes.warlock then
+    sc.ap_per_str = 1;
+    sc.ap_per_agi = 0;
+    sc.rap_per_agi = 0;
+elseif class == classes.druid then
+    sc.ap_per_str = 2;
+    sc.ap_per_agi = 0;
+    sc.rap_per_agi = 0;
+    sc.cat_form_ap_per_agi = 1;
+end
 
 -- combat rating weights are multiplied by the general combat rating level scaling formula
 local cr_weights = {
@@ -80,9 +83,6 @@ scaling.dps_per_ap                       = dps_per_ap;
 scaling.spirit_mana_regen                = spirit_mana_regen;
 scaling.mana_per_int                     = mana_per_int;
 scaling.hp_per_stam                      = hp_per_stam;
-scaling.ap_per_str                       = ap_per_str;
-scaling.ap_per_agi                       = ap_per_agi;
-scaling.rap_per_agi                      = rap_per_agi;
 scaling.armor_per_agi                    = armor_per_agi;
 scaling.cr_weights                       = cr_weights;
 

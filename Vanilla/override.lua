@@ -304,6 +304,9 @@ elseif sc.class == sc.classes.rogue then
         spells[v].periodic.coef_ap_by_cp = {0.01, 0.02, 0.03, 0.03, 0.03}; -- scuffed scaling
     end
     for _, v in pairs(rank_seqs[spids.eviscerate]) do
+        if not spells[v].direct then
+            print("bad", v);
+        end
         spells[v].direct.per_cp_coef_ap = 0.03;
     end
     for _, v in pairs(rank_seqs[spids.garrote]) do
