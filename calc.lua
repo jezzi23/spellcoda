@@ -2808,7 +2808,9 @@ if client_matches(bit.bnot(client_flags.vanilla)) then
         v[#v+1] = {display = "Haste", key = "haste_rating"};
     end
     for _, v in ipairs({melee_stat_weights, ranged_stat_weights}) do
-        v[#v+1] = {display = "Expr", key = "expertise_rating"};
+        if not client_matches(client_flags.forever) then
+            v[#v+1] = {display = "Expr", key = "expertise_rating"};
+        end
         v[#v+1] = {display = "Pen", key = "pen"};
     end
 end
@@ -2842,7 +2844,7 @@ local function stat_weights(normal_info, spell, loadout, effects, eval_flags, sp
         diff[v.key] = 1;
 
         cpy_effects(effects_diffed, effects);
-        effects_add_manual_diff(effects_diffed, diff);
+        effects_add_manual_diff(loadout, effects_diffed, diff);
         effects_finalize_forced(loadout, effects_diffed)
 
         spell_stats_info(info_diff, spell_stats_diffed, spell, loadout, effects_diffed, eval_flags, spell_id);

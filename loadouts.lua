@@ -1622,7 +1622,53 @@ local function manual_effects_zero_diff()
     };
 end
 
-local function effects_add_manual_diff(effects, diff)
+-- clients that show these combat stats as percentages, where a manual diff is typed in percent
+local ratings_in_pct = client_matches(bit.bor(client_flags.vanilla, client_flags.forever));
+
+local manual_diff_ratings = {
+    crit_rating = {
+        pct = true,
+        {"spell_crit_rating_flat", combat_ratings.CR_CRIT_SPELL},
+        {"melee_crit_rating_flat", combat_ratings.CR_CRIT_MELEE},
+        {"ranged_crit_rating_flat", combat_ratings.CR_CRIT_RANGED},
+    },
+    hit_rating = {
+        pct = true,
+        {"spell_hit_rating_flat", combat_ratings.CR_HIT_SPELL},
+        {"melee_hit_rating_flat", combat_ratings.CR_HIT_MELEE},
+        {"ranged_hit_rating_flat", combat_ratings.CR_HIT_RANGED},
+    },
+    haste_rating = {
+        pct = true,
+        {"spell_haste_rating_flat", combat_ratings.CR_HASTE_SPELL},
+        {"melee_haste_rating_flat", combat_ratings.CR_HASTE_MELEE},
+        {"ranged_haste_rating_flat", combat_ratings.CR_HASTE_RANGED},
+    },
+    dodge_rating = {
+        pct = true,
+        {"dodge_rating_flat", combat_ratings.CR_DODGE},
+    },
+    parry_rating = {
+        pct = true,
+        {"parry_rating_flat", combat_ratings.CR_PARRY},
+    },
+    expertise_rating = {
+        {"expertise_rating_flat", combat_ratings.CR_EXPERTISE},
+    },
+    defense_skill_rating = {
+        {"defense_skill_rating_flat", combat_ratings.CR_DEFENSE_SKILL},
+    },
+    resilience_rating = {
+        {"resilience_crit_taken_rating_flat", combat_ratings.CR_RESILIENCE_CRIT_TAKEN},
+        {"resilience_dmg_taken_rating_flat", combat_ratings.CR_RESILIENCE_PLAYER_DAMAGE_TAKEN},
+    },
+};
+
+local function manual_diff_in_pct(key)
+    return ratings_in_pct and manual_diff_ratings[key] and manual_diff_ratings[key].pct;
+end
+
+local function effects_add_manual_diff(loadout, effects, diff)
 
     effects.by_attr.stat_flat[attr.stamina] = effects.by_attr.stat_flat[attr.stamina] + diff.stam;
     effects.by_attr.stat_flat[attr.strength] = effects.by_attr.stat_flat[attr.strength] + diff.str;
@@ -1637,21 +1683,16 @@ local function effects_add_manual_diff(effects, diff)
 
     effects.raw.mp5_flat = effects.raw.mp5_flat + diff.mp5;
 
-    effects.raw.spell_haste_rating_flat = effects.raw.spell_haste_rating_flat + diff.haste_rating;
-    effects.raw.melee_haste_rating_flat = effects.raw.melee_haste_rating_flat + diff.haste_rating;
-    effects.raw.ranged_haste_rating_flat = effects.raw.ranged_haste_rating_flat + diff.haste_rating;
-    effects.raw.spell_crit_rating_flat = effects.raw.spell_crit_rating_flat + diff.crit_rating;
-    effects.raw.melee_crit_rating_flat = effects.raw.melee_crit_rating_flat + diff.crit_rating;
-    effects.raw.ranged_crit_rating_flat = effects.raw.ranged_crit_rating_flat + diff.crit_rating;
-    effects.raw.spell_hit_rating_flat = effects.raw.spell_hit_rating_flat + diff.hit_rating;
-    effects.raw.melee_hit_rating_flat = effects.raw.melee_hit_rating_flat + diff.hit_rating;
-    effects.raw.ranged_hit_rating_flat = effects.raw.ranged_hit_rating_flat + diff.hit_rating;
-    effects.raw.expertise_rating_flat = effects.raw.expertise_rating_flat + diff.expertise_rating;
-    effects.raw.dodge_rating_flat = effects.raw.dodge_rating_flat + diff.dodge_rating;
-    effects.raw.parry_rating_flat = effects.raw.parry_rating_flat + diff.parry_rating;
-    effects.raw.defense_skill_rating_flat = effects.raw.defense_skill_rating_flat + diff.defense_skill_rating;
-    effects.raw.resilience_crit_taken_rating_flat = effects.raw.resilience_crit_taken_rating_flat + diff.resilience_rating;
-    effects.raw.resilience_dmg_taken_rating_flat = effects.raw.resilience_dmg_taken_rating_flat + diff.resilience_rating;
+    for key, targets in pairs(manual_diff_ratings) do
+        local val = diff[key];
+        for _, target in ipairs(targets) do
+            local rating_per_val = 1;
+            if targets.pct and ratings_in_pct then
+                rating_per_val = loadout.cr_scaling * cr_weights[target[2]];
+            end
+            effects.raw[target[1]] = effects.raw[target[1]] + val * rating_per_val;
+        end
+    end
 
     for i = 1, 7 do
         effects.by_school.target_res_flat[i] = effects.by_school.target_res_flat[i] - diff.pen;
@@ -2185,6 +2226,21 @@ local function apply_effect(effects, spid, auras, forced, stacks, undo, player_o
     end
 end
 
+-- adds the aura values times amount, for additive auras scaled by a count like the points of an item stat
+local function apply_flat_scaled(effects, auras, amount)
+    for _, aura in pairs(auras) do
+        local val = aura[value_idx] * amount;
+        if aura[category_idx] == "raw" then
+            effects.raw[aura[effect_idx]] = effects.raw[aura[effect_idx]] + val;
+        else
+            local by_subject = effects[aura[category_idx]][aura[effect_idx]];
+            for _, i in pairs(aura[subject_idx]) do
+                by_subject[i] = (by_subject[i] or 0.0) + val;
+            end
+        end
+    end
+end
+
 -- double buffered loadout
 local loadout_base1 = loadout_zero();
 local loadout_base2 = loadout_zero();
@@ -2368,7 +2424,7 @@ local function update_loadout_and_effects_diffed_from_ui()
     sc.equipment.apply_items_cmp(loadout, diffed, new_items_buffer, old_items_buffer, true, true, true);
 
     -- Manual stat changes
-    effects_add_manual_diff(diffed, stats_diff_last);
+    effects_add_manual_diff(loadout, diffed, stats_diff_last);
 
     -- Buffs
     if buffs_cfg.use_custom then
@@ -2396,6 +2452,7 @@ loadouts.talented                                     = talented;
 loadouts.empty_effects                                = empty_effects;
 loadouts.effects_add                                  = effects_add;
 loadouts.effects_add_manual_diff                      = effects_add_manual_diff;
+loadouts.manual_diff_in_pct                           = manual_diff_in_pct;
 loadouts.effects_finalize_forced                      = effects_finalize_forced;
 loadouts.cpy_effects                                  = cpy_effects;
 loadouts.manual_effects_zero_diff                     = manual_effects_zero_diff;
@@ -2404,6 +2461,7 @@ loadouts.update_loadout_and_effects                   = update_loadout_and_effec
 loadouts.update_loadout_and_effects_diffed_from_ui    = update_loadout_and_effects_diffed_from_ui;
 loadouts.loadout_flags                                = loadout_flags;
 loadouts.apply_effect                                 = apply_effect;
+loadouts.apply_flat_scaled                            = apply_flat_scaled;
 loadouts.stats_diff_format                            = stats_diff_format;
 loadouts.stats_format                                 = stats_format;
 loadouts.init_lnames                                  = init_lnames;
