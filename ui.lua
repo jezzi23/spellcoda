@@ -61,6 +61,36 @@ local font = "GameFontHighlightSmall";
 local libstub_data_broker = LibStub("LibDataBroker-1.1", true);
 local libstub_icon = libstub_data_broker and LibStub("LibDBIcon-1.0", true);
 local libstub_launcher;
+
+local function fix_minimap_button()
+    local button = libstub_icon:GetMinimapButton(sc.core.addon_name);
+    if client_matches(sc.client_flags.forever) then
+        -- forever has the retail minimap border art, lay it out like LibDBIcon does on retail
+        for _, region in ipairs({button:GetRegions()}) do
+            if region:IsObjectType("Texture") then
+                local layer = region:GetDrawLayer();
+                if layer == "OVERLAY" then
+                    region:SetSize(50, 50);
+                    region:ClearAllPoints();
+                    region:SetPoint("TOPLEFT", button, "TOPLEFT");
+                elseif layer == "BACKGROUND" then
+                    region:SetSize(24, 24);
+                    region:ClearAllPoints();
+                    region:SetPoint("CENTER", button, "CENTER");
+                end
+            end
+        end
+        button.icon:SetSize(18, 18);
+        button.icon:ClearAllPoints();
+        button.icon:SetPoint("CENTER", button, "CENTER");
+    end
+    -- the square icon relies on the border art to hide its corners
+    local mask = button:CreateMaskTexture();
+    mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE");
+    mask:SetAllPoints(button.icon);
+    button.icon:AddMaskTexture(mask);
+end
+
 local libDD = LibStub("LibUIDropDownMenu-4.0", true);
 
 local colored_text_frames = {};
@@ -727,14 +757,122 @@ for k, v in ipairs(ui_tabs_order) do
     ui_tabs_idx[v] = k;
 end
 
+local tab_atlases = {
+    normal = {"uiframe-tab-left", "_uiframe-tab-center", "uiframe-tab-right"},
+    active = {"uiframe-activetab-left", "_uiframe-activetab-center", "uiframe-activetab-right"},
+};
+local tab_overhang_left = 3;
+local tab_overhang_right = 8;
+local tab_spacing = 3;
+local tab_min_padding = 12;
+
+-- the art is made for tabs hanging below a frame, flip it and cut to 3/4 height like PanelTopTabButtonMixin
+local function create_tab_art(tab, layer, atlases, left_x)
+    local art = {left_x = left_x};
+    for i, atlas in ipairs(atlases) do
+        local info = C_Texture.GetAtlasInfo(atlas);
+        local l, r = info.leftTexCoord, info.rightTexCoord;
+        if i == 2 then
+            l, r = l + 0.45 * (r - l), l + 0.55 * (r - l);
+        end
+        local t = tab:CreateTexture(nil, layer);
+        t:SetTexture(info.file);
+        t:SetTexCoord(l, r, info.bottomTexCoord, info.topTexCoord + 0.25 * (info.bottomTexCoord - info.topTexCoord));
+        t:SetSize(info.width, 0.75 * info.height);
+        t.natural_width = info.width;
+        art[i] = t;
+    end
+    art[2]:SetPoint("BOTTOMLEFT", art[1], "BOTTOMRIGHT");
+    art[2]:SetPoint("BOTTOMRIGHT", art[3], "BOTTOMLEFT");
+    return art;
+end
+
+local function fit_tab_art(tab, art, width)
+    local k = math.min(1, width / (art[1].natural_width + art[3].natural_width));
+    art[1]:SetWidth(k * art[1].natural_width);
+    art[3]:SetWidth(k * art[3].natural_width);
+    art[1]:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", k * art.left_x, 0);
+    art[3]:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", k * tab_overhang_right, 0);
+end
+
+local function select_tab(tab, selected)
+    for i = 1, 3 do
+        tab.art[i]:SetShown(not selected);
+        tab.active_art[i]:SetShown(selected);
+    end
+    local icon_shift = tab.icon:IsShown() and 0.5 * (tab.icon:GetWidth() + 3) or 0;
+    tab.Text:ClearAllPoints();
+    tab.Text:SetPoint("CENTER", tab, "CENTER", icon_shift, selected and -4 or -8);
+    tab:SetNormalFontObject(selected and GameFontHighlightSmall or GameFontNormalSmall);
+end
+
+local function create_tab_button(parent, name)
+    local tab = CreateFrame("Button", name, parent);
+    tab:SetHeight(32);
+    tab.art = create_tab_art(tab, "BACKGROUND", tab_atlases.normal, -tab_overhang_left);
+    tab.active_art = create_tab_art(tab, "BACKGROUND", tab_atlases.active, 1 - tab_overhang_left);
+    tab.highlight_art = create_tab_art(tab, "HIGHLIGHT", tab_atlases.normal, -tab_overhang_left);
+    for i = 1, 3 do
+        tab.highlight_art[i]:SetBlendMode("ADD");
+        tab.highlight_art[i]:SetAlpha(0.4);
+    end
+    tab:SetNormalFontObject(GameFontNormalSmall);
+    tab:SetHighlightFontObject(GameFontHighlightSmall);
+    tab:SetText(" ");
+    tab.Text = tab:GetFontString();
+    tab.icon = tab:CreateTexture(nil, "ARTWORK");
+    tab.icon:SetPoint("RIGHT", tab.Text, "LEFT", -3, 0);
+    tab.icon:Hide();
+    select_tab(tab, false);
+    return tab;
+end
+
+local function set_tab_icon(tab, size)
+    tab.icon:SetSize(size, size);
+    tab.icon:Show();
+    select_tab(tab, false);
+    return tab.icon;
+end
+
+-- tabs share the row width, a tab with fixed_width keeps it and the others get equal padding around their text
+local function layout_tabs(tabs, x, y, row_width)
+    local free = row_width - tab_overhang_left - tab_overhang_right - tab_spacing * (#tabs - 1);
+    local num_flexible = 0;
+    for _, tab in ipairs(tabs) do
+        if tab.fixed_width then
+            free = free - tab.fixed_width;
+        else
+            tab.Text:SetWidth(0);
+            tab.icon_width = tab.icon:IsShown() and tab.icon:GetWidth() + 3 or 0;
+            tab.content_width = tab.Text:GetStringWidth() + tab.icon_width;
+            free = free - tab.content_width;
+            num_flexible = num_flexible + 1;
+        end
+    end
+    local padding = free / num_flexible;
+
+    x = x + tab_overhang_left;
+    for _, tab in ipairs(tabs) do
+        local w = tab.fixed_width or tab.content_width + padding;
+        if not tab.fixed_width and padding < tab_min_padding then
+            tab.Text:SetWidth(math.max(1, w - tab_min_padding - tab.icon_width));
+        end
+        tab:SetWidth(w);
+        for _, art in ipairs({tab.art, tab.active_art, tab.highlight_art}) do
+            fit_tab_art(tab, art, w);
+        end
+        tab:SetPoint("TOPLEFT", x, y);
+        x = x + w + tab_spacing;
+    end
+end
+
 local function sw_activate_tab(tab_window)
 
     __sc_frame:Show();
 
     for _, v in pairs(__sc_frame.tabs) do
         v.frame_to_open:Hide();
-        v:UnlockHighlight();
-        v:SetButtonState("NORMAL");
+        select_tab(v, false);
     end
 
     if tab_window.frame_to_open == __sc_frame.spells_frame then
@@ -746,8 +884,7 @@ local function sw_activate_tab(tab_window)
     end
 
     tab_window.frame_to_open:Show();
-    tab_window:LockHighlight();
-    tab_window:SetButtonState("PUSHED");
+    select_tab(tab_window, true);
 end
 
 local function sw_activate_frame(frame_name)
@@ -1044,9 +1181,9 @@ local function make_frame_scrollable(frame)
     end
     local f = CreateFrame("Slider", nil, frame, "UIPanelScrollBarTrimTemplate");
     f:SetOrientation('VERTICAL');
-    f:SetPoint("RIGHT", frame, "RIGHT", 10, 0);
+    f:SetPoint("RIGHT", frame, "RIGHT", 10, 9);
     f:SetWidth(20);
-    f:SetHeight(height-25);
+    f:SetHeight(height-43);
     f:SetScript("OnValueChanged", function(self, val)
         for _, grp in ipairs({{frame:GetChildren()}, {frame:GetRegions()}}) do
             for _, v in ipairs(grp) do
@@ -1281,8 +1418,8 @@ local function create_sw_ui_spells_frame(pframe)
     -- sliders
     f = CreateFrame("Slider", nil, pframe, "UIPanelScrollBarTrimTemplate");
     f:SetOrientation('VERTICAL');
-    f:SetPoint("RIGHT", pframe, "RIGHT", 10, -15);
-    f:SetHeight(pframe:GetHeight()-63);
+    f:SetPoint("RIGHT", pframe, "RIGHT", 10, -6);
+    f:SetHeight(pframe:GetHeight()-81);
     f:SetScript("OnValueChanged", function(self, val)
         pframe.slider_val = val;
         populate_scrollable_spell_view(pframe.filtered_list, math.floor(val));
@@ -3160,7 +3297,7 @@ local default_buffs_plan = {
 };
 
 local working_item_plan = {};
-local working_stats = {};
+local working_stats = sc.loadouts.manual_effects_zero_diff();
 local working_talents = sc.utils.deep_table_copy(default_talents_plan);
 local working_buffs = sc.utils.deep_table_copy(default_buffs_plan);
 local working_name = "";
@@ -4959,19 +5096,29 @@ local function create_calculator_stats_subframe(pframe)
         },
         expertise_rating = {
             label_str = L["Expertise"],
+            clients = bit.bnot(bit.bor(client_flags.vanilla, client_flags.forever)),
         },
         extra_mana = {
             label_str = L["Extra mana"],
         },
         resilience_rating = {
-            label_str = L["Resilience"]
+            label_str = L["Resilience"],
+            clients = bit.bnot(bit.bor(client_flags.vanilla, client_flags.forever)),
         },
     };
 
-    local comparison_stats_listing_order = {
+    local comparison_stats_listing_order = {};
+    for _, k in ipairs({
         "str", "agi", "stam", "int", "spirit", "mp5", "extra_mana", "armor", "defense_skill_rating", "dodge_rating", "parry_rating", "resilience_rating",
         "crit_rating", "hit_rating", "haste_rating", "expertise_rating", "ap", "rap", "weapon_skill", "sp", "sd", "hp", "pen",
-    };
+    }) do
+        local clients = pframe.stats.stat_fields[k].clients;
+        if not clients or client_matches(clients) then
+            table.insert(comparison_stats_listing_order, k);
+        else
+            pframe.stats.stat_fields[k] = nil;
+        end
+    end
 
     local new_column_breakpoint = "crit_rating";
 
@@ -5008,6 +5155,13 @@ local function create_calculator_stats_subframe(pframe)
         v.editbox:SetAutoFocus(false);
         v.editbox:SetSize(100, 10);
         v.editbox.index = i;
+        if sc.loadouts.manual_diff_in_pct(k) then
+            local pct = v.editbox:CreateFontString(nil, "OVERLAY");
+            pct:SetFontObject(font);
+            pct:SetPoint("RIGHT", v.editbox, "RIGHT", -2, 0);
+            pct:SetText("%");
+            v.editbox:SetTextInsets(0, pct:GetStringWidth() + 4, 0, 0);
+        end
         v.editbox:SetScript("OnTextChanged", function(self)
 
             if string.match(self:GetText(), "[^-+0123456789. ()]") ~= nil then
@@ -5060,11 +5214,6 @@ local function create_calculator_stats_subframe(pframe)
     f:SetHeight(20);
     f:SetWidth(120);
     f:SetText(L["Clear stats"]);
-
-    if client_matches(client_flags.vanilla) then
-        pframe.stats.stat_fields.expertise_rating.editbox:Hide();
-        pframe.stats.stat_fields.expertise_rating.label:Hide();
-    end
 
     if __spellcoda_test_all_data__ then
         for _, v in pairs(pframe.stats.stat_fields) do
@@ -5492,23 +5641,18 @@ local function create_sw_ui_calculator_frame(pframe)
 
     local subframe_height = 315;
     do
-        local strwidth_total = 0;
         for k, v in pairs(tabs) do
-            local tab = CreateFrame("Button", nil, pframe, "PanelTopTabButtonTemplate");
+            local tab = create_tab_button(pframe);
 
             tab:SetText(v[2]);
-            local w = tab:GetFontString():GetWidth();
-            strwidth_total = strwidth_total + w;
             tab:SetScript("OnClick", function(self)
                 for _, vv in ipairs(tabs) do
 
-                    pframe[vv[1].."_tab"]:UnlockHighlight();
-                    pframe[vv[1].."_tab"]:SetButtonState("NORMAL");
+                    select_tab(pframe[vv[1].."_tab"], false);
                     pframe[vv[1]]:Hide();
                 end
 
-                self:SetButtonState("PUSHED");
-                self:LockHighlight();
+                select_tab(self, true);
                 pframe[v[1]]:Show();
                 if pframe[v[1]].on_show then
                     pframe[v[1]].on_show();
@@ -5528,7 +5672,7 @@ local function create_sw_ui_calculator_frame(pframe)
 
             local f = CreateFrame("Frame", nil, tab);
             f:SetSize(6, 6);
-            f:SetPoint("RIGHT", -6, -2);
+            f:SetPoint("RIGHT", -8, -6);
             f:Hide();
 
             f.dot = f:CreateTexture(nil, "OVERLAY");
@@ -5547,18 +5691,11 @@ local function create_sw_ui_calculator_frame(pframe)
             pframe[v[1].."_tab"] = tab;
         end
 
-        local accum = 0;
-        local sum = 0;
+        local row = {};
         for _, v in ipairs(tabs) do
-            local tab = pframe[v[1].."_tab"];
-            local max_width = pframe:GetWidth();
-            local w = math.max(25, -29 + max_width * tab:GetFontString():GetWidth()/strwidth_total);
-            PanelTemplates_TabResize(tab, 0, nil, w, w);
-            tab:SetPoint("TOPLEFT", accum-7, pframe.y_offset+34);
-            accum = accum + tab:GetWidth();
-
-            sum = sum + tab:GetWidth();
+            table.insert(row, pframe[v[1].."_tab"]);
         end
+        layout_tabs(row, -7, pframe.y_offset+34, pframe:GetWidth()+14);
     end
 
     pframe.items.working = working_item_plan;
@@ -7059,6 +7196,35 @@ local function create_sw_base_ui()
     __sc_frame:SetHeight(height);
     __sc_frame:SetPoint("TOPLEFT", 400, -30);
 
+    local scale_grip = CreateFrame("Button", nil, __sc_frame);
+    scale_grip:SetSize(20, 20);
+    scale_grip:SetPoint("BOTTOMRIGHT", -4, 4);
+    scale_grip:SetFrameLevel(__sc_frame:GetFrameLevel() + 20);
+    scale_grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up");
+    scale_grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight");
+    scale_grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down");
+    scale_grip:SetScript("OnMouseDown", function(self)
+        self:SetScript("OnUpdate", function()
+            local scale = __sc_frame:GetScale();
+            local left = __sc_frame:GetLeft() * scale;
+            local top = __sc_frame:GetTop() * scale;
+            local cursor_x, cursor_y = GetCursorPosition();
+            local ui_scale = UIParent:GetEffectiveScale();
+            cursor_x = cursor_x / ui_scale;
+            cursor_y = cursor_y / ui_scale;
+
+            local new_scale = 0.5 * ((cursor_x - left) / width + (top - cursor_y) / height);
+            new_scale = math.max(0.5, math.min(2.5, new_scale));
+            __sc_frame:SetScale(new_scale);
+            __sc_frame:ClearAllPoints();
+            __sc_frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left / new_scale, top / new_scale);
+        end);
+    end);
+    scale_grip:SetScript("OnMouseUp", function(self)
+        self:SetScript("OnUpdate", nil);
+        __sc_p_acc.window_scale = __sc_frame:GetScale();
+    end);
+
     __sc_frame.title = __sc_frame:CreateFontString(nil, "OVERLAY");
     __sc_frame.title:SetFontObject(font)
     __sc_frame.title:SetText(sc.core.addon_name.." v"..sc.core.version);
@@ -7080,12 +7246,8 @@ local function create_sw_base_ui()
         __sc_frame[v]:SetHeight(height-tabbed_child_frames_y_offset-35-5);
         __sc_frame[v].y_offset = 0;
 
-        __sc_frame.tabs[i] = CreateFrame("Button", "__sc_frame_tab_button"..i, __sc_frame, "PanelTopTabButtonTemplate");
+        __sc_frame.tabs[i] = create_tab_button(__sc_frame, "__sc_frame_tab_button"..i);
         __sc_frame.tabs[i].frame_to_open = __sc_frame[v];
-
-        local fntstr = __sc_frame.tabs[i]:GetFontString();
-        fntstr:ClearAllPoints();
-        fntstr:SetPoint("CENTER", __sc_frame.tabs[i], "CENTER", 0, -6);
 
         i = i + 1;
     end
@@ -7110,48 +7272,34 @@ end
 
 local function load_sw_ui()
 
+    __sc_frame:SetScale(__sc_p_acc.window_scale);
+
     local tab_display_names = {
-        spells_frame = "     "..L["Spells"],
-        calculator_frame = "    "..L["Calculator"],
-        loadout_frame = "     "..L["Loadout"],
+        spells_frame = L["Spells"],
+        calculator_frame = L["Calculator"],
+        loadout_frame = L["Loadout"],
         tooltip_frame = L["Tooltip"],
         overlay_frame = L["Overlay"],
-        settings_frame = "|TInterface\\Buttons\\UI-OptionsButton:0:0:0:-3|t",
+        settings_frame = "",
         profile_frame = L["Profile"]
     };
 
-    local x = 5;
     for k, tab_name in ipairs(ui_tabs_order) do
 
         local v = __sc_frame.tabs[k];
         v:SetText(tab_display_names[tab_name]);
-
-        --                          pad  min max absolute
-        PanelTemplates_TabResize(v, -10, nil, 5, 10+v:GetFontString():GetWidth());
-
-        local w = v:GetWidth();
-        -- ww actual width of fontstring, w is size of the tab...
-        v:SetPoint("TOPLEFT", x+3, -20);
-        x = x + w;
-
         v:SetScript("OnClick", function(self)
             sw_activate_tab(self);
         end);
         v:SetID(k);
     end
-    PanelTemplates_SetNumTabs(__sc_frame, #__sc_frame.tabs);
 
-    local spell_book_texture = __sc_frame.tabs[1]:CreateTexture(nil, "ARTWORK");
-    spell_book_texture:SetSize(12, 12);
+    local spell_book_texture = set_tab_icon(__sc_frame.tabs[1], 12);
     spell_book_texture:SetTexture("Interface\\Icons\\INV_Misc_Book_09");
-    spell_book_texture:SetPoint("LEFT", 8, -7);
     spell_book_texture:SetTexCoord(0.08, 0.92, 0.08, 0.92);
 
-
     local calc_tab =  __sc_frame.tabs[2];
-    local character_portrait = calc_tab:CreateTexture(nil, "ARTWORK");
-    character_portrait:SetSize(16, 16);
-    character_portrait:SetPoint("LEFT", 6, -6);
+    local character_portrait = set_tab_icon(calc_tab, 16);
     SetPortraitTexture(character_portrait, "player");
     calc_tab:RegisterEvent("UNIT_PORTRAIT_UPDATE");
     calc_tab:SetScript("OnEvent", function(self, event, unit)
@@ -7160,11 +7308,15 @@ local function load_sw_ui()
         end
     end);
 
-    local loadout_texture = __sc_frame.tabs[3]:CreateTexture(nil, "ARTWORK");
-    loadout_texture:SetSize(12, 12);
+    local loadout_texture = set_tab_icon(__sc_frame.tabs[3], 12);
     loadout_texture:SetTexture("Interface\\Icons\\Ability_Warrior_OffensiveStance");
-    loadout_texture:SetPoint("LEFT", 8, -7);
     loadout_texture:SetTexCoord(0.08, 0.92, 0.08, 0.92);
+
+    local settings_tab = __sc_frame.tabs[ui_tabs_idx.settings_frame];
+    set_tab_icon(settings_tab, 14):SetTexture("Interface\\Buttons\\UI-OptionsButton");
+    settings_tab.fixed_width = 40;
+
+    layout_tabs(__sc_frame.tabs, 8, -20, __sc_frame:GetWidth()-16);
 
     create_sw_spell_id_viewer();
     create_sw_item_id_viewer();
@@ -7214,7 +7366,9 @@ local function load_sw_ui()
             end,
             OnTooltipShow = tooltip_show_fn
         });
+        -- LibDBIcon 55 creates the button on Register
         libstub_icon:Register(sc.core.addon_name, libstub_launcher, config.settings.libstub_icon_conf);
+        fix_minimap_button();
     end
 
 

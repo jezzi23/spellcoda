@@ -23,6 +23,24 @@ local function any_secret(...)
     return false;
 end
 
+local reported_secrets = {};
+
+-- for values not expected to be secret: returns fallback instead, debug mode reports each site once
+local function secret_or(v, fallback, what)
+    if not is_secret(v) then
+        return v;
+    end
+    if __spellcoda_debug__ and not reported_secrets[what] then
+        reported_secrets[what] = true;
+        print(string.format("|cFFFF4040SpellCoda secret:|r %s, in combat: %s, at %s",
+            what,
+            tostring(InCombatLockdown()),
+            (debugstack(2, 1, 0) or ""):gsub("\n", "")
+        ));
+    end
+    return fallback;
+end
+
 local function spell_book_shown()
     if SpellBookFrame then
         return SpellBookFrame:IsShown();
@@ -369,6 +387,7 @@ utils.client_matches                = client_matches;
 utils.spell_book_shown              = spell_book_shown;
 utils.is_secret                     = is_secret;
 utils.any_secret                    = any_secret;
+utils.secret_or                     = secret_or;
 utils.deep_table_copy               = deep_table_copy;
 utils.clear_table                   = clear_table;
 utils.spell_cost                    = spell_cost;

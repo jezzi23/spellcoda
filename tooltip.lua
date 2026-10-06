@@ -18,6 +18,7 @@ local spell_cast_time                           = sc.utils.spell_cast_time;
 local format_number                             = sc.utils.format_number;
 local color_by_lvl_diff                         = sc.utils.color_by_lvl_diff;
 local write_item_info_from_link                 = sc.utils.write_item_info_from_link;
+local secret_or                                 = sc.utils.secret_or;
 
 local update_loadout_and_effects                = sc.loadouts.update_loadout_and_effects;
 local update_loadout_and_effects_diffed_from_ui = sc.loadouts.update_loadout_and_effects_diffed_from_ui;
@@ -27,6 +28,7 @@ local empty_effects                             = sc.loadouts.empty_effects;
 local stats_diff_format                         = sc.loadouts.stats_diff_format;
 
 local apply_items_cmp                           = sc.equipment.apply_items_cmp;
+local item_in_data                              = sc.equipment.item_in_data;
 local slots                                     = sc.equipment.slots;
 local wpn_skill_for_slot                        = sc.equipment.wpn_skill_for_slot;
 local inv_type_to_slot_ids                      = sc.equipment.inv_type_to_slot_ids;
@@ -187,9 +189,6 @@ text:SetFont(GameTooltipText:GetFont())
 text_small:SetFont(GameTooltipTextSmall:GetFont())
 
 sc_stat_calc_tooltip:AddFontStrings(header_txt, text, text_small);
--- Font for some reason is always larger than GameTooltip even though
--- they have same fonts and size. Downscale instead
-sc_stat_calc_tooltip:SetScale(0.75);
 
 local spell_id_of_cleared_tooltip = 0;
 local clear_tooltip_refresh_id = 463;
@@ -2025,6 +2024,8 @@ local function write_spell_tooltip()
         if config.settings.general_calc_secondary_tooltip then
             sc_stat_calc_tooltip:ClearLines();
             sc_stat_calc_tooltip:SetOwner(GameTooltip, "ANCHOR_LEFT", 0, -select(2, sc_stat_calc_tooltip:GetSize()));
+            local parent = sc_stat_calc_tooltip:GetParent();
+            sc_stat_calc_tooltip:SetScale(GameTooltip:GetEffectiveScale() / (parent and parent:GetEffectiveScale() or 1));
 
             write_tooltip_spell_info(
                 sc_stat_calc_tooltip,
@@ -2212,6 +2213,12 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         if key and config.settings["tooltip_item_ignore_"..key] then
             return;
         end
+    end
+
+    if not item_in_data(tt.new_item.id) then
+        tooltip:AddLine(L["Item missing from SpellCoda dataset. An update may be needed"], 1, 0.2, 0.2);
+        tooltip:Show();
+        return;
     end
 
     local loadout, effects, effects_finalized, update_id = update_loadout_and_effects();
@@ -2577,8 +2584,13 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
 
     local min_width = 95;
 
-    local offset_to_first = math.max(min_width, tt.headers.second_fstr:GetWidth());
-    local offset_to_role_icon = offset_to_first + math.max(min_width, tt.headers.first_fstr:GetWidth());
+    -- anchors to tooltip lines left from the last show make the width secret when those lines are secret
+    tt.headers.first_fstr:ClearAllPoints();
+    tt.headers.second_fstr:ClearAllPoints();
+    local offset_to_first = math.max(min_width,
+        secret_or(tt.headers.second_fstr:GetWidth(), min_width, "item tooltip header 2 width"));
+    local offset_to_role_icon = offset_to_first + math.max(min_width,
+        secret_or(tt.headers.first_fstr:GetWidth(), min_width, "item tooltip header 1 width"));
 
     local tooltip_name = tooltip:GetName();
     local rhs_txt = _G[tooltip_name .. "TextRight" .. num_lines];

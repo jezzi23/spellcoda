@@ -397,6 +397,7 @@ local function default_p_acc()
         },
         localization_use = false,
         localization_notified = false,
+        window_scale = sc.utils.client_matches(sc.client_flags.forever) and 1.25 or 1.0,
     };
 end
 
