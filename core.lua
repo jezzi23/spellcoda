@@ -599,7 +599,7 @@ sc.ext.version_id = core.version_id;
 -- but remains due to external things relying on it
 __SC = sc.ext;
 
-__spellcoda_debug__ = 1;
+--__spellcoda_debug__ = 1;
 --__spellcoda_test_all_data__ = 1;
 --__spellcoda_test_all_spells__ = 1;
 

@@ -105,6 +105,8 @@ if sc.class == sc.classes.mage then
         { spids.remove_lesser_curse, {14} },
     });
 elseif sc.class == sc.classes.druid then
+    lookups.wild_growth_lname = C_Spell.GetSpellName(spids.wild_growth);
+
     -- DISABLE JUNK
     spells[spids.swiftmend].flags = bit.band(spells[spids.swiftmend].flags, bit.bnot(spell_flags.eval));
     for _, v in pairs(rank_seqs[spids.frenzied_regeneration]) do

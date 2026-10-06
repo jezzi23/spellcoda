@@ -27,12 +27,12 @@ spids.curse_of_agony = spids.bane_of_agony;
 --lookups.sacred_shield               = 412019;
 --lookups.rapid_healing               = 468531;
 --lookups.water_shield                = 408510;
---lookups.fingers_of_frost            = 400669;
 --lookups.living_seed                 = 414677;
 --lookups.fanaticism                  = 429142;
 --lookups.divine_aegis                = 431622;
 --lookups.overload                    = 408438;
 --lookups.ancestral_awakening         = 425858;
+lookups.fingers_of_frost              = 400669;
 
 sc.dual_wield_class =
     sc.class == sc.classes.warrior or
@@ -68,7 +68,6 @@ if sc.class == sc.classes.mage then
                 table.insert(sc.hostile_buffs[id], freeze_detection_aura);
             end
         end
-        -- add fingers of frost as well
         if not sc.class_buffs[lookups.fingers_of_frost] then
             sc.class_buffs[lookups.fingers_of_frost] = {};
         end
@@ -81,6 +80,8 @@ if sc.class == sc.classes.mage then
     --    { spids.remove_lesser_curse, {14} },
     --});
 elseif sc.class == sc.classes.druid then
+    lookups.wild_growth_lname = C_Spell.GetSpellName(spids.wild_growth);
+
     -- TODO: forever-transition:
     spells[spids.tigers_fury].flags = bit.band(spells[spids.tigers_fury].flags, bit.bnot(spell_flags.eval));
 
@@ -335,13 +336,6 @@ elseif sc.class == sc.classes.paladin then
 		{"ability", "effect_mod_flat", 400, {spids.holy_light}, 0, 0},
 		{"ability", "effect_mod_flat", 115, {spids.flash_of_light}, 0, 1},
     };
-    -- Holy light and flash of light are treated as dummies in vanilla client data, coef missing
-    for _, v in pairs(rank_seqs[spids.flash_of_light]) do
-        spells[v].direct.coef = spell_coef_lvl_adjusted(0.429, spells[v].lvl_req);
-    end
-    for _, v in pairs(rank_seqs[spids.holy_light]) do
-        spells[v].direct.coef = spell_coef_lvl_adjusted(0.714, spells[v].lvl_req);
-    end
 
     --sc.passives[lookups.exorcist] = {
 	--	{"ability", "crit", 1.0, {spids.exorcism}, 0, 0},
@@ -359,7 +353,6 @@ elseif sc.class == sc.classes.warrior then
         [1] = {21156}, -- battle
         [2] = {7376}, -- defensive
         [3] = {7381}, -- berserker
-        [4] = {413479}, -- gladiator
     }
 
     for _, v in pairs(rank_seqs[spids.shield_slam]) do

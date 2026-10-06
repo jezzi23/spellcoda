@@ -7487,7 +7487,7 @@ local function locale_warning_popup()
             text:SetPoint("RIGHT", -10, 0);
             text:SetJustifyH("LEFT");
             text:SetJustifyV("TOP");
-            text:SetText("SpellCoda has localization support but is turned off by default.\n\nStrings have been translated using an AI LLM model and may be terribly wrong.\n\nIf you are interested in improving some string translations you can make a pull request on GitHub or upload a modified localization lua file on Discord.\n\nTurn on localization in settings:\n\n            |cFF00FF00/spellcoda config|r");
+            text:SetText("SpellCoda has localization support but is turned off by default.\n\n\n\nTurn on localization in settings:\n\n            |cFF00FF00/spellcoda config|r \n\n There may be missing or unfortunate translations");
 
             __sc__localization_notifiedButton:SetSize(180, 24);
             __sc__localization_notifiedButton:SetPoint("BOTTOM", 0, 20);

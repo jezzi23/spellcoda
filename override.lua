@@ -40,7 +40,6 @@ elseif class == classes.druid then
     lookups.rejuvenation_lname = C_Spell.GetSpellName(spids.rejuvenation);
     lookups.regrowth_lname = C_Spell.GetSpellName(spids.regrowth);
     lookups.lifebloom_lname = C_Spell.GetSpellName(spids.lifebloom);
-    lookups.wild_growth_lname = C_Spell.GetSpellName(spids.wild_growth);
 elseif class == classes.priest then
 
     lookups.priest_t3 = 525;
