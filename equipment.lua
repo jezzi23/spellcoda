@@ -779,6 +779,7 @@ local function apply_equipment(loadout, effects)
                 apply_effect(effects, id, sc.set_effects[id], true, 1.0, false, true, true);
                 sets_applied = sets_applied + 1;
             end
+            effects.num_set_pieces[k] = 10;
         end
         print(sets_applied, "gen sets applied");
 

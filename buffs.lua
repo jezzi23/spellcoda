@@ -140,26 +140,64 @@ local function detect_buffs(loadout)
             end
         end
     end
+
+    if __spellcoda_test_all_data__ then
+        for k, v in pairs(loadout.dynamic_buffs) do
+            for _, list in ipairs({buffs, target_buffs}) do
+                for _, b in ipairs(list) do
+                    if not v[b.id] then
+                        local buff_info = { count = 1, id = b.id, player_owned = true };
+                        v[b.id] = buff_info;
+                        if b.lname then
+                            loadout.dynamic_buffs_lname[k][b.lname] = buff_info;
+                        end
+                    end
+                end
+            end
+        end
+    end
 end
 
 local function apply_buffs(loadout, effects, forced, undo)
 
-    for k, v in pairs(loadout.dynamic_buffs["player"]) do
-        if sc.class_buffs[k] then
-            apply_effect(effects, k, sc.class_buffs[k], forced, v.count, undo, v.player_owned);
-        elseif sc.player_buffs[k] then
-            apply_effect(effects, k, sc.player_buffs[k], forced, v.count, undo, v.player_owned);
+    if __spellcoda_test_all_data__ then
+        -- Testing all buffs
+        local buffs_applied = 0;
+        for k, v in pairs(sc.player_buffs) do
+            apply_effect(effects, k, v, true, 1, undo, true);
+            buffs_applied = buffs_applied + 1;
         end
-    end
-    for k, v in pairs(loadout.dynamic_buffs[loadout.friendly_towards]) do
-        if sc.friendly_buffs[k] then
-            apply_effect(effects, k, sc.friendly_buffs[k], forced, v.count, undo, v.player_owned);
+        for k, v in pairs(sc.class_buffs) do
+            apply_effect(effects, k, v, true, 1, undo, true);
+            buffs_applied = buffs_applied + 1;
         end
-    end
-    if loadout.hostile_towards ~= "" then
-        for k, v in pairs(loadout.dynamic_buffs[loadout.hostile_towards]) do
-            if sc.hostile_buffs[k] then
-                apply_effect(effects, k, sc.hostile_buffs[k], forced, v.count, undo, v.player_owned);
+        for k, v in pairs(sc.friendly_buffs) do
+            apply_effect(effects, k, v, true, 1, undo, true);
+            buffs_applied = buffs_applied + 1;
+        end
+        for k, v in pairs(sc.hostile_buffs) do
+            apply_effect(effects, k, v, true, 1, undo, true);
+            buffs_applied = buffs_applied + 1;
+        end
+        print(buffs_applied, "gen buffs applied");
+    else
+        for k, v in pairs(loadout.dynamic_buffs["player"]) do
+            if sc.class_buffs[k] then
+                apply_effect(effects, k, sc.class_buffs[k], forced, v.count, undo, v.player_owned);
+            elseif sc.player_buffs[k] then
+                apply_effect(effects, k, sc.player_buffs[k], forced, v.count, undo, v.player_owned);
+            end
+        end
+        for k, v in pairs(loadout.dynamic_buffs[loadout.friendly_towards]) do
+            if sc.friendly_buffs[k] then
+                apply_effect(effects, k, sc.friendly_buffs[k], forced, v.count, undo, v.player_owned);
+            end
+        end
+        if loadout.hostile_towards ~= "" then
+            for k, v in pairs(loadout.dynamic_buffs[loadout.hostile_towards]) do
+                if sc.hostile_buffs[k] then
+                    apply_effect(effects, k, sc.hostile_buffs[k], forced, v.count, undo, v.player_owned);
+                end
             end
         end
     end
@@ -170,28 +208,6 @@ local function apply_buffs(loadout, effects, forced, undo)
         for _, k in pairs(sc.shapeshift_id_to_effects[loadout.shapeshift]) do
             apply_effect(effects, k, sc.shapeshift_passives[k], forced, 1, undo);
         end
-    end
-
-    if __spellcoda_test_all_data__ then
-        -- Testing all buffs
-        local buffs_applied = 0;
-        for k, v in pairs(sc.player_buffs) do
-            apply_effect(effects, k, v, true, 1, false, true);
-            buffs_applied = buffs_applied + 1;
-        end
-        for k, v in pairs(sc.class_buffs) do
-            apply_effect(effects, k, v, true, 1, false, true);
-            buffs_applied = buffs_applied + 1;
-        end
-        for k, v in pairs(sc.friendly_buffs) do
-            apply_effect(effects, k, v, true, 1, false, true);
-            buffs_applied = buffs_applied + 1;
-        end
-        for k, v in pairs(sc.hostile_buffs) do
-            apply_effect(effects, k, v, true, 1, false, true);
-            buffs_applied = buffs_applied + 1;
-        end
-        print(buffs_applied, "gen buffs applied");
     end
 end
 
@@ -235,6 +251,9 @@ end
 
 local function get_buff_by_lname(loadout, unit, lname, only_self_buff, require_ownership)
 
+    if __spellcoda_debug__ and not lname then
+        print("SpellCoda: buff lookup with nil name at", ((debugstack(2, 1, 0) or ""):gsub("\n", "")));
+    end
     if unit ~= "" and
         (not loadout.calculator_mode or not sandbox_buffs_cfg.use_custom or sandbox_buffs_cfg.preserve_active) then
 
@@ -259,6 +278,9 @@ end
 
 local function get_buff(loadout, unit, id, only_self_buff, require_ownership)
 
+    if __spellcoda_debug__ and not id then
+        print("SpellCoda: buff lookup with nil id at", ((debugstack(2, 1, 0) or ""):gsub("\n", "")));
+    end
     if unit ~= "" and
         (not loadout.calculator_mode or not sandbox_buffs_cfg.use_custom or sandbox_buffs_cfg.preserve_active) then
 

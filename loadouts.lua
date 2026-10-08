@@ -1847,7 +1847,6 @@ local function effects_finalize_forced(loadout, effects)
     effects.finalized = true;
 end
 
--- when stats are restricted the API returns secret numbers, keep the previous value then
 local function keep_if_secret(v, previous)
     if is_secret(v) then
         return previous;
