@@ -1297,6 +1297,8 @@ local class_stats_spell = (function()
                         );
                     end
                 end
+            elseif bid == spids.mana_burn then
+                stats.target_vuln_mod_mul = stats.target_vuln_mod_mul * 0.5;
             end
         end
     elseif class == classes.shaman then
@@ -2405,6 +2407,10 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
         if direct.coef_attr then
             min = min + loadout.stats[direct.coef_attr] + effects.by_attr.stat_flat[direct.coef_attr];
         end
+        local added = 0;
+        if direct.coef ~= 0 then
+            added = stats_sp(0, bid, direct, spell, loadout, effects);
+        end
 
         min =
             (
@@ -2415,6 +2421,8 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
                 )
                 +
                 (effects.ability.effect_mod_flat[bid] or 0.0)
+                +
+                added
             )
             *
             (1.0 + (effects.ability.effect_mod[bid] or 0.0));
@@ -2434,6 +2442,11 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
         if periodic.coef_attr then
             min = min + loadout.stats[periodic.coef_attr] + effects.by_attr.stat_flat[periodic.coef_attr];
         end
+        local added = 0;
+        if periodic.coef ~= 0 then
+            added = stats_sp(0, bid, periodic, spell, loadout, effects);
+        end
+
         min =
             (
                 (
@@ -2443,6 +2456,8 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
                 )
                 +
                 (effects.ability.effect_mod_ot_flat[bid] or 0.0)
+                +
+                added
             )
             *
             (1.0 + (effects.ability.effect_mod_ot[bid] or 0.0));
