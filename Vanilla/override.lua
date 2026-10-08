@@ -35,6 +35,7 @@ lookups.rune_dance_of_the_wicked    = 6957;
 lookups.rune_soul_siphon            = 7590;
 lookups.rune_living_seed            = 6975;
 lookups.rune_advanced_warding       = 6726;
+lookups.rune_burnout                = 6729;
 
 sc.dual_wield_class =
     sc.class == sc.classes.warrior or
@@ -277,7 +278,7 @@ elseif sc.class == sc.classes.warlock then
     for rank, talent_id in pairs(talent_ranks[talent_idx.improved_life_tap]) do
         -- Life tap talent effect is a dummy, needs manual adding
         sc.talent_effects[talent_id] = {
-            {"ability", "base_mod", rank*0.1, {spids.life_tap}, 0, 0},
+            {"ability", "effect_mod", rank*0.1, {spids.life_tap}, 0, 0},
         };
     end
 elseif sc.class == sc.classes.rogue then

@@ -233,13 +233,18 @@ elseif sc.class == sc.classes.warlock then
         {spids.searing_pain, 1.0}
     });
 
-    -- ?
-    --for rank, talent_id in pairs(talent_ranks[talent_idx.improved_life_tap]) do
-    --    -- Life tap talent effect is a dummy, needs manual adding
-    --    sc.talent_effects[talent_id] = {
-    --        {"ability", "base_mod", rank*0.1, {spids.life_tap}, 0, 0},
-    --    };
-    --end
+    for rank, talent_id in pairs(talent_ranks[talent_idx.improved_life_tap]) do
+        -- Life tap talent effect is a dummy, manually editing
+        sc.talent_effects[talent_id] = {
+            {"ability", "base_mod", rank*0.1, {spids.life_tap}, 0, 0},
+        };
+    end
+    for _, v in pairs(rank_seqs[spids.life_tap]) do
+        spells[v].direct.coef = spell_coef_lvl_adjusted(0.8, spells[v].lvl_req);
+    end
+    for _, v in pairs(rank_seqs[spids.dark_pact]) do
+        spells[v].direct.coef = spell_coef_lvl_adjusted(0.96, spells[v].lvl_req);
+    end
 elseif sc.class == sc.classes.rogue then
     for _, v in pairs(rank_seqs[spids.rupture]) do
         spells[v].periodic.coef_ap_by_cp = {0.01, 0.02, 0.03, 0.03, 0.03};

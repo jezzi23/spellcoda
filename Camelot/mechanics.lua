@@ -181,8 +181,6 @@ if class == classes.shaman then
     };
 elseif class == classes.priest then
     special_abilities = {
-        [spids.mana_burn] = function(_, _, _, _, effects)
-        end,
     };
 --elseif class == classes.druid then
 --    special_abilities = {
@@ -197,8 +195,10 @@ elseif class == classes.mage then
     special_abilities = {
         [spids.mana_shield] = function(spell, info, loadout, stats, effects)
             local pts = talent_pts(effects, talent_idx.arcane_shielding);
-            local drain_mod = 0.01*math.ceil(16.5*pts);
-            stats.cost = stats.cost + 2 * info.min_noncrit_if_hit1 * (1.0 - drain_mod);
+            if pts ~= 0 then
+                local drain_mod = 0.01*dummy_value(lookups.arcane_shielding, 0, pts);
+                stats.cost = stats.cost + 2 * info.min_noncrit_if_hit1 * (1.0 + drain_mod);
+            end
         end,
     };
 --elseif class == classes.rogue then

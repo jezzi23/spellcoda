@@ -162,7 +162,7 @@ local class_stats_spell = (function()
 
             if bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 then
                 if has_enchant(effects, lookups.rune_burnout) and spell.direct then
-                    stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + 0.01 * base_mana;
+                    stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + 0.01 * loadout.base_mana;
                 end
 
                 if num_set_pieces(effects, 1807) >= 6 and bid == spids.fireball then
@@ -273,8 +273,6 @@ if class == classes.shaman then
     };
 elseif class == classes.priest then
     special_abilities = {
-        [spids.mana_burn] = function(_, _, _, _, effects)
-        end,
     };
 --elseif class == classes.druid then
 --    special_abilities = {

@@ -36,9 +36,6 @@ if sc.class == sc.classes.mage then
         spells[v].direct.coef = 0.429;
     end
 
-    spells[spids.arcane_surge].direct.per_resource = 0.03;
-    spells[spids.arcane_surge].flags = bit.bor(spells[spids.arcane_surge].flags, spell_flags.uses_all_power);
-
     lookups.averaged_procs = {
         12536, -- clearcast
         22008, -- tier 2 instant cast proc
@@ -116,7 +113,7 @@ elseif sc.class == sc.classes.druid then
     end
 
     do
-        -- Heart of the wild shapeshift specials hacked in by blizzard instead of being
+        -- Heart of the wild shapeshift specials hacked in by blizzard as dummies instead of being
         -- added to shapeshift passive effects so needs to be hacked in here too
         -- (without this stat weights would be inaccurate for shapeshifts)
 
@@ -132,22 +129,20 @@ elseif sc.class == sc.classes.druid then
         local new_dire_bear_effect_iid = dire_bear_passive[#dire_bear_passive][sc.aura_idx_iid] + 1;
         dire_bear_passive[#dire_bear_passive + 1] = {"by_attr", "stat_mod", 0.0, {attr.stamina,}, 32, new_dire_bear_effect_iid};
 
-        -- TODO forever-transition: talent_ranks is nil on Camelot, needs the rank/curve mechanism
-        --for rank, talent_id in pairs(talent_ranks[talent_idx.heart_of_the_wild]) do
+        local stamina_curve = sc.dummies[lookups.heart_of_the_wild][2][4];
+        local strength_curve = sc.dummies[lookups.heart_of_the_wild][3][4];
 
-        --    local effects = sc.talent_effects[talent_id];
-        --    -- add to aura points to our fake new effects
-        --    local iid_next = effects[#effects][sc.aura_idx_iid] + 1;
+        local effects = sc.talent_effects[lookups.heart_of_the_wild];
+        -- add to aura points to our fake new effects
+        local iid_next = effects[#effects][sc.aura_idx_iid] + 1;
 
-        --    effects[#effects + 1] = {"aura_pts_flat", new_cat_effect_iid, 0.02*rank, {3025}, 0, iid_next};
-        --    iid_next = iid_next + 1;
+        effects[#effects + 1] = {"aura_pts_flat", new_cat_effect_iid, 0.0, {3025}, 0, iid_next, 0.01, strength_curve};
+        iid_next = iid_next + 1;
 
-        --    effects[#effects + 1] = {"aura_pts_flat", new_bear_effect_iid, 0.04*rank, {1178}, 0, iid_next};
-        --    iid_next = iid_next + 1;
+        effects[#effects + 1] = {"aura_pts_flat", new_bear_effect_iid, 0.0, {1178}, 0, iid_next, 0.01, stamina_curve};
+        iid_next = iid_next + 1;
 
-        --    effects[#effects + 1] = {"aura_pts_flat", new_dire_bear_effect_iid, 0.04*rank, {9635}, 0, iid_next};
-        --    iid_next = iid_next + 1;
-        --end
+        effects[#effects + 1] = {"aura_pts_flat", new_dire_bear_effect_iid, 0.0, {9635}, 0, iid_next, 0.01, stamina_curve};
     end
 
     do
@@ -187,75 +182,37 @@ elseif sc.class == sc.classes.druid then
 
 elseif sc.class == sc.classes.priest then
 
-    for _, v in pairs(rank_seqs[spids.mana_burn]) do
-        spells[v].direct.coef = 0.1;
-    end
+    --for _, v in pairs(rank_seqs[spids.mana_burn]) do
+    --    spells[v].direct.coef = 0.1;
+    --end
 
     -- THREAT
-    --add_threat_mod_all_ranks({
-    --    {spids.mind_blast, 1.0}
-    --});
+    add_threat_mod_all_ranks({
+        {spids.mind_blast, 1.0}
+    });
     for _, v in pairs(rank_seqs[spids.holy_nova]) do
         spells[v].flags = bit.bor(spells[v].flags, spell_flags.no_threat);
         spells[v].healing_version.flags = bit.bor(spells[v].healing_version.flags, spell_flags.no_threat);
     end
 
-    -- TODO forever-transition: talent_ranks is nil on Camelot, needs the rank/curve mechanism
-    --for _, talent_id in pairs(talent_ranks[talent_idx.spiritual_guidance]) do
-    --    for _, auras in pairs(sc.talent_effects[talent_id]) do
-    --        if auras[sc.aura_idx_category] == "by_attr" then
-    --            auras[sc.aura_idx_subject] = {attr.spirit};
-    --        end
-    --    end
-    --end
-
 elseif sc.class == sc.classes.shaman then
-    for _, v in pairs(rank_seqs[spids.earth_shield]) do
-        spells[v].direct.coef = 0.271;
-    end
-
-
 
     lookups.averaged_procs = {
         16246, -- clearcast
     };
 
     -- THREAT
-    --add_threat_mod_all_ranks({
-    --    {spids.earth_shock, 1.0}
-    --});
+    add_threat_mod_all_ranks({
+        {spids.earth_shock, 1.0}
+    });
 
 elseif sc.class == sc.classes.warlock then
 
-
-
-    do
-        if bit.band(sc.game_mode, sc.game_modes.season_of_discovery) ~= 0 then
-            -- Soul siphon rune shadow debuffs detection using class_misc value
-            local shadow_detection_aura = {"raw", "class_misc", 1, nil, sc.aura_flags.requires_ownership, -1};
-            local affecters = {"corruption", "curse_of_agony", "curse_of_doom", "curse_of_recklessness", "curse_of_shadow", "curse_of_the_elements", "curse_of_weakness", "curse_of_tongues", "fear", "haunt", "howl_of_terror" };
-            for _, v in ipairs(affecters) do
-                for _, id in ipairs(rank_seqs[spids[v]]) do
-                    if not sc.hostile_buffs[id] then
-                        sc.hostile_buffs[id] = {};
-                    end
-                    table.insert(sc.hostile_buffs[id], shadow_detection_aura);
-                end
-            end
-        end
-    end
-
     -- THREAT
-    --add_threat_mod_all_ranks({
-    --    {spids.searing_pain, 1.0}
-    --});
-    -- TODO forever-transition: talent_ranks is nil on Camelot, needs the rank/curve mechanism
-    --for rank, talent_id in pairs(talent_ranks[talent_idx.improved_life_tap]) do
-    --    -- Life tap talent effect is a dummy, needs manual adding
-    --    sc.talent_effects[talent_id] = {
-    --        {"ability", "base_mod", rank*0.1, {spids.life_tap}, 0, 0},
-    --    };
-    --end
+    add_threat_mod_all_ranks({
+        {spids.searing_pain, 1.0}
+    });
+
 elseif sc.class == sc.classes.rogue then
 
     -- TODO: forever-transition
@@ -305,15 +262,11 @@ elseif sc.class == sc.classes.paladin then
 		{"ability", "effect_mod_flat", 115, {spids.flash_of_light}, 0, 1},
     };
 
-    --sc.passives[lookups.exorcist] = {
-	--	{"ability", "crit", 1.0, {spids.exorcism}, 0, 0},
-    --};
-
     -- THREAT
-    --add_threat_flat_by_rank({
-    --    { spids.holy_shield, {20, 30, 40} },
-    --    { spids.cleanse, {40} },
-    --});
+    add_threat_flat_by_rank({
+        { spids.holy_shield, {20, 30, 40} },
+        { spids.cleanse, {40} },
+    });
 
 elseif sc.class == sc.classes.warrior then
 
@@ -324,22 +277,21 @@ elseif sc.class == sc.classes.warrior then
     }
 
     -- THREAT
-    --add_threat_mod_all_ranks({
-    --    {spids.execute, 0.25},
-    --    {spids.thunder_clap, 1.5},
-    --});
+    add_threat_mod_all_ranks({
+        {spids.execute, 0.25},
+        {spids.thunder_clap, 1.5},
+    });
 
-    --add_threat_flat_by_rank({
-    --    { spids.revenge, {155, 195, 235, 275, 315, 355} },
-    --    { spids.shield_slam, {160, 190, 220, 250} },
-    --    { spids.sunder_armor, {100, 140, 180, 220, 260} },
-    --    { spids.shield_bash, {180, 180, 180} },
-    --    { spids.battle_shout, {5, 11, 17, 26, 39, 55, 70} },
-    --    { spids.cleave, {10, 40, 60, 70, 100} },
-    --    { spids.demoralizing_shout, {11, 17, 21, 32, 43} },
-    --    { spids.heroic_strike, {20, 39, 59, 78, 98, 118, 137, 145, 175} },
-    --    { spids.hamstring, {61, 101, 141} },
-    --});
+    add_threat_flat_by_rank({
+        { spids.revenge, {155, 195, 235, 275, 315, 355} },
+        { spids.shield_slam, {160, 190, 220, 250} },
+        { spids.shield_bash, {180, 180, 180} },
+        { spids.battle_shout, {5, 11, 17, 26, 39, 55, 70} },
+        { spids.cleave, {10, 40, 60, 70, 100} },
+        { spids.demoralizing_shout, {11, 17, 21, 32, 43} },
+        { spids.heroic_strike, {20, 39, 59, 78, 98, 118, 137, 145, 175} },
+        { spids.hamstring, {61, 101, 141} },
+    });
 elseif sc.class == sc.classes.hunter then
 
 end
