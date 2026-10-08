@@ -111,10 +111,6 @@ elseif sc.class == sc.classes.druid then
         spells[v].periodic.coef_ap_min = 0.03;
     end
     for _, v in pairs(rank_seqs[spids.rake]) do
-        spells[v].direct.coef_ap_min = 0.01;
-        spells[v].direct.coef_ap_max = 0.01;
-        spells[v].periodic.coef_ap_min = 0.02;
-        spells[v].periodic.coef_ap_max = 0.02;
         spells[v].direct.flags = bit.bor(spells[v].direct.flags, comp_flags.bleed);
     end
     for _, v in pairs(rank_seqs[spids.rip]) do
@@ -229,9 +225,6 @@ elseif sc.class == sc.classes.shaman then
 
 elseif sc.class == sc.classes.warlock then
 
-    -- Lifetap ranks 1 and 2 unusual in client data
-    spells[rank_seqs[spids.life_tap][1]].direct.min = 30;
-    spells[rank_seqs[spids.life_tap][2]].direct.min = 75;
 
     for _, v in pairs(rank_seqs[spids.shadow_ward]) do
         spells[v].direct.coef = spell_coef_lvl_adjusted(0.3, spells[v].lvl_req);
@@ -250,11 +243,6 @@ elseif sc.class == sc.classes.warlock then
     --    };
     --end
 elseif sc.class == sc.classes.rogue then
-    for _, v in pairs(rank_seqs[spids.eviscerate]) do
-        spells[v].direct.coef_ap_min = nil;
-        spells[v].direct.coef_ap_max = nil;
-        spells[v].direct.per_cp_coef_ap = 0.03;
-    end
     for _, v in pairs(rank_seqs[spids.rupture]) do
         spells[v].periodic.coef_ap_by_cp = {0.01, 0.02, 0.03, 0.03, 0.03};
     end
@@ -328,8 +316,6 @@ elseif sc.class == sc.classes.warrior then
     for _, v in pairs(rank_seqs[spids.rend]) do
         spells[v].periodic.flags =
             bit.bor(spells[v].periodic.flags, comp_flags.coef_applied_to_avg_weapon_dmg);
-        spells[v].periodic.coef_ap_min = nil;
-        spells[v].periodic.coef_ap_max = nil;
         -- special coef applied to weapn damage
         spells[v].periodic.min = 0.00743;
         spells[v].periodic.max = 0.00743;
@@ -364,18 +350,6 @@ elseif sc.class == sc.classes.hunter then
     for _, v in pairs(rank_seqs[spids.serpent_sting]) do
         spells[v].periodic.flags = 
             bit.bor(spells[v].periodic.flags, comp_flags.magic_scaling_as_ap);
-
-        -- generator has coef for entire duration instead of per tick, divide by ticks
-        if spells[v].periodic.coef_ap_min then
-            spells[v].periodic.coef_ap_min =
-                spells[v].periodic.tick_time*spells[v].periodic.coef_ap_min
-                /
-                spells[v].periodic.dur;
-            spells[v].periodic.coef_ap_max =
-                spells[v].periodic.tick_time*spells[v].periodic.coef_ap_max
-                /
-                spells[v].periodic.dur;
-        end
     end
     for _, v in pairs(rank_seqs[spids.steady_shot]) do
         spells[v].direct.flags =

@@ -269,9 +269,6 @@ elseif sc.class == sc.classes.shaman then
 
 elseif sc.class == sc.classes.warlock then
 
-    -- Lifetap ranks 1 and 2 unusual in client data
-    spells[rank_seqs[spids.life_tap][1]].direct.min = 30;
-    spells[rank_seqs[spids.life_tap][2]].direct.min = 75;
 
 
     do
@@ -384,7 +381,8 @@ elseif sc.class == sc.classes.warrior then
     }
 
     for _, v in pairs(rank_seqs[spids.shield_slam]) do
-        spells[v].direct.per_resource = 0.05; -- hacked in as per strength
+        spells[v].direct.coef = 0.05;
+        spells[v].direct.coef_attr = attr.strength;
     end
     -- THREAT
     add_threat_mod_all_ranks({

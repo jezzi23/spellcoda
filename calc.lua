@@ -571,6 +571,10 @@ local function stats_sp(sp_extra, bid, comp, spell, loadout, effects)
 
     local sp;
 
+    if comp.coef_attr then
+        return loadout.stats[comp.coef_attr] + effects.by_attr.stat_flat[comp.coef_attr];
+    end
+
     if bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) ~= 0 then
         sp = loadout.healing_power + effects.raw.healing_power_flat;
     elseif comp.school1 == schools.physical or
@@ -610,6 +614,8 @@ local function stats_coef(stats, bid, comp, spell, loadout, effects, eval_flags)
     local coef, coef_max;
     if bid == auto_wand_spell_id or bit.band(comp.flags, comp_flags.no_coef) ~= 0 then
         coef = 0;
+    elseif comp.coef_attr then
+        coef = comp.coef;
     elseif comp.school1 == schools.physical or
         bit.band(comp.flags, comp_flags.magic_scaling_as_ap) ~= 0 then
 
@@ -2407,6 +2413,10 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
             local added_effect = direct.per_lvl * clvl + direct.per_lvl_sq * clvl * clvl;
             min = direct.min * (direct.base_min + added_effect);
         end
+        if direct.coef_attr then
+            min = min + loadout.stats[direct.coef_attr] + effects.by_attr.stat_flat[direct.coef_attr];
+        end
+
         min =
             (
                 (
@@ -2431,6 +2441,9 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
         else
             local added_effect = periodic.per_lvl * clvl + periodic.per_lvl_sq * clvl * clvl;
             min = periodic.min * (periodic.base_min + added_effect);
+        end
+        if periodic.coef_attr then
+            min = min + loadout.stats[periodic.coef_attr] + effects.by_attr.stat_flat[periodic.coef_attr];
         end
         min =
             (
@@ -2803,7 +2816,7 @@ if client_matches(client_flags.vanilla) then
 end
 
 -- tbc and beyond
-if client_matches(bit.bnot(client_flags.vanilla)) then
+if client_matches(bit.bnot(bit.bor(client_flags.vanilla, client_flags.forever))) then
     for _, v in ipairs({dmg_magic_stat_weights, heal_stat_weights, melee_stat_weights, ranged_stat_weights}) do
         v[#v+1] = {display = "Haste", key = "haste_rating"};
     end

@@ -43,7 +43,7 @@ sc.dual_wield_class =
 
 if sc.class == sc.classes.mage then
     for _, v in pairs(rank_seqs[spids.ice_lance]) do
-        spells[v].direct.coef = spell_coef_lvl_adjusted(0.429, spells[v].lvl_req);
+        spells[v].direct.coef = 0.429;
     end
 
     spells[spids.arcane_surge].direct.per_resource = 0.03;
@@ -93,7 +93,7 @@ elseif sc.class == sc.classes.druid then
 
     -- COEF ADJUSTMENTS
     for _, v in pairs(rank_seqs[spids.lifebloom]) do
-        spells[v].periodic.coef = spell_coef_lvl_adjusted(0.051, spells[v].lvl_req);
+        spells[v].periodic.coef = 0.051;
     end
     -- cat has a few spells with AP coef not found in game client
     for _, v in pairs(rank_seqs[spids.ferocious_bite]) do
@@ -198,10 +198,7 @@ elseif sc.class == sc.classes.druid then
 elseif sc.class == sc.classes.priest then
 
     for _, v in pairs(rank_seqs[spids.mana_burn]) do
-        spells[v].direct.coef = spell_coef_lvl_adjusted(0.1, spells[v].lvl_req);
-    end
-    for _, v in pairs(rank_seqs[spids.power_word_shield]) do
-        spells[v].direct.coef = spell_coef_lvl_adjusted(0.1, spells[v].lvl_req);
+        spells[v].direct.coef = 0.1;
     end
     for _, v in pairs(rank_seqs[spids.penance]) do
         -- first tick missing from generator, use direct portion as one tick of periodic
@@ -231,13 +228,7 @@ elseif sc.class == sc.classes.priest then
 
 elseif sc.class == sc.classes.shaman then
     for _, v in pairs(rank_seqs[spids.earth_shield]) do
-        spells[v].direct.coef = spell_coef_lvl_adjusted(0.271, spells[v].lvl_req);
-    end
-
-    for _, v in pairs(rank_seqs[spids.fire_nova]) do
-        -- TODO forever-transition: might need to handle this more carefully
-        spells[v].direct = spells[v].periodic;
-        spells[v].periodic = nil;
+        spells[v].direct.coef = 0.271;
     end
 
 
@@ -253,9 +244,6 @@ elseif sc.class == sc.classes.shaman then
 
 elseif sc.class == sc.classes.warlock then
 
-    -- Lifetap ranks 1 and 2 unusual in client data
-    spells[rank_seqs[spids.life_tap][1]].direct.min = 30;
-    spells[rank_seqs[spids.life_tap][2]].direct.min = 75;
 
 
     do
@@ -295,6 +283,7 @@ elseif sc.class == sc.classes.rogue then
     -- rogue has a few spells with AP coef not found in game client
     for _, v in pairs(rank_seqs[spids.rupture]) do
         spells[v].periodic.coef_ap_by_cp = {0.01, 0.02, 0.03, 0.03, 0.03}; -- scuffed scaling
+        spells[v].periodic.per_cp_dur = 2;
     end
     for _, v in pairs(rank_seqs[spids.eviscerate]) do
         spells[v].direct.per_cp_coef_ap = 0.03;
@@ -302,16 +291,12 @@ elseif sc.class == sc.classes.rogue then
     for _, v in pairs(rank_seqs[spids.garrote]) do
         spells[v].periodic.coef_ap_min = 0.03;
     end
+    -- TODO: between the eyes coef unknown
+    --spells[spids.between_the_eyes].direct.per_cp_coef_ap = 0.03;
     for _, v in pairs(rank_seqs[spids.slice_and_dice]) do
         spells[v].periodic.per_cp_dur = 3;
     end
 
-    spells[spids.fan_of_knives].direct.flags =
-        bit.bor(spells[spids.fan_of_knives].direct.flags, comp_flags.applies_oh, comp_flags.full_oh);
-    spells[spids.mutilate].direct.flags =
-        bit.bor(spells[spids.mutilate].direct.flags, comp_flags.applies_oh, comp_flags.full_oh);
-    spells[spids.main_gauche].direct.flags =
-        bit.bor(spells[spids.main_gauche].direct.flags, comp_flags.applies_oh, comp_flags.full_oh);
     spells[spids.main_gauche].direct.flags =
         bit.band(spells[spids.main_gauche].direct.flags, bit.bnot(comp_flags.applies_mh));
 
@@ -355,9 +340,6 @@ elseif sc.class == sc.classes.warrior then
         [3] = {7381}, -- berserker
     }
 
-    for _, v in pairs(rank_seqs[spids.shield_slam]) do
-        spells[v].direct.per_resource = 0.05; -- hacked in as per strength
-    end
     -- THREAT
     --add_threat_mod_all_ranks({
     --    {spids.execute, 0.25},
