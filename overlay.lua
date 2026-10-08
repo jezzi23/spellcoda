@@ -236,9 +236,14 @@ end
 local function spell_id_of_action(action_id)
 
     local spell_id = 0;
-    local action_type, id, _ = GetActionInfo(action_id);
+    local action_type, id, sub_type = GetActionInfo(action_id);
     if action_type == "macro" then
-         spell_id, _ = GetMacroSpell(id);
+        if sub_type == "spell" then
+            -- modern client
+            spell_id = id;
+        else
+            spell_id, _ = GetMacroSpell(id);
+        end
     elseif action_type == "spell" then
          spell_id = id;
     end
