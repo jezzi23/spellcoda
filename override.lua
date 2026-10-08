@@ -32,7 +32,9 @@ elseif class == classes.paladin then
     };
 elseif class == classes.warlock then
 
-    lookups.isb_lname = C_Spell.GetSpellName(17800);
+    if lookups.shadow_vulnerability then
+        lookups.isb_lname = C_Spell.GetSpellName(lookups.shadow_vulnerability);
+    end
 elseif class == classes.shaman then
 
 elseif class == classes.druid then

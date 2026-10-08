@@ -13,6 +13,7 @@ local spell_flags                   = sc.spell_flags;
 local comp_flags                    = sc.comp_flags;
 local rank_seqs                     = sc.rank_seqs;
 local talent_ranks                  = sc.talent_ranks;
+local talent_idx                    = sc.talent_idx;
 local lookups                       = sc.lookups;
 
 local spell_coef_lvl_adjusted       = sc.utils.spell_coef_lvl_adjusted;
@@ -42,8 +43,6 @@ sc.npc_armor_by_lvl = {
 };
 
 if sc.class == sc.classes.mage then
-
-    lookups.molten_fury_idx = 220;
 
     lookups.averaged_procs = {
         12536, -- clearcast
@@ -135,7 +134,7 @@ elseif sc.class == sc.classes.druid then
         local new_dire_bear_effect_iid = dire_bear_passive[#dire_bear_passive][sc.aura_idx_iid] + 1;
         dire_bear_passive[#dire_bear_passive + 1] = {"by_attr", "stat_mod", 0.0, {attr.stamina,}, 32, new_dire_bear_effect_iid};
 
-        for rank, talent_id in pairs(talent_ranks[215]) do
+        for rank, talent_id in pairs(talent_ranks[talent_idx.heart_of_the_wild]) do
 
             local effects = sc.talent_effects[talent_id];
             -- add to aura points to our fake new effects
@@ -179,7 +178,6 @@ elseif sc.class == sc.classes.druid then
         {spids.maul, 0.75},
         {spids.swipe, 0.75},
     });
-    lookups.tree_of_life_friendly_aura = 34123;
 
 elseif sc.class == sc.classes.priest then
 
@@ -202,7 +200,7 @@ elseif sc.class == sc.classes.priest then
     end
 
     -- Spiritual Healing not affecting selected spells
-    for _, talent_id in pairs(talent_ranks[216]) do
+    for _, talent_id in pairs(talent_ranks[talent_idx.spiritual_healing]) do
         for _, auras in pairs(sc.talent_effects[talent_id]) do
             if auras[sc.aura_idx_category] == "ability" then
                 table.insert(auras[sc.aura_idx_subject], spids.circle_of_healing);
@@ -236,7 +234,7 @@ elseif sc.class == sc.classes.warlock then
     });
 
     -- ?
-    --for rank, talent_id in pairs(talent_ranks[105]) do
+    --for rank, talent_id in pairs(talent_ranks[talent_idx.improved_life_tap]) do
     --    -- Life tap talent effect is a dummy, needs manual adding
     --    sc.talent_effects[talent_id] = {
     --        {"ability", "base_mod", rank*0.1, {spids.life_tap}, 0, 0},

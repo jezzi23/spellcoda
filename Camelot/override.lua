@@ -13,6 +13,7 @@ local spell_flags                   = sc.spell_flags;
 local comp_flags                    = sc.comp_flags;
 local rank_seqs                     = sc.rank_seqs;
 local talent_ranks                  = sc.talent_ranks;
+local talent_idx                    = sc.talent_idx;
 local lookups                       = sc.lookups;
 
 local spell_coef_lvl_adjusted       = sc.utils.spell_coef_lvl_adjusted;
@@ -22,17 +23,6 @@ local add_threat_mod_all_ranks      = sc.utils.add_threat_mod_all_ranks;
 
 spids.curse_of_agony = spids.bane_of_agony;
 
-
---lookups.exorcist                    = 415076;
---lookups.sacred_shield               = 412019;
---lookups.rapid_healing               = 468531;
---lookups.water_shield                = 408510;
---lookups.living_seed                 = 414677;
---lookups.fanaticism                  = 429142;
---lookups.divine_aegis                = 431622;
---lookups.overload                    = 408438;
---lookups.ancestral_awakening         = 425858;
-lookups.fingers_of_frost              = 400669;
 
 sc.dual_wield_class =
     sc.class == sc.classes.warrior or
@@ -143,7 +133,7 @@ elseif sc.class == sc.classes.druid then
         dire_bear_passive[#dire_bear_passive + 1] = {"by_attr", "stat_mod", 0.0, {attr.stamina,}, 32, new_dire_bear_effect_iid};
 
         -- TODO forever-transition: talent_ranks is nil on Camelot, needs the rank/curve mechanism
-        --for rank, talent_id in pairs(talent_ranks[215]) do
+        --for rank, talent_id in pairs(talent_ranks[talent_idx.heart_of_the_wild]) do
 
         --    local effects = sc.talent_effects[talent_id];
         --    -- add to aura points to our fake new effects
@@ -200,13 +190,6 @@ elseif sc.class == sc.classes.priest then
     for _, v in pairs(rank_seqs[spids.mana_burn]) do
         spells[v].direct.coef = 0.1;
     end
-    for _, v in pairs(rank_seqs[spids.penance]) do
-        -- first tick missing from generator, use direct portion as one tick of periodic
-        spells[v].direct = spells[v].periodic;
-        if spells[v].healing_version  then
-            spells[v].healing_version.direct = spells[v].healing_version.periodic;
-        end
-    end
 
     -- THREAT
     --add_threat_mod_all_ranks({
@@ -218,7 +201,7 @@ elseif sc.class == sc.classes.priest then
     end
 
     -- TODO forever-transition: talent_ranks is nil on Camelot, needs the rank/curve mechanism
-    --for _, talent_id in pairs(talent_ranks[214]) do
+    --for _, talent_id in pairs(talent_ranks[talent_idx.spiritual_guidance]) do
     --    for _, auras in pairs(sc.talent_effects[talent_id]) do
     --        if auras[sc.aura_idx_category] == "by_attr" then
     --            auras[sc.aura_idx_subject] = {attr.spirit};
@@ -267,7 +250,7 @@ elseif sc.class == sc.classes.warlock then
     --    {spids.searing_pain, 1.0}
     --});
     -- TODO forever-transition: talent_ranks is nil on Camelot, needs the rank/curve mechanism
-    --for rank, talent_id in pairs(talent_ranks[105]) do
+    --for rank, talent_id in pairs(talent_ranks[talent_idx.improved_life_tap]) do
     --    -- Life tap talent effect is a dummy, needs manual adding
     --    sc.talent_effects[talent_id] = {
     --        {"ability", "base_mod", rank*0.1, {spids.life_tap}, 0, 0},

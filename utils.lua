@@ -295,15 +295,41 @@ local function spell_lname(spell_id)
     end
 end
 
+local function curve_value(pts, curve_id)
+    if pts == 0 then
+        return 0;
+    end
+    local curve = sc.curves[curve_id];
+    local val = curve and curve[pts];
+    if not val then
+        if __spellcoda_debug__ then
+            print("SpellCoda: Missing curve point, curve id:", curve_id, " pts:", pts);
+        end
+        return 0;
+    end
+    return val;
+end
+
 local dummy_min_idx = 1;
 local dummy_max_idx = 2;
 local dummy_iid_idx = 3;
-local function dummy_value(dummy_id, iid)
+local dummy_curve_idx = 4;
+local function dummy_value(dummy_id, iid, pts)
     local dummy = sc.dummies[dummy_id];
     if dummy then
         for _, v in pairs(dummy) do
             if v[dummy_iid_idx] == iid then
-                return v[dummy_min_idx];
+                local curve_id = v[dummy_curve_idx];
+                if not curve_id then
+                    return v[dummy_min_idx];
+                end
+                if not pts then
+                    if __spellcoda_debug__ then
+                        print("Dummy has curve id but no pts given, spell id:", dummy_id, " iid:", iid, " curve id:", curve_id);
+                    end
+                    return 0;
+                end
+                return curve_value(pts, curve_id);
             end
         end
     end
@@ -405,6 +431,7 @@ utils.spell_coef_lvl_adjusted       = spell_coef_lvl_adjusted;
 utils.add_threat_flat_by_rank       = add_threat_flat_by_rank;
 utils.add_threat_mod_all_ranks      = add_threat_mod_all_ranks;
 utils.spell_lname                   = spell_lname;
+utils.curve_value                   = curve_value;
 utils.dummy_value                   = dummy_value;
 utils.assign_color_tag              = assign_color_tag;
 utils.write_item_info_from_link     = write_item_info_from_link;

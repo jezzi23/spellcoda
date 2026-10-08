@@ -34,6 +34,7 @@ local wpn_skill_for_slot                        = sc.equipment.wpn_skill_for_slo
 local inv_type_to_slot_ids                      = sc.equipment.inv_type_to_slot_ids;
 
 local talent_pts                                = sc.talents.talent_pts;
+local talent_idx                                = sc.talent_idx;
 
 local fight_types                               = sc.calc.fight_types;
 local stat_weights                              = sc.calc.stat_weights;
@@ -1243,7 +1244,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                               (1.0 - direct_ratio) * 100,
                               L["periodic"]);
         end
-        if config.settings.general_average_proc_effects and spell.base_id == spids.shadow_bolt and talent_pts(effects_finalized, 301) ~= 0 then
+        if config.settings.general_average_proc_effects and spell.base_id == spids.shadow_bolt and talent_pts(effects_finalized, talent_idx.improved_shadow_bolt) ~= 0 then
             local isb_uptime = 1.0 - math.pow(1.0 - stats.crit, 4);
 
             extra_info_st = extra_info_st .. string.format("%s %.1f%%", L["ISB debuff uptime"], 100 * isb_uptime);

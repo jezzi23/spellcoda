@@ -21,6 +21,7 @@ local dummy_value                                   = sc.utils.dummy_value;
 local num_set_pieces                                = sc.equipment.num_set_pieces;
 
 local talent_pts                                    = sc.talents.talent_pts;
+local talent_idx                                    = sc.talent_idx;
 
 local effect_flags                                  = sc.calc.effect_flags;
 local add_extra_effect                              = sc.calc.add_extra_effect;
@@ -42,12 +43,12 @@ local class_stats_spell = (function()
         return function(anycomp, bid, stats, spell, loadout, effects)
             if bit.band(spell.flags, spell_flags.heal) ~= 0 then
                 -- illumination
-                local pts = talent_pts(effects, 109);
+                local pts = talent_pts(effects, talent_idx.illumination);
                 if pts ~= 0 then
                     stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + 0.6 * pts * 0.2 * stats.original_base_cost;
                 end
                 if bid == spids.holy_light and config.settings.general_average_proc_effects then
-                    local pts = talent_pts(effects, 116);
+                    local pts = talent_pts(effects, talent_idx.lights_grace);
                     stats.extra_cast_time_flat = stats.extra_cast_time_flat - pts * 0.5/3;
 
                 end
@@ -69,11 +70,12 @@ local class_stats_spell = (function()
     elseif class == classes.shaman then
         return function(anycomp, bid, stats, spell, loadout, effects)
 
-            local pts = talent_pts(effects, 119);
+            local pts = talent_pts(effects, talent_idx.lightning_overload);
             if pts ~= 0 and (bid == spids.chain_lightning or bid == spids.lightning_bolt) then
-                local spid = sc.talent_ranks[119][pts];
+                local spid = sc.talent_ranks[talent_idx.lightning_overload][pts];
                 if spid then
-                    local proc = 0.01*dummy_value(spid, 1);
+                    -- proc chance is the rank spell's dummy effect 0 (4 per talent point: 4, 8, 12, 16, 20)
+                    local proc = 0.01*dummy_value(spid, 0);
                     sc.calc.add_extra_effect(
                         stats,
                         0,
@@ -86,7 +88,7 @@ local class_stats_spell = (function()
 
             -- clearcast
             if bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 and
-                talent_pts(effects, 106) ~= 0 then
+                talent_pts(effects, talent_idx.elemental_focus) ~= 0 then
 
                 stats.clearcast_p = 0.4;
                 stats.clearcast_on_crit_lookback_len = 2;
@@ -94,7 +96,7 @@ local class_stats_spell = (function()
         end
     elseif class == classes.mage then
         return function(anycomp, bid, stats, spell, loadout, effects)
-            local pts = talent_pts(effects, lookups.molten_fury_idx);
+            local pts = talent_pts(effects, talent_idx.molten_fury);
             if pts ~= 0 and loadout.enemy_hp_perc <= 0.2 then
                 local vuln = effects.mul.ability.thp_based_vuln_mod[bid];
                 if vuln then
@@ -115,6 +117,19 @@ local class_stats_spell = (function()
 
                     local spirit = loadout.stats[attr.spirit] + effects.by_attr.stat_flat[attr.spirit];
                     stats.extra_spell_power = stats.extra_spell_power + 0.25*spirit;
+                end
+            end
+
+            -- clearcast
+            local pts = talent_pts(effects, talent_idx.omen_of_clarity);
+            if pts and pts ~= 0 then
+                if anycomp.school1 == schools.physical then
+                    stats.clearcast_p = stats.clearcast_p + 0.1*pts;
+
+                elseif bit.band(sc.game_mode, sc.game_modes.season_of_discovery) ~= 0 and
+                       bit.band(spell_flags.instant, spell.flags) == 0 then
+
+                    stats.clearcast_p = stats.clearcast_p + 0.1*pts;
                 end
             end
         end
@@ -142,7 +157,7 @@ elseif class == classes.priest then
 elseif class == classes.mage then
     special_abilities = {
         [spids.mana_shield] = function(spell, info, loadout, stats, effects)
-            local pts = talent_pts(effects, 110);
+            local pts = talent_pts(effects, talent_idx.improved_mana_shield);
             local drain_mod = 0.1 * pts;
             stats.cost = stats.cost + 2 * info.min_noncrit_if_hit1 * (1.0 - drain_mod);
         end,
@@ -159,6 +174,29 @@ elseif class == classes.mage then
 else
     special_abilities = {};
 end
+
+local class_cast_time = (function()
+    if class == classes.druid then
+        return function(bid, spell, stats, cast_time, gcd, loadout, effects)
+            if config.settings.general_average_proc_effects and
+                talent_pts(effects, talent_idx.natures_grace) ~= 0 and
+                spell.direct and
+                bit.band(spell.flags, bit.bor(spell_flags.instant, spell_flags.channel)) == 0 then
+
+                if bid == spids.wrath then
+                    gcd = gcd - 0.5;
+                end
+
+                cast_time = (1.0 - stats.crit) * cast_time + stats.crit * (math.max(gcd, cast_time-0.5));
+            end
+            return cast_time, gcd;
+        end
+    else
+        return function(bid, spell, stats, cast_time, gcd, loadout, effects)
+            return cast_time, gcd;
+        end
+    end
+end)();
 
 local function stats_glance(stats, bid, loadout)
     if bid ~= auto_attack_spell_id then
@@ -189,6 +227,7 @@ end
 --------------------------------------------------------------------------------
 mechanics.client_class_stats_spell          = class_stats_spell;
 mechanics.client_special_abilities          = special_abilities;
+mechanics.client_class_cast_time           = class_cast_time;
 mechanics.stats_glance                      = stats_glance;
 mechanics.caster_coef_multiplier            = caster_coef_multiplier;
 

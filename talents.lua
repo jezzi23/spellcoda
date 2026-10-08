@@ -88,6 +88,10 @@ local function talent_pts(effects, idx)
     return effects.talent_pts[idx] or 0;
 end
 
+local function talent_curve_value(effects, idx, curve_id)
+    return sc.utils.curve_value(talent_pts(effects, idx), curve_id);
+end
+
 local function apply_talents(loadout, effects, wowhead_code, forced, undo)
 
     local i = 1;
@@ -233,6 +237,7 @@ talents_export.wowhead_talent_code_from_url = wowhead_talent_code_from_url;
 talents_export.wowhead_talent_code = wowhead_talent_code;
 talents_export.loadout_talents_info = loadout_talents_info;
 talents_export.talent_pts = talent_pts;
+talents_export.talent_curve_value = talent_curve_value;
 talents_export.apply_talents = apply_talents;
 
 sc.talents = talents_export;

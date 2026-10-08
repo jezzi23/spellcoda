@@ -13,6 +13,7 @@ local spell_flags                   = sc.spell_flags;
 local comp_flags                    = sc.comp_flags;
 local rank_seqs                     = sc.rank_seqs;
 local talent_ranks                  = sc.talent_ranks;
+local talent_idx                    = sc.talent_idx;
 local lookups                       = sc.lookups;
 
 local spell_coef_lvl_adjusted       = sc.utils.spell_coef_lvl_adjusted;
@@ -34,17 +35,6 @@ lookups.rune_dance_of_the_wicked    = 6957;
 lookups.rune_soul_siphon            = 7590;
 lookups.rune_living_seed            = 6975;
 lookups.rune_advanced_warding       = 6726;
-
-lookups.exorcist                    = 415076;
-lookups.sacred_shield               = 412019;
-lookups.rapid_healing               = 468531;
-lookups.water_shield                = 408510;
-lookups.fingers_of_frost            = 400669;
-lookups.living_seed                 = 414677;
-lookups.fanaticism                  = 429142;
-lookups.divine_aegis                = 431622;
-lookups.overload                    = 408438;
-lookups.ancestral_awakening         = 425858;
 
 sc.dual_wield_class =
     sc.class == sc.classes.warrior or
@@ -164,7 +154,7 @@ elseif sc.class == sc.classes.druid then
         local new_dire_bear_effect_iid = dire_bear_passive[#dire_bear_passive][sc.aura_idx_iid] + 1;
         dire_bear_passive[#dire_bear_passive + 1] = {"by_attr", "stat_mod", 0.0, {attr.stamina,}, 32, new_dire_bear_effect_iid};
 
-        for rank, talent_id in pairs(talent_ranks[215]) do
+        for rank, talent_id in pairs(talent_ranks[talent_idx.heart_of_the_wild]) do
 
             local effects = sc.talent_effects[talent_id];
             -- add to aura points to our fake new effects
@@ -224,13 +214,6 @@ elseif sc.class == sc.classes.priest then
     for _, v in pairs(rank_seqs[spids.power_word_shield]) do
         spells[v].direct.coef = spell_coef_lvl_adjusted(0.1, spells[v].lvl_req);
     end
-    for _, v in pairs(rank_seqs[spids.penance]) do
-        -- first tick missing from generator, use direct portion as one tick of periodic
-        spells[v].direct = spells[v].periodic;
-        if spells[v].healing_version  then
-            spells[v].healing_version.direct = spells[v].healing_version.periodic;
-        end
-    end
 
     -- THREAT
     add_threat_mod_all_ranks({
@@ -241,7 +224,7 @@ elseif sc.class == sc.classes.priest then
         spells[v].healing_version.flags = bit.bor(spells[v].healing_version.flags, spell_flags.no_threat);
     end
 
-    for _, talent_id in pairs(talent_ranks[214]) do
+    for _, talent_id in pairs(talent_ranks[talent_idx.spiritual_guidance]) do
         for _, auras in pairs(sc.talent_effects[talent_id]) do
             if auras[sc.aura_idx_category] == "by_attr" then
                 auras[sc.aura_idx_subject] = {attr.spirit};
@@ -291,7 +274,7 @@ elseif sc.class == sc.classes.warlock then
     add_threat_mod_all_ranks({
         {spids.searing_pain, 1.0}
     });
-    for rank, talent_id in pairs(talent_ranks[105]) do
+    for rank, talent_id in pairs(talent_ranks[talent_idx.improved_life_tap]) do
         -- Life tap talent effect is a dummy, needs manual adding
         sc.talent_effects[talent_id] = {
             {"ability", "base_mod", rank*0.1, {spids.life_tap}, 0, 0},

@@ -10,6 +10,7 @@ local powers                                        = sc.powers;
 local spell_flags                                   = sc.spell_flags;
 local comp_flags                                    = sc.comp_flags;
 local lookups                                       = sc.lookups;
+local config                                        = sc.config;
 
 local auto_attack_spell_id                          = sc.auto_attack_spell_id;
 
@@ -19,6 +20,7 @@ local dummy_value                                   = sc.utils.dummy_value;
 local num_set_pieces                                = sc.equipment.num_set_pieces;
 local has_enchant                                   = sc.equipment.has_enchant;
 local talent_pts                                    = sc.talents.talent_pts;
+local talent_idx                                    = sc.talent_idx;
 
 local effect_flags                                  = sc.calc.effect_flags;
 local add_extra_effect                              = sc.calc.add_extra_effect;
@@ -41,7 +43,7 @@ local class_stats_spell = (function()
             if bit.band(spell.flags, spell_flags.heal) ~= 0 then
 
                 -- illumination
-                local pts = talent_pts(effects, 109);
+                local pts = talent_pts(effects, talent_idx.illumination);
                 if pts ~= 0 then
                     stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + pts * 0.2 * stats.original_base_cost;
                 end
@@ -112,7 +114,7 @@ local class_stats_spell = (function()
             -- shaman clearcast
             if bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 then
                 -- clearcast
-                local pts = talent_pts(effects, 106);
+                local pts = talent_pts(effects, talent_idx.elemental_focus);
                 if pts ~= 0 then
                     stats.clearcast_p = stats.clearcast_p + 0.1;
                 end
@@ -120,7 +122,7 @@ local class_stats_spell = (function()
 
             if num_set_pieces(effects, 1816) >= 2 and spell.direct and get_buff(loadout, "player", lookups.water_shield, true) then
 
-                stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + 0.04 * loadout.resources_max[powers.mana];
+                stats.resource_refund_mul_crit = stats.resource_refund_mul_crit + 0.01*dummy_value(408511, 0) * loadout.resources_max[powers.mana];
             end
             if has_enchant(effects, lookups.rune_overload) and
                    (bid == spids.chain_heal or
@@ -129,13 +131,12 @@ local class_stats_spell = (function()
                     bid == spids.lightning_bolt or
                     bid == spids.lava_burst) then
 
-                local proc = 0.01*dummy_value(lookups.overload, 1);
                 sc.calc.add_extra_effect(
                     stats,
                     0,
-                    proc,
-                    spell_lname(lookups.overload),
-                    0.01*dummy_value(lookups.overload, 0)/proc
+                    2*0.01*dummy_value(lookups.lightning_overload, 0),
+                    spell_lname(lookups.lightning_overload),
+                    0.5
                 );
             end
             if bid == spids.healing_wave or
@@ -168,8 +169,8 @@ local class_stats_spell = (function()
                     add_extra_effect(stats,
                         effect_flags.is_periodic,
                         1.0,
-                        spell_lname(467399),
-                        0.01*dummy_value(467399, 0),
+                        spell_lname(lookups.t2_mage_damage_6p),
+                        0.01*dummy_value(lookups.t2_mage_damage_6p, 0),
                         4,
                         2);
                 end
@@ -231,8 +232,8 @@ local class_stats_spell = (function()
                             stats,
                             bit.bor(effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod),
                             1.0,
-                            spell_lname(1213160),
-                            0.01*dummy_value(1213160, 0));
+                            spell_lname(lookups.taq_druid_restoration_4p),
+                            0.01*dummy_value(lookups.taq_druid_restoration_4p, 0));
                 end
             else
                 if num_set_pieces(effects, 1838) >= 4 and
@@ -241,13 +242,27 @@ local class_stats_spell = (function()
                             stats,
                             bit.bor(effect_flags.is_periodic, effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod),
                             1.0,
-                            spell_lname(1213174),
-                            0.01*dummy_value(1213174, 0),
+                            spell_lname(lookups.taq_druid_feral_4p),
+                            0.01*dummy_value(lookups.taq_druid_feral_4p, 0),
                             4,
                             1
                             );
                 end
             end
+
+            -- clearcast
+            local pts = talent_pts(effects, talent_idx.omen_of_clarity);
+            if pts and pts ~= 0 then
+                if anycomp.school1 == schools.physical then
+                    stats.clearcast_p = stats.clearcast_p + 0.1*pts;
+
+                elseif bit.band(sc.game_mode, sc.game_modes.season_of_discovery) ~= 0 and
+                       bit.band(spell_flags.instant, spell.flags) == 0 then
+
+                    stats.clearcast_p = stats.clearcast_p + 0.1*pts;
+                end
+            end
+
         end
     end
 end)();
@@ -273,7 +288,7 @@ elseif class == classes.priest then
 elseif class == classes.mage then
     special_abilities = {
         [spids.mana_shield] = function(spell, info, loadout, stats, effects)
-            local pts = talent_pts(effects, 110);
+            local pts = talent_pts(effects, talent_idx.improved_mana_shield);
             local drain_mod = 0.1 * pts;
             if has_enchant(effects, lookups.rune_advanced_warding) then
                 drain_mod = drain_mod + 0.5;
@@ -293,6 +308,29 @@ elseif class == classes.mage then
 else
     special_abilities = {};
 end
+
+local class_cast_time = (function()
+    if class == classes.druid then
+        return function(bid, spell, stats, cast_time, gcd, loadout, effects)
+            if config.settings.general_average_proc_effects and
+                talent_pts(effects, talent_idx.natures_grace) ~= 0 and
+                spell.direct and
+                bit.band(spell.flags, bit.bor(spell_flags.instant, spell_flags.channel)) == 0 then
+
+                if bid == spids.wrath then
+                    gcd = gcd - 0.5;
+                end
+
+                cast_time = (1.0 - stats.crit) * cast_time + stats.crit * (math.max(gcd, cast_time-0.5));
+            end
+            return cast_time, gcd;
+        end
+    else
+        return function(bid, spell, stats, cast_time, gcd, loadout, effects)
+            return cast_time, gcd;
+        end
+    end
+end)();
 
 local function stats_glance(stats, bid, loadout)
     if bid ~= auto_attack_spell_id then
@@ -314,6 +352,7 @@ end
 --------------------------------------------------------------------------------
 mechanics.client_class_stats_spell          = class_stats_spell;
 mechanics.client_special_abilities          = special_abilities;
+mechanics.client_class_cast_time           = class_cast_time;
 mechanics.stats_glance                      = stats_glance;
 mechanics.caster_coef_multiplier            = caster_coef_multiplier;
 
