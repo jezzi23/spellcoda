@@ -2941,42 +2941,34 @@ local function stat_weights(normal_info, spell, loadout, effects, eval_flags, sp
     return weights, normalize_table;
 end
 
--- evaluate spell with and without stat change coming from a buff spell aliased such as Slice and Dice
-local function eval_spell_buff_diffed(alias_info, alias_spell_id, table_to_change, table_key, buff_value, buff_is_mul, info, stats, spell, loadout, effects, eval_flags, spell_id)
+-- gain of a buff spell such as Slice and Dice, evaluated as the difference it makes to the aliased spell
+local function eval_buff_alias(alias_info, info, stats, spell, loadout, effects, eval_flags, spell_id)
     for _, v in pairs(expectation_variations) do
         info[v] = 0;
     end
     info.num_periodic_effects = 0;
     info.num_direct_effects = 0;
 
-    spell_stats_info(alias_info, stats, spells[alias_spell_id], loadout, effects, eval_flags, alias_spell_id);
+    local auras = class_buffs[spell_id];
+    local alias_id = spell.alias;
+    local active = get_buff(loadout, "player", spell_id, true) ~= nil;
 
-    local table_val_prev = table_to_change[table_key];
+    spell_stats_info(alias_info, stats, spells[alias_id], loadout, effects, eval_flags, alias_id);
+    local effect_per_sec = alias_info.effect_per_sec;
+    local threat_per_sec = alias_info.threat_per_sec;
 
-    if get_buff(loadout, "player", spell_id, true) then
-        info.effect_per_sec = alias_info.effect_per_sec;
-        info.threat_per_sec = alias_info.threat_per_sec;
-        if buff_is_mul then
-            table_to_change[table_key] = (table_to_change[table_key] or 1.0)/(1.0 + buff_value);
-        else
-            table_to_change[table_key] = (table_to_change[table_key] or 0.0)-buff_value;
-        end
-        spell_stats_info(alias_info, stats, spells[alias_spell_id], loadout, effects, eval_flags, alias_spell_id);
-        info.effect_per_sec = info.effect_per_sec - alias_info.effect_per_sec;
-        info.threat_per_sec = info.threat_per_sec - alias_info.threat_per_sec;
+    -- forced so that buffs already reflected in client queries, like attack speed, are toggled on top
+    apply_effect(effects, spell_id, auras, true, 1, active, true);
+    spell_stats_info(alias_info, stats, spells[alias_id], loadout, effects, eval_flags, alias_id);
+    apply_effect(effects, spell_id, auras, true, 1, not active, true);
+
+    if active then
+        info.effect_per_sec = effect_per_sec - alias_info.effect_per_sec;
+        info.threat_per_sec = threat_per_sec - alias_info.threat_per_sec;
     else
-        info.effect_per_sec = -alias_info.effect_per_sec;
-        info.threat_per_sec = -alias_info.threat_per_sec;
-        if buff_is_mul then
-            table_to_change[table_key] = (table_to_change[table_key] or 1.0)*(1.0 + buff_value);
-        else
-            table_to_change[table_key] = (table_to_change[table_key] or 0.0)+buff_value;
-        end
-        spell_stats_info(alias_info, stats, spells[alias_spell_id], loadout, effects, eval_flags, alias_spell_id);
-        info.effect_per_sec = info.effect_per_sec + alias_info.effect_per_sec;
-        info.threat_per_sec = info.threat_per_sec + alias_info.threat_per_sec;
+        info.effect_per_sec = alias_info.effect_per_sec - effect_per_sec;
+        info.threat_per_sec = alias_info.threat_per_sec - threat_per_sec;
     end
-    table_to_change[table_key] = table_val_prev;
     stats_for_spell(stats, spell, loadout, effects, eval_flags);
 
     info.expected_ot_st = info.effect_per_sec*stats.dur_ot;
@@ -3011,41 +3003,20 @@ end
 
 local alias_info = {};
 
+-- alias spells are only evaluated through their buff
+-- TODO: swiftmend needs its own handler, it consumes the aliased hot instead of buffing it
+for spell_id, spell in pairs(spells) do
+    if bit.band(spell.flags, spell_flags.alias) ~= 0 and not class_buffs[spell_id] then
+        spell.flags = bit.band(spell.flags, bit.bnot(spell_flags.eval));
+    end
+end
+
 spell_stats_info = function(info, stats, spell, loadout, effects, eval_flags, spell_id)
     if bit.band(spell.flags, spell_flags.alias) == 0 then
         stats_for_spell(stats, spell, loadout, effects, eval_flags);
         spell_info(info, spell, stats, loadout, effects, eval_flags, spell_id);
-
     else
-        -- handle spells that fully or partially alias other spells
-        if spell.base_id == spids.swiftmend then
-
-        elseif spell.base_id == spids.slice_and_dice then
-            eval_spell_buff_diffed(alias_info,
-                                   spell.alias,
-                                   effects.mul.raw,
-                                   "melee_haste_forced",
-                                   class_buffs[spell_id][1][sc.aura_idx_value],
-                                   true,
-                                   info, stats, spell, loadout, effects, eval_flags, spell_id);
-        elseif spell.base_id == spids.tigers_fury then
-            -- TODO forever-transition: make these things client specific
-            eval_spell_buff_diffed(alias_info,
-                                   spell.alias,
-                                   effects.ability.base_mod_flat,
-                                   spell.alias,
-                                   class_buffs[spell_id][1][sc.aura_idx_value],
-                                   false,
-                                   info, stats, spell, loadout, effects, eval_flags, spell_id);
-        elseif spell.base_id == spids.tigers_fury_2 then
-            eval_spell_buff_diffed(alias_info,
-                                   spell.alias,
-                                   effects.mul.raw,
-                                   "phys_mod",
-                                   class_buffs[spell_id][1][sc.aura_idx_value],
-                                   true,
-                                   info, stats, spell, loadout, effects, eval_flags, spell_id);
-        end
+        eval_buff_alias(alias_info, info, stats, spell, loadout, effects, eval_flags, spell_id);
     end
 end
 
