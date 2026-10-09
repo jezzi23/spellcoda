@@ -9,6 +9,8 @@ local apply_effect                     = sc.loadouts.apply_effect;
 local apply_flat_scaled                = sc.loadouts.apply_flat_scaled;
 local write_item_info_from_link        = sc.utils.write_item_info_from_link;
 local cpy_effects                      = sc.loadouts.cpy_effects;
+local client_matches                   = sc.utils.client_matches;
+local client_flags                     = sc.client_flags;
 
 
 ---------------------------------------------------------------------------------------------------
@@ -465,6 +467,20 @@ local function apply_gems(effects, forced, undo, item_id, gem1, gem2, gem3, gem4
     end
 end
 
+-- skill of the attack in druid forms, which use the feral skill instead of the weapon's
+local function feral_skill(loadout)
+    local skill = loadout.wpn_skills[sc.feral_skill_as_wpn_subclass_hack];
+    -- feral skill as weapon skill only works in vanilla
+    -- I think we did this hack because some things could increase
+    -- the feral skill i.e. weapon skill for some druid forms
+    -- The following is needed to fix TBC
+    -- forever reports the real skill, rank 1 is a genuine value there
+    if skill == 1 and not client_matches(client_flags.forever) then
+        skill = loadout.lvl*5;
+    end
+    return skill;
+end
+
 local function wpn_skill_for_slot(loadout, effects, slot, weapon_subclass_id)
 
     local wpn_skill = 0;
@@ -473,8 +489,16 @@ local function wpn_skill_for_slot(loadout, effects, slot, weapon_subclass_id)
         return wpn_skill;
     end
 
-    if weapon_subclass_id and loadout.wpn_skills[weapon_subclass_id] then
-        wpn_skill = loadout.wpn_skills[weapon_subclass_id];
+    local base_skill;
+    if slot == slots.MainHandSlot and loadout.shapeshift_feral_skill ~= 0 then
+        weapon_subclass_id = sc.feral_skill_as_wpn_subclass_hack;
+        base_skill = feral_skill(loadout);
+    elseif weapon_subclass_id then
+        base_skill = loadout.wpn_skills[weapon_subclass_id];
+    end
+
+    if base_skill then
+        wpn_skill = base_skill;
         for mask, v in pairs(effects.wpn_subclass.skill_flat) do
             if bit.band(mask, bit.lshift(1, weapon_subclass_id)) ~= 0 then
                 wpn_skill = wpn_skill + v;
@@ -804,6 +828,7 @@ equipment.has_enchant                   = has_enchant;
 equipment.apply_equipment               = apply_equipment;
 equipment.apply_items_cmp               = apply_items_cmp;
 equipment.wpn_skill_for_slot            = wpn_skill_for_slot;
+equipment.feral_skill                   = feral_skill;
 equipment.slots                         = slots;
 equipment.inv_type_to_slot_ids          = inv_type_to_slot_ids;
 equipment.item_in_data                  = item_in_data;

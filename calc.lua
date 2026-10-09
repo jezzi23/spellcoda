@@ -32,9 +32,11 @@ local effects_add_manual_diff                       = sc.loadouts.effects_add_ma
 local effects_finalize_forced                       = sc.loadouts.effects_finalize_forced;
 local empty_effects                                 = sc.loadouts.empty_effects;
 local cpy_effects                                   = sc.loadouts.cpy_effects;
+local apply_effect                                  = sc.loadouts.apply_effect;
 local loadout_flags                                 = sc.loadouts.loadout_flags;
 
 local num_set_pieces                                = sc.equipment.num_set_pieces;
+local feral_skill                                   = sc.equipment.feral_skill;
 
 local get_buff                                      = sc.buffs.get_buff;
 local get_buff_by_lname                             = sc.buffs.get_buff_by_lname;
@@ -187,6 +189,29 @@ end
 
 local special_abilities;
 
+-- TODO forever-transition: assumed, not verified in game: forms swing at a fixed speed
+--      (bear 2.5, cat 1.0) and the weapon's damage is scaled to that speed
+local feral_form_speed = {[1] = 2.5, [3] = 1.0};
+
+-- main hand min, max and delay, as the attack uses them
+local function mh_weapon(loadout, effects)
+    local min = effects.raw.wpn_min_mh;
+    local max = effects.raw.wpn_max_mh;
+    local delay = effects.raw.wpn_delay_mh;
+    local form_speed = loadout.shapeshift_feral_skill ~= 0 and feral_form_speed[loadout.shapeshift];
+    if form_speed then
+        if delay ~= 0 then
+            min = min*form_speed/delay;
+            max = max*form_speed/delay;
+        end
+        return min, max, form_speed;
+    end
+    if delay == 0 then
+        delay = 2.0;
+    end
+    return min, max, delay;
+end
+
 
 -- For physical mechanics, formulas are based on this
 -- @src: https://github.com/magey/classic-warrior/wiki/Attack-table
@@ -201,16 +226,9 @@ local function stats_attack_skill(comp, spell, loadout, effects, eval_flags)
     local wpn_skill;
     local subclass = nil;
 
-    if loadout.shapeshift_no_weapon ~= 0 then
+    if loadout.shapeshift_feral_skill ~= 0 then
         subclass = sc.feral_skill_as_wpn_subclass_hack;
-        -- feral skill as weapon skill only works in vanilla
-        -- I think we did this hack because some things could increase
-        -- the feral skill i.e. weapon skill for some druid forms
-        -- The following is needed to fix TBC
-        wpn_skill = loadout.wpn_skills[subclass];
-        if wpn_skill == 1 then
-            wpn_skill = loadout.lvl*5;
-        end
+        wpn_skill = feral_skill(loadout);
     else
         if bit.band(eval_flags, evaluation_flags.isolate_oh) ~= 0 and
             bit.band(comp.flags, comp_flags.applies_oh) ~= 0 then
@@ -249,7 +267,7 @@ local function stats_attack_skill(comp, spell, loadout, effects, eval_flags)
         end
     end
 
-    if loadout.shapeshift_no_weapon ~= 0 then
+    if loadout.shapeshift_feral_skill ~= 0 then
         subclass = nil;
     elseif bit.band(eval_flags, evaluation_flags.fix_weapon_skill_to_level) ~= 0 then
 
@@ -657,10 +675,9 @@ local function stats_coef(stats, bid, comp, spell, loadout, effects, eval_flags)
             else
                 if bit.band(comp.flags, comp_flags.normalized_weapon) ~= 0 then
                     speed = sc.wep_subclass_to_normalized_speed[effects.raw.wpn_subclass_mh] or 2.4;
-                elseif effects.raw.wpn_delay_mh == 0 then
-                    speed = 2.0;
                 else
-                    speed = effects.raw.wpn_delay_mh;
+                    local _, _, wpn_delay = mh_weapon(loadout, effects);
+                    speed = wpn_delay;
                 end
             end
 
@@ -853,12 +870,7 @@ local function stats_cast_time(stats, bid, comp, spell, loadout, effects, eval_f
                 local haste_mul_from_rating = 1.0 +
                     0.01*(loadout.melee_haste_rating+effects.raw.melee_haste_rating_flat)/
                         (loadout.cr_scaling * cr_weights[CR_HASTE_MELEE]);
-                local mh_delay;
-                if effects.raw.wpn_delay_mh == 0 then
-                    mh_delay = 2.0;
-                else
-                    mh_delay = effects.raw.wpn_delay_mh;
-                end
+                local _, _, mh_delay = mh_weapon(loadout, effects);
                 cast_time = mh_delay /
                     (effects.mul.raw.melee_haste*effects.mul.raw.melee_haste_forced*haste_mul_from_rating);
             end
@@ -1880,8 +1892,9 @@ local function direct_info(info, spell, loadout, stats, effects, eval_flags)
             base_min = (base_mod_mul*(flat_min + base_mod_flat) + m1_min_base) * base_min;
             base_max = (base_mod_mul*(flat_max + base_mod_flat) + m1_max_base) * base_max;
         else
-            base_min = (base_mod_mul*(flat_min + base_mod_flat) + effects.raw.wpn_min_mh) * base_min;
-            base_max = (base_mod_mul*(flat_max + base_mod_flat) + effects.raw.wpn_max_mh) * base_max;
+            local wpn_min, wpn_max = mh_weapon(loadout, effects);
+            base_min = (base_mod_mul*(flat_min + base_mod_flat) + wpn_min) * base_min;
+            base_max = (base_mod_mul*(flat_max + base_mod_flat) + wpn_max) * base_max;
         end
 
         base_mod_mul = 1;
@@ -2003,8 +2016,8 @@ local function periodic_info(info, spell, loadout, stats, effects, eval_flags)
                 (weapon_base_avg * base_tick_max);
 
         elseif loadout.shapeshift_no_weapon ~= 0 then
-            local ap_reduce_min = loadout.ap*stats.coef/m1_min_base;
-            local ap_reduce_max = loadout.ap*stats.coef_max/m1_max_base;
+            local ap_reduce_min = loadout.ap*stats.coef_ot/base_tick_min;
+            local ap_reduce_max = loadout.ap*stats.coef_ot_max/base_tick_max;
             local m1_min_base = (loadout.attack_min_mh/loadout.attack_mod) - ap_reduce_min;
             local m1_max_base = (loadout.attack_max_mh/loadout.attack_mod) - ap_reduce_max;
 
@@ -2017,12 +2030,13 @@ local function periodic_info(info, spell, loadout, stats, effects, eval_flags)
                 *
                 base_tick_max;
         else
+            local wpn_min, wpn_max = mh_weapon(loadout, effects);
             base_tick_min =
-                (base_mod_ot_mul*(periodic.base_min + base_mod_ot_flat) + effects.raw.wpn_min_mh)
+                (base_mod_ot_mul*(periodic.base_min + base_mod_ot_flat) + wpn_min)
                 *
                 base_tick_min;
             base_tick_max =
-                (base_mod_ot_mul*(periodic.base_max + base_mod_ot_flat) + effects.raw.wpn_max_mh)
+                (base_mod_ot_mul*(periodic.base_max + base_mod_ot_flat) + wpn_max)
                 *
                 base_tick_max;
         end

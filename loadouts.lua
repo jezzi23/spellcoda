@@ -87,6 +87,7 @@ local loadout_numbers = {
     "m1_speed",
     "m2_speed",
     "shapeshift",
+    "shapeshift_feral_skill",
     "shapeshift_no_weapon",
     "target_defense",
     "target_creature_mask",
@@ -287,10 +288,10 @@ local effects_additive = {
     -- effects that affects the base value (points) of other subauras
     -- indexed by the aura internal idx
     aura_pts = {
-        -1, 0, 1, 2, 3, 4
+        -1, 0, 1, 2, 3, 4, 5
     },
     aura_pts_flat = {
-        -1, 0, 1, 2, 3, 4
+        -1, 0, 1, 2, 3, 4, 5
     },
     wpn_subclass = {
         "phys_crit",
@@ -1983,8 +1984,15 @@ local function dynamic_loadout(loadout)
 
     loadout.shapeshift = GetShapeshiftForm();
     if class == classes.druid and loadout.shapeshift ~= 0 and loadout.shapeshift ~= 5 then
-        loadout.shapeshift_no_weapon = 1;
+        loadout.shapeshift_feral_skill = 1;
+        -- forever forms attack with the weapon's damage, older clients ignore the weapon
+        if client_matches(client_flags.forever) then
+            loadout.shapeshift_no_weapon = 0;
+        else
+            loadout.shapeshift_no_weapon = 1;
+        end
     else
+        loadout.shapeshift_feral_skill = 0;
         loadout.shapeshift_no_weapon = 0;
     end
 
