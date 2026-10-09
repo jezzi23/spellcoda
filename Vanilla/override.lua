@@ -19,6 +19,7 @@ local lookups                       = sc.lookups;
 local spell_coef_lvl_adjusted       = sc.utils.spell_coef_lvl_adjusted;
 local add_threat_flat_by_rank       = sc.utils.add_threat_flat_by_rank;
 local add_threat_mod_all_ranks      = sc.utils.add_threat_mod_all_ranks;
+local alias_all_ranks               = sc.utils.alias_all_ranks;
 ---------------------------------------------------------------------------------------------------
 
 -- Lookups for things that need special handling
@@ -97,6 +98,8 @@ if sc.class == sc.classes.mage then
     });
 elseif sc.class == sc.classes.druid then
     lookups.wild_growth_lname = C_Spell.GetSpellName(spids.wild_growth);
+
+    alias_all_ranks(spids.tigers_fury_2, sc.auto_attack_spell_id);
 
     -- DISABLE JUNK
     spells[spids.swiftmend].flags = bit.band(spells[spids.swiftmend].flags, bit.bnot(spell_flags.eval));

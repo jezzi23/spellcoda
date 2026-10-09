@@ -281,6 +281,13 @@ local function add_threat_mod_all_ranks(list)
         end
     end
 end
+local function alias_all_ranks(base_id, alias_id)
+    for _, spid in ipairs(rank_seqs[base_id]) do
+        local spell = spells[spid];
+        spell.alias = alias_id;
+        spell.flags = bit.bor(spell.flags, spell_flags.alias);
+    end
+end
 
 
 local lname_cache = {};
@@ -430,6 +437,7 @@ utils.effect_colors                 = effect_colors;
 utils.spell_coef_lvl_adjusted       = spell_coef_lvl_adjusted;
 utils.add_threat_flat_by_rank       = add_threat_flat_by_rank;
 utils.add_threat_mod_all_ranks      = add_threat_mod_all_ranks;
+utils.alias_all_ranks               = alias_all_ranks;
 utils.spell_lname                   = spell_lname;
 utils.curve_value                   = curve_value;
 utils.dummy_value                   = dummy_value;

@@ -69,9 +69,6 @@ if sc.class == sc.classes.mage then
 elseif sc.class == sc.classes.druid then
     lookups.wild_growth_lname = C_Spell.GetSpellName(spids.wild_growth);
 
-    -- TODO: forever-transition:
-    spells[spids.tigers_fury].flags = bit.band(spells[spids.tigers_fury].flags, bit.bnot(spell_flags.eval));
-
     -- DISABLE JUNK
     spells[spids.swiftmend].flags = bit.band(spells[spids.swiftmend].flags, bit.bnot(spell_flags.eval));
     for _, v in pairs(rank_seqs[spids.frenzied_regeneration]) do
@@ -214,11 +211,6 @@ elseif sc.class == sc.classes.warlock then
     });
 
 elseif sc.class == sc.classes.rogue then
-
-    -- TODO: forever-transition
-    for _, v in pairs(rank_seqs[spids.slice_and_dice]) do
-        spells[v].flags = bit.band(spells[v].flags, bit.bnot(spell_flags.eval));
-    end
 
     -- rogue has a few spells with AP coef not found in game client
     for _, v in pairs(rank_seqs[spids.rupture]) do

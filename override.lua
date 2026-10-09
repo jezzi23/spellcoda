@@ -10,6 +10,8 @@ local spids                         = sc.spids;
 local spell_flags                   = sc.spell_flags;
 local comp_flags                    = sc.comp_flags;
 local rank_seqs                     = sc.rank_seqs;
+
+local alias_all_ranks               = sc.utils.alias_all_ranks;
 ---------------------------------------------------------------------------------------------------
 
 if sc.class == classes.mage then
@@ -32,9 +34,8 @@ elseif class == classes.paladin then
     };
 elseif class == classes.warlock then
 
-    if lookups.shadow_vulnerability then
-        lookups.isb_lname = C_Spell.GetSpellName(lookups.shadow_vulnerability);
-    end
+    lookups.isb_lname = C_Spell.GetSpellName(lookups.shadow_vulnerability);
+
 elseif class == classes.shaman then
 
 elseif class == classes.druid then
@@ -42,10 +43,14 @@ elseif class == classes.druid then
     lookups.rejuvenation_lname = C_Spell.GetSpellName(spids.rejuvenation);
     lookups.regrowth_lname = C_Spell.GetSpellName(spids.regrowth);
     lookups.lifebloom_lname = C_Spell.GetSpellName(spids.lifebloom);
+
+    alias_all_ranks(spids.tigers_fury, sc.auto_attack_spell_id);
 elseif class == classes.priest then
 
     lookups.priest_t3 = 525;
 elseif class == classes.rogue then
+
+    alias_all_ranks(spids.slice_and_dice, sc.auto_attack_spell_id);
 
 elseif sc.class == sc.classes.hunter then
 
