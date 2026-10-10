@@ -2024,7 +2024,8 @@ local function write_spell_tooltip()
 
         if config.settings.general_calc_secondary_tooltip then
             sc_stat_calc_tooltip:ClearLines();
-            sc_stat_calc_tooltip:SetOwner(GameTooltip, "ANCHOR_LEFT", 0, -select(2, sc_stat_calc_tooltip:GetSize()));
+            local height = secret_or((select(2, sc_stat_calc_tooltip:GetSize())), 0, "stat calc tooltip height");
+            sc_stat_calc_tooltip:SetOwner(GameTooltip, "ANCHOR_LEFT", 0, -height);
             local parent = sc_stat_calc_tooltip:GetParent();
             sc_stat_calc_tooltip:SetScale(GameTooltip:GetEffectiveScale() / (parent and parent:GetEffectiveScale() or 1));
 

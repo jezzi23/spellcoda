@@ -1,7 +1,7 @@
 local _, sc               = ...;
 
 local apply_effect        = sc.loadouts.apply_effect;
-local is_secret           = sc.utils.is_secret;
+local any_secret          = sc.utils.any_secret;
 local client_matches      = sc.utils.client_matches;
 local client_flags        = sc.client_flags;
 
@@ -127,7 +127,7 @@ local function detect_buffs(loadout)
                     break;
                 end
                 local spell_id = aura.spellId;
-                if not is_secret(spell_id) and not is_secret(aura.name) then
+                if not any_secret(spell_id, aura.name, aura.applications, is_player_owned(aura)) then
                     -- player owned takes priority
                     local player_owned = is_player_owned(aura);
                     if not v[spell_id] or player_owned then

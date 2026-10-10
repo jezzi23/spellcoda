@@ -11,6 +11,7 @@ local format_locale_dump                        = sc.loc.format_locale_dump;
 local clear_table                               = sc.utils.clear_table;
 local assign_color_tag                          = sc.utils.assign_color_tag;
 local client_matches                            = sc.utils.client_matches;
+local is_secret                                 = sc.utils.is_secret;
 local client_flags                              = sc.client_flags;
 local highest_learned_rank                      = sc.utils.highest_learned_rank;
 local effect_color                              = sc.utils.effect_color;
@@ -4772,7 +4773,7 @@ local function create_calculator_items_subframe(pframe)
     local chatedit_insertlink_link;
 
     hooksecurefunc("ChatEdit_InsertLink", function(link)
-        if link then
+        if link and not is_secret(link) then
             if link ~= handle_modified_item_click_link then
 
                 handle_player_links(link);
@@ -4784,7 +4785,7 @@ local function create_calculator_items_subframe(pframe)
     end);
 
     hooksecurefunc("HandleModifiedItemClick", function(link)
-        if link then
+        if link and not is_secret(link) then
             if link ~= chatedit_insertlink_link then
 
                 handle_player_links(link);
@@ -5003,9 +5004,11 @@ local function create_calculator_items_subframe(pframe)
     target_item_fetch = function()
         local self = pframe.items.targets_item_btn;
 
+        local target_name = UnitName("target");
         if not self.confirmed_incomplete and
             (self.num_fetch_attempts > 5 or
-            UnitName("target") ~= self.target_name) then
+            is_secret(target_name) or
+            target_name ~= self.target_name) then
 
             return;
         end

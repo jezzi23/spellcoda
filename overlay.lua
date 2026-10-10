@@ -9,6 +9,7 @@ local format_number                                 = sc.utils.format_number;
 local format_dur                                    = sc.utils.format_dur;
 local table_from_schema                             = sc.utils.table_from_schema;
 local spell_book_shown                              = sc.utils.spell_book_shown;
+local is_secret                                     = sc.utils.is_secret;
 
 local spells                                        = sc.spells;
 local spids                                         = sc.spids;
@@ -1310,6 +1311,9 @@ end
 
 local function set_cc_spell(spell_id)
 
+    if is_secret(spell_id) then
+        return;
+    end
     if spells[spell_id] and
         (not config.settings.overlay_cc_only_eval or
         bit.band(spells[spell_id].flags, spell_flags.eval) ~= 0) then
@@ -1419,7 +1423,11 @@ end);
 local function ccf_hook_events(should_hook)
     if should_hook then
         for k, v in pairs(cc_event_dispatch) do
-            ccf_parent:RegisterEvent(k);
+            if k:find("^UNIT_") and ccf_parent.RegisterUnitEvent then
+                ccf_parent:RegisterUnitEvent(k, "player");
+            else
+                ccf_parent:RegisterEvent(k);
+            end
         end
     else
         for k, v in pairs(cc_event_dispatch) do
