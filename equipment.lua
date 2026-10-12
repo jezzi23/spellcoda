@@ -1,6 +1,5 @@
 local _, sc = ...;
 
-local attr                             = sc.attr;
 local aura_idx_effect                  = sc.aura_idx_effect;
 local aura_idx_value                   = sc.aura_idx_value;
 local special_item_properties          = sc.special_item_properties;
@@ -8,6 +7,7 @@ local special_item_properties          = sc.special_item_properties;
 local apply_effect                     = sc.loadouts.apply_effect;
 local apply_flat_scaled                = sc.loadouts.apply_flat_scaled;
 local write_item_info_from_link        = sc.utils.write_item_info_from_link;
+local is_secret                        = sc.utils.is_secret;
 local cpy_effects                      = sc.loadouts.cpy_effects;
 local client_matches                   = sc.utils.client_matches;
 local client_flags                     = sc.client_flags;
@@ -144,75 +144,85 @@ end
 
 local GetItemStats = GetItemStats or C_Item.GetItemStats;
 
-local function flat_add(val, forced, undo, attr_table, attr)
-    if not forced then
+local function apply_item_stats(effects, link, forced, undo)
+    local stats = link and GetItemStats(link);
+    if not stats then
         return;
     end
-    if undo then
-        val = -val;
+    for k, v in pairs(stats) do
+        local auras = sc.item_stat_effects[k];
+        if auras then
+            if undo then
+                v = -v;
+            end
+            apply_flat_scaled(effects, auras, v, forced);
+        end
     end
-    attr_table[attr] = attr_table[attr] + val;
 end
 
--- Generated spell effects handle most item effects but some require special handling
-local item_stats_handler = {
-    ITEM_MOD_INTELLECT_SHORT = function(effects, val, forced, undo)
-        flat_add(val, forced, undo, effects.by_attr.stat_flat, attr.intellect);
-    end,
-    ITEM_MOD_SPIRIT_SHORT = function(effects, val, forced, undo)
-        flat_add(val, forced, undo, effects.by_attr.stat_flat, attr.spirit);
-    end,
-    ITEM_MOD_STRENGTH_SHORT = function(effects, val, forced, undo)
-        flat_add(val, forced, undo, effects.by_attr.stat_flat, attr.strength);
-    end,
-    ITEM_MOD_AGILITY_SHORT = function(effects, val, forced, undo)
-        flat_add(val, forced, undo, effects.by_attr.stat_flat, attr.agility);
-    end,
-    ITEM_MOD_STAMINA_SHORT = function(effects, val, forced, undo)
-        flat_add(val, forced, undo, effects.by_attr.stat_flat, attr.stamina);
-    end,
-};
-
-local function rand_prop_points(item_info, idx)
-    local by_quality = sc.ilvl_to_quality_rand_prop_points[item_info.ilvl];
-    return by_quality and idx and by_quality[math.max(2, math.min(4, item_info.quality))][idx];
+local function item_dps(item_info)
+    local stats = item_info.link and GetItemStats(item_info.link);
+    return stats and stats.ITEM_MOD_DAMAGE_PER_SECOND_SHORT;
 end
 
--- Item values come either per item from the client data (old clients) or from formulas of ilvl and quality
--- (Forever, whose item data has no damage or armor columns). The generated tables decide which.
+local function weapon_from_tooltip(link)
+    local data = link and C_TooltipInfo and C_TooltipInfo.GetHyperlink(link);
+    if not data or not data.lines then
+        return;
+    end
+    for _, line in ipairs(data.lines) do
+        local left, right = line.leftText, line.rightText;
+        if is_secret(left) or is_secret(right) then
+            return;
+        end
+        if left and right then
+            local min, max = left:match("(%d+)%s*%-%s*(%d+)");
+            local int, frac = right:match("(%d+)[.,](%d+)");
+            if min and int then
+                local delay = tonumber(int.."."..frac);
+                if delay > 0 then
+                    return tonumber(min), tonumber(max), delay, 1;
+                end
+                return;
+            end
+        end
+    end
+end
+
+local function weapon_min_max(avg, variance)
+    local lo, hi = 1 - 0.5 * variance, 1 + 0.5 * variance;
+    local sum = math.floor(2 * avg + 0.5);
+    local base = math.floor(avg * lo);
+    for min = base - 1, base + 1 do
+        local max = sum - min;
+        if math.max(min / lo, (max - 0.5) / hi) < math.min((min + 1) / lo, (max + 0.5) / hi) then
+            return min, max;
+        end
+    end
+    return base, sum - base;
+end
 
 -- min, max, delay, school or nil
 local weapon_stats;
 if sc.weapons then
     weapon_stats = function(item_info)
         local wpn = sc.weapons[item_info.id];
-        if wpn then
-            return wpn[1], wpn[2], wpn[3], wpn[4];
+        if not wpn then
+            return weapon_from_tooltip(item_info.link);
         end
+        return wpn[1], wpn[2], wpn[3], wpn[4];
     end;
 else
     weapon_stats = function(item_info)
         local wpn = sc.scaled_weapons[item_info.id];
-        if not wpn or not item_info.ilvl then
-            return;
+        if not wpn then
+            return weapon_from_tooltip(item_info.link);
         end
-        local ilvl_to_quality_dps;
-        if item_info.class_id == 2 and item_info.subclass_id == 19 then
-            ilvl_to_quality_dps = sc.ilvl_to_quality_wand_dps;
-        else
-            ilvl_to_quality_dps = sc.inv_type_to_ilvl_to_quality_dps[item_info.inv_type];
+        local dps = item_dps(item_info);
+        if dps then
+            local min, max = weapon_min_max(dps * wpn[1], wpn[2]);
+            return min, max, wpn[1], wpn[3];
         end
-        local by_quality = ilvl_to_quality_dps and ilvl_to_quality_dps[item_info.ilvl];
-        if not by_quality then
-            return;
-        end
-        local dps = by_quality[item_info.quality];
-        if wpn[4] == 1 then
-            dps = dps - sc.inv_type_to_ilvl_to_quality_dps.INVTYPE_WEAPON[item_info.ilvl][item_info.quality] * (1/3);
-        end
-        local delay, variance = wpn[1], wpn[2];
-        local avg = dps * delay;
-        return math.floor(avg * (1 - 0.5 * variance)), math.floor(avg * (1 + 0.5 * variance) + 0.5), delay, wpn[3];
     end;
 end
 
@@ -225,94 +235,9 @@ if sc.weapons then
     end;
 else
     ammo_dps = function(item_info)
-        local by_quality = item_info.ilvl and sc.ilvl_to_quality_ammo_dps[item_info.ilvl];
-        return by_quality and by_quality[item_info.quality];
-    end;
-end
-
-local item_armor;
-if sc.armor then
-    item_armor = function(item_info)
-        return sc.armor[item_info.id];
-    end;
-else
-    item_armor = function(item_info)
-        local ilvl, quality, subclass = item_info.ilvl, item_info.quality, item_info.subclass_id;
-        if item_info.class_id ~= 4 or not ilvl then
-            return nil;
-        end
-        if subclass == 6 then
-            local by_quality = sc.ilvl_to_quality_shield_armor[ilvl];
-            return by_quality and by_quality[quality];
-        end
-        local by_subclass = sc.ilvl_to_armor_subclass_armor[ilvl];
-        local inv_type_mods = sc.inv_type_to_armor_subclass_mod[item_info.inv_type];
-        local quality_mods = sc.ilvl_to_quality_armor_mod[ilvl];
-        if not by_subclass or not by_subclass[subclass] or not inv_type_mods or not quality_mods then
-            return nil;
-        end
-        return math.floor(by_subclass[subclass] * inv_type_mods[subclass] * quality_mods[quality] + 0.5);
-    end;
-end
-
-local function round(x)
-    return math.floor(x + 0.5);
-end
-
--- item stats are rounded, the implicit spell power of caster weapons is floored
-local function apply_pct_stats(effects, pcts, points, undo, rounding)
-    if not pcts or not points then
-        return;
-    end
-    for i = 1, #pcts, 2 do
-        local stat, pct = pcts[i], pcts[i+1];
-        local amount = rounding(0.0001 * points * math.abs(pct));
-        -- negative stats round like positive ones
-        if pct < 0 then
-            amount = -amount;
-        end
-        if undo then
-            amount = -amount;
-        end
-        apply_flat_scaled(effects, sc.item_stat_effects[stat], amount);
-    end
-end
-
-local apply_item_stats;
-if sc.item_stat_pcts then
-    apply_item_stats = function(effects, item_info, _, undo)
-        if not item_info.ilvl then
-            return;
-        end
-        apply_pct_stats(effects, sc.item_stat_pcts[item_info.id],
-                        rand_prop_points(item_info, inv_type_to_rand_prop_points_index[item_info.inv_type]), undo, round);
-        apply_pct_stats(effects, sc.caster_weapon_stat_pcts[item_info.id], rand_prop_points(item_info, 1), undo, math.floor);
-    end;
-else
-    apply_item_stats = function(effects, item_info, forced, undo)
-        if not item_info.link then
-            return;
-        end
-        local item_stats = GetItemStats(item_info.link);
-        if item_stats then
-            for k, v in pairs(item_stats) do
-                if item_stats_handler[k] then
-                    item_stats_handler[k](effects, v, forced, undo);
-                end
-            end
-        end
-    end;
-end
-
--- false for items released after the generated data was made
-local item_in_data;
-if sc.item_stat_pcts then
-    item_in_data = function(item_id)
-        return sc.item_stat_pcts[item_id] ~= nil;
-    end;
-else
-    item_in_data = function()
-        return true;
+        local ammo = sc.scaled_weapons[item_info.id];
+        local dps = ammo and item_dps(item_info);
+        return dps and dps * ammo[1];
     end;
 end
 
@@ -378,7 +303,7 @@ local function apply_ammo(effects, item_info, undo)
 end
 
 local function apply_armor(effects, item_info, undo)
-    local armor = item_armor(item_info);
+    local armor = sc.armor and sc.armor[item_info.id];
     if not armor then
         return;
     end
@@ -547,7 +472,7 @@ local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems,
         end
     end
 
-    apply_item_stats(effects, item_info, true, undo);
+    apply_item_stats(effects, item_info.link, true, undo);
 
     if should_apply_gems then
         apply_gems(effects, true, undo, item_info.id,
@@ -723,9 +648,9 @@ local function apply_equipment(loadout, effects)
             if id and sc.items[id] then
                 for _, effect_id in pairs(sc.items[id]) do
                     apply_effect(effects, effect_id, sc.item_effects[effect_id], false, 1.0);
-                    --apply_item_stats(effects, item_info, false, false);
                 end
             end
+            apply_item_stats(effects, item_link, false, false);
             found_anything = true;
             local _, enchant_id, gem1, gem2, gem3, gem4, suffix_id =
                 strsplit(":", item_link:match("|Hitem:(.+)|h"));
@@ -828,9 +753,10 @@ equipment.has_enchant                   = has_enchant;
 equipment.apply_equipment               = apply_equipment;
 equipment.apply_items_cmp               = apply_items_cmp;
 equipment.wpn_skill_for_slot            = wpn_skill_for_slot;
+equipment.weapon_stats                  = weapon_stats;
+equipment.ammo_dps                      = ammo_dps;
 equipment.feral_skill                   = feral_skill;
 equipment.slots                         = slots;
 equipment.inv_type_to_slot_ids          = inv_type_to_slot_ids;
-equipment.item_in_data                  = item_in_data;
 
 sc.equipment = equipment;

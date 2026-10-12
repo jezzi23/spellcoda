@@ -2245,15 +2245,17 @@ local function apply_effect(effects, spid, auras, forced, stacks, undo, player_o
 end
 
 -- adds the aura values times amount, for additive auras scaled by a count like the points of an item stat
-local function apply_flat_scaled(effects, auras, amount)
+local function apply_flat_scaled(effects, auras, amount, forced)
     for _, aura in pairs(auras) do
-        local val = aura[value_idx] * amount;
-        if aura[category_idx] == "raw" then
-            effects.raw[aura[effect_idx]] = effects.raw[aura[effect_idx]] + val;
-        else
-            local by_subject = effects[aura[category_idx]][aura[effect_idx]];
-            for _, i in pairs(aura[subject_idx]) do
-                by_subject[i] = (by_subject[i] or 0.0) + val;
+        if forced or bit.band(aura[flags_idx], sc.aura_flags.inactive_forced) == 0 then
+            local val = aura[value_idx] * amount;
+            if aura[category_idx] == "raw" then
+                effects.raw[aura[effect_idx]] = effects.raw[aura[effect_idx]] + val;
+            else
+                local by_subject = effects[aura[category_idx]][aura[effect_idx]];
+                for _, i in pairs(aura[subject_idx]) do
+                    by_subject[i] = (by_subject[i] or 0.0) + val;
+                end
             end
         end
     end
