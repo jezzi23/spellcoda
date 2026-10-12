@@ -429,11 +429,11 @@ local event_dispatch = {
         core.old_ranks_checks_needed = true;
         sc.loadouts.force_update = true;
     end,
-    --["LEARNED_SPELL_IN_TAB"] = function()
-    --    sc.spells_feed.external_feed_highest_ranks_update();
-    --    core.old_ranks_checks_needed = true;
-    --    sc.loadouts.force_update = true;
-    --end,
+    ["LEARNED_SPELL_IN_SKILL_LINE"] = function()
+        sc.spells_feed.external_feed_highest_ranks_update();
+        core.old_ranks_checks_needed = true;
+        sc.loadouts.force_update = true;
+    end,
     ["SPELLS_CHANGED"] = function()
         sc.spells_feed.external_feed_highest_ranks_update();
         core.old_ranks_checks_needed = true;
