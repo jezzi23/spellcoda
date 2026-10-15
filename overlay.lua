@@ -1850,6 +1850,16 @@ end
 
 local special_action_bar_changed_id = 0;
 
+local function update_spell_book_slot(frame, overlay_parent, id, loadout, effects, eval_flags)
+    local v = spell_book_frame_info(frame, overlay_parent);
+    for _, ov in pairs(v.overlay_frames) do
+        ov:Hide();
+    end
+    if id and spells[id] and frame:IsVisible() then
+        update_overlay_frame(v, loadout, effects, id, eval_flags);
+    end
+end
+
 local function update_spell_icons(loadout, effects, eval_flags)
 
     if sc.core.update_action_bar_needed then
@@ -1885,13 +1895,10 @@ local function update_spell_icons(loadout, effects, eval_flags)
     -- update spell book icons
     if spell_book_shown() then
         for_each_spell_book_spell(function(frame, overlay_parent, id)
-            local v = spell_book_frame_info(frame, overlay_parent);
-            for _, ov in pairs(v.overlay_frames) do
-                ov:Hide();
-            end
-            if id and spells[id] and frame:IsShown() then
-                update_overlay_frame(v, loadout, effects, id, eval_flags);
-            end
+            update_spell_book_slot(frame, overlay_parent, id, loadout, effects, eval_flags);
+        end);
+        sc.ui.for_each_book_icon(function(frame, id)
+            update_spell_book_slot(frame, frame, id, loadout, effects, eval_flags);
         end);
     end
 
@@ -1917,13 +1924,24 @@ local function overlay_eval_flags()
     return eval_flags;
 end
 
+-- the spellbook catalogue's rows changed without a loadout update, its icons with the last one
+local function update_book_icons()
+    if not loadout or config.settings.overlay_disable or sc.core.mute_overlay then
+        return;
+    end
+    local eval_flags = overlay_eval_flags();
+    sc.ui.for_each_book_icon(function(frame, id)
+        update_spell_book_slot(frame, frame, id, loadout, effects, eval_flags);
+    end);
+end
+
 local function update_overlay()
 
     local effects_before, update_id;
     local updated = false;
     local eval_flags = overlay_eval_flags();
 
-    local spells_frame_open = __sc_frame:IsShown() and __sc_frame.spells_frame:IsShown();
+    local catalogue_open = sc.ui.spell_catalogue_visible();
     local calc_frame_open = __sc_frame:IsShown() and __sc_frame.calculator_frame:IsShown();
 
     if not config.settings.overlay_disable and not sc.core.mute_overlay then
@@ -1944,9 +1962,10 @@ local function update_overlay()
             if not config.settings.overlay_disable and not sc.core.mute_overlay then
                 sc.ui.update_calc_list(false, loadout, effects_before, effects, eval_flags);
             end
-        elseif spells_frame_open then
+        end
+        if catalogue_open then
             if not config.settings.overlay_disable and not sc.core.mute_overlay then
-                sc.ui.update_spells_frame(loadout, effects, eval_flags);
+                sc.ui.update_spell_catalogues(loadout, effects, eval_flags);
             end
         end
 
@@ -1957,7 +1976,6 @@ local function update_overlay()
         for feed, feed_data in pairs(sc.spells_feed.external_feeds) do
             if not feed_data.paused then
                 sc.spells_feed.external_feed_calc(feed, feed_data, loadout, effects);
-                sc.spells_feed.external_feed_calc(feed, feed_data,  loadout, effects);
 
                 if feed_data.callback_fn then
                     feed_data.callback_fn(feed);
@@ -1996,6 +2014,7 @@ overlay.spell_book_frames                           = spell_book_frames;
 overlay.action_id_frames                            = action_id_frames;
 overlay.setup_action_bars                           = setup_action_bars;
 overlay.hook_spell_book                             = hook_spell_book;
+overlay.update_book_icons                           = update_book_icons;
 overlay.update_overlay                              = update_overlay;
 overlay.update_icon_overlay_settings                = update_icon_overlay_settings;
 overlay.reassign_overlay_icon                       = reassign_overlay_icon;

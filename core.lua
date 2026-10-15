@@ -40,7 +40,7 @@ sc.core                         = core;
 core.addon_name                 = "SpellCoda";
 
 local version_major             = 0;
-local version_minor             = 13;
+local version_minor             = 14;
 local version_build             = sc.addon_build_id;
 
 core.version_id                 = version_build + version_minor*100000 + version_major*100000000;
@@ -205,19 +205,16 @@ local function refresh_tooltip()
 
     local dt = tooltip_dt;
 
-    local spells_frame_open = false;
-    local calc_frame_open = false;
-    if __sc_frame:IsShown() then
-        spells_frame_open = __sc_frame.spells_frame:IsShown();
-        calc_frame_open = __sc_frame.calculator_frame:IsShown();
-    end
+    local catalogue_open = sc.ui.spell_catalogue_visible();
+    local calc_frame_open = __sc_frame:IsShown() and __sc_frame.calculator_frame:IsShown();
 
     if config.settings.overlay_disable or core.mute_overlay then
         -- overlay is off, trigger updates which may exit early if nothing changed
         if calc_frame_open then
             sc.ui.update_calc_list(false);
-        elseif spells_frame_open then
-            sc.ui.update_spells_frame();
+        end
+        if catalogue_open then
+            sc.ui.update_spell_catalogues();
         end
     elseif calc_frame_open and __sc_frame.calculator_frame.calculator_plan_changed then
         -- lower response time of calc updates when plan changed
@@ -265,15 +262,11 @@ end
 
 function core.deactivate_tooltip_refresh()
 
-    local spells_frame_open = false;
-    local calc_frame_open = false;
-    if __sc_frame:IsShown() then
-        spells_frame_open = __sc_frame.spells_frame:IsShown();
-        calc_frame_open = __sc_frame.calculator_frame:IsShown();
-    end
+    local catalogue_open = sc.ui.spell_catalogue_visible();
+    local calc_frame_open = __sc_frame:IsShown() and __sc_frame.calculator_frame:IsShown();
     if not GameTooltip:IsShown() and
         not ItemRefTooltip:IsShown() and
-        not (spells_frame_open and (config.settings.overlay_disable or core.mute_overlay)) and
+        not (catalogue_open and (config.settings.overlay_disable or core.mute_overlay)) and
         not calc_frame_open then
 
         refreshing_tooltip = false;
@@ -285,11 +278,16 @@ local event_dispatch = {
         if arg == "SpellCoda" then
             load_config();
             load_localization();
+            if client_matches(client_flags.forever) then
+                sc.ui.init_spellbook_tab();
+            end
         elseif arg == "Blizzard_PlayerSpells" and client_matches(client_flags.forever) then
             sc.overlay.hook_spell_book();
+            sc.ui.init_spellbook_tab();
         end
     end,
     ["PLAYER_LOGOUT"] = function()
+        sc.ui.spellbook_tab_undock_sc_frame();
         save_config();
     end,
     ["PLAYER_LOGIN"] = function()
@@ -431,11 +429,13 @@ local event_dispatch = {
     end,
     ["LEARNED_SPELL_IN_SKILL_LINE"] = function()
         sc.spells_feed.external_feed_highest_ranks_update();
+        sc.ui.spells_known_changed();
         core.old_ranks_checks_needed = true;
         sc.loadouts.force_update = true;
     end,
     ["SPELLS_CHANGED"] = function()
         sc.spells_feed.external_feed_highest_ranks_update();
+        sc.ui.spells_known_changed();
         core.old_ranks_checks_needed = true;
         sc.loadouts.force_update = true;
     end,
@@ -473,6 +473,9 @@ local event_dispatch = {
     end,
     ["GROUP_ROSTER_UPDATE"] = function()
         core.overlay_refresh_config();
+    end,
+    ["ITEM_DATA_LOAD_RESULT"] = function(_, item_id, success)
+        sc.utils.item_data_received(item_id, success);
     end,
 };
 

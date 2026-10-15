@@ -14,6 +14,7 @@
 ## Notes-esES: ¡Todo sobre hechizos!
 ## Notes-esMX: ¡Todo sobre hechizos!
 ## Notes-ptBR: Tudo sobre feitiços!
+## IconTexture: Interface\Icons\spell_fire_elementaldevastation
 ## SavedVariablesPerCharacter: __sc_p_char
 ## SavedVariables: __sc_p_acc
 ## OptionalDeps: LibStub, CallbackHandler-1.0, LibUIDropDownMenu

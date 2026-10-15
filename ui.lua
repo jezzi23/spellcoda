@@ -16,6 +16,7 @@ local client_flags                              = sc.client_flags;
 local highest_learned_rank                      = sc.utils.highest_learned_rank;
 local effect_color                              = sc.utils.effect_color;
 local write_item_info_from_link                 = sc.utils.write_item_info_from_link;
+local request_item_data                         = sc.utils.request_item_data;
 
 local wowhead_talent_link                       = sc.talents.wowhead_talent_link;
 local wowhead_talent_code_from_url              = sc.talents.wowhead_talent_code_from_url;
@@ -407,7 +408,6 @@ local buff_categories_colors = {
 };
 
 local spell_filter_listing;
-local spell_filters;
 local spell_browser_sort_options;
 local spell_browser_sort_keys = {
     lvl = 1,
@@ -417,11 +417,226 @@ local spell_browser_sort_keys = {
     hpc = 5,
 };
 
-local spell_browser_active_sort_key = spell_browser_sort_keys.lvl;
+-- config keys are a catalogue's filter_prefix followed by the id, the first three indices double as triggers
+local spell_filter_ids = {
+    "already_known",
+    "available",
+    "unavailable",
+    "learned_from_item",
+    "talent",
+    "pet",
+    "ignored_spells",
+    "other_spells",
+    "only_highest_learned_ranks",
+};
+local spell_filters = {};
+for k, id in ipairs(spell_filter_ids) do
+    spell_filters[id] = k;
+end
+
 -- meant to happen only the first time
 local spell_browser_scroll_to_lvl = true;
 
-local function filtered_spell_view(spell_ids, name_filter, loadout, effects, eval_flags)
+-- learned state only changes with SPELLS_CHANGED / LEARNED_SPELL_IN_SKILL_LINE
+local spells_known_cache = {};
+local highest_learned_cache = {};
+local spells_known_dirty = true;
+
+local function spells_known_changed()
+    spells_known_dirty = true;
+end
+
+local function cached_highest_learned_rank(base_id)
+    local highest = highest_learned_cache[base_id];
+    if highest == nil then
+        highest = highest_learned_rank(base_id) or false;
+        highest_learned_cache[base_id] = highest;
+    end
+    return highest or nil;
+end
+
+local function spell_known(id)
+    local known = spells_known_cache[id];
+    if known == nil then
+        known = IsSpellKnownOrOverridesKnown(id) or IsSpellKnownOrOverridesKnown(id, true);
+        if not known then
+            -- deal with spells that you unlearn when you have a higher rank
+            local highest = cached_highest_learned_rank(spells[id].base_id);
+            known = spells[highest] ~= nil and spells[highest].rank > spells[id].rank;
+        end
+        spells_known_cache[id] = known;
+    end
+    return known;
+end
+
+local pickup_spell = C_Spell.PickupSpell or PickupSpell;
+
+local function pickup_known_spell(id)
+    if id and IsSpellKnownOrOverridesKnown(id) then
+        pickup_spell(id);
+    end
+end
+
+-- art of blizzard's arrow dropdown button (UIPanelArrowDropdownButtonTemplate), nil on clients without the atlas
+local function create_arrow_button(parent, size)
+    if not (C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo("common-dropdown-a-button")) then
+        return nil;
+    end
+    local btn = CreateFrame("Button", nil, parent);
+    btn:SetSize(size, size);
+    btn.icon = btn:CreateTexture(nil, "ARTWORK");
+    btn.icon:SetAtlas("common-dropdown-a-button");
+    btn.icon:SetSize(size + 2, size + 2);
+    btn.icon:SetPoint("CENTER");
+    local hl = btn:CreateTexture(nil, "HIGHLIGHT");
+    hl:SetAtlas("common-dropdown-a-button");
+    hl:SetBlendMode("ADD");
+    hl:SetAlpha(0.4);
+    hl:SetAllPoints(btn.icon);
+    btn:SetScript("OnMouseDown", function(self) self.icon:SetPoint("CENTER", 1, -1); end);
+    btn:SetScript("OnMouseUp", function(self) self.icon:SetPoint("CENTER", 0, 0); end);
+    return btn;
+end
+
+local spell_lower_names = {};
+
+local function spell_lower_name(id)
+    local lname = spell_lower_names[id];
+    if not lname then
+        lname = string.lower(C_Spell.GetSpellName(id));
+        spell_lower_names[id] = lname;
+    end
+    return lname;
+end
+
+local function spell_view_trigger(filters, id, lvl, name_filter)
+    local spell = spells[id];
+
+    if name_filter ~= "" and not string.find(spell_lower_name(id), name_filter, 1, true) then
+        return nil;
+    end
+    local known = spell_known(id);
+    local trigger;
+    if filters.already_known and known then
+        trigger = spell_filters.already_known;
+    elseif filters.available and lvl >= spell.lvl_req and not known then
+        trigger = spell_filters.available;
+    elseif filters.unavailable and lvl < spell.lvl_req then
+        trigger = spell_filters.unavailable;
+    else
+        return nil;
+    end
+
+    if not filters.learned_from_item and spell.train < -1 then
+        return nil;
+    end
+    if not filters.pet and bit.band(spell.flags, spell_flags.pet) ~= 0 then
+        return nil;
+    end
+    if not filters.talent and bit.band(spell.flags, spell_flags.talent) ~= 0 then
+        return nil;
+    end
+    if not filters.ignored_spells and config.settings.spells_ignore_list[id] then
+        return nil;
+    end
+    if not filters.other_spells and spell.train == 0 then
+        return nil;
+    end
+    if filters.only_highest_learned_ranks and
+        cached_highest_learned_rank(spell.base_id) ~= id then
+        return nil;
+    end
+    if spell.race_flags and bit.band(spell.race_flags, bit.lshift(1, sc.race-1)) == 0 then
+        return nil;
+    end
+    return trigger;
+end
+
+-- each catalogue has its own filters, sort and view, the ignore and calculator lists are shared
+local spell_catalogues = {};
+
+local function new_spell_catalogue(filter_prefix, is_visible, render)
+    local cat = {
+        filter_prefix = filter_prefix,
+        filters = {},
+        name_filter = "",
+        sort_key = spell_browser_sort_keys.lvl,
+        -- entries are reused between updates, the view only holds references to them
+        view = {},
+        pool = {},
+        len = 0,
+        -- rows are evaluated when they are displayed, with the inputs of the last update
+        eval = {},
+        eval_id = 0,
+        update_id = 0,
+        next_lvl = 0,
+        avail_cost = 0,
+        next_cost = 0,
+        total_cost = 0,
+        is_visible = is_visible,
+        render = render,
+    };
+    table.insert(spell_catalogues, cat);
+    return cat;
+end
+
+local function spell_view_entry(cat, i)
+    local v = cat.pool[i];
+    if not v then
+        v = {};
+        cat.pool[i] = v;
+    end
+    v.spell_id = nil;
+    v.lvl_barrier = nil;
+    v.trigger = nil;
+    v.is_dual = false;
+    v.evaluable = false;
+    v.eval_id = -1;
+    v.effect_per_sec = nil;
+    v.effect_per_cost = nil;
+    v.dps = 0;
+    v.hps = 0;
+    v.dpc = 0;
+    v.hpc = 0;
+    cat.view[i] = v;
+    return v;
+end
+
+local function eval_spell_view_entry(cat, v)
+    local spell = spells[v.spell_id];
+    if v.is_dual then
+        spell = spell.healing_version;
+    end
+    local info = calc_spell_eval(spell,
+                                 cat.eval.loadout,
+                                 cat.eval.effects,
+                                 cat.eval.eval_flags,
+                                 v.spell_id);
+    v.effect_per_sec = info.effect_per_sec;
+    v.effect_per_cost = info.effect_per_cost;
+    if v.is_dual or bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) ~= 0 then
+        v.hps = info.effect_per_sec;
+        v.hpc = info.effect_per_cost;
+    else
+        v.dps = info.effect_per_sec;
+        v.dpc = info.effect_per_cost;
+    end
+    v.eval_id = cat.eval_id;
+end
+
+local function filtered_spell_view(cat, spell_ids)
+
+    if spells_known_dirty then
+        clear_table(spells_known_cache);
+        clear_table(highest_learned_cache);
+        spells_known_dirty = false;
+    end
+
+    local settings = config.settings;
+    local filters = cat.filters;
+    for _, id in ipairs(spell_filter_ids) do
+        filters[id] = settings[cat.filter_prefix..id];
+    end
 
     local lvl = active_loadout().lvl;
     local next_lvl = lvl + 1;
@@ -431,160 +646,97 @@ local function filtered_spell_view(spell_ids, name_filter, loadout, effects, eva
     local avail_cost = 0;
     local next_cost = 0;
     local total_cost = 0;
-    local filtered = {};
-    local i = 1
-    for _, id in pairs(spell_ids) do
-        --local known = IsSpellKnown(id);
-        local known = IsSpellKnownOrOverridesKnown(id);
-        if not known then
-            known = IsSpellKnownOrOverridesKnown(id, true);
-        end
-        if not known then
-            -- deal with spells that you unlearn when you have a higher rank
-            local highest = highest_learned_rank(spells[id].base_id);
-            if spells[highest] then
-                known = spells[highest].rank > spells[id].rank;
-            end
-        end
-        if name_filter ~= "" and not string.find(string.lower(C_Spell.GetSpellName(id)), string.lower(name_filter)) then
-        elseif config.settings.spells_filter_already_known and known then
-            filtered[i] = {spell_id = id, trigger = spell_filters.spells_filter_already_known};
-        elseif config.settings.spells_filter_available and
-            lvl >= spells[id].lvl_req and not known then
-            filtered[i] = {spell_id = id, trigger = spell_filters.spells_filter_available};
-        elseif config.settings.spells_filter_unavailable and
-            lvl < spells[id].lvl_req then
-            filtered[i] = {spell_id = id, trigger = spell_filters.spells_filter_unavailable};
-        end
 
-        if not config.settings.spells_filter_learned_from_item and
-            spells[id].train < -1 then
-            filtered[i] = nil;
-        end
-        if not config.settings.spells_filter_pet and
-            bit.band(spells[id].flags, spell_flags.pet) ~= 0 then
-            filtered[i] = nil;
-        end
-        if not config.settings.spells_filter_talent and
-            bit.band(spells[id].flags, spell_flags.talent) ~= 0 then
-            filtered[i] = nil;
-        end
-        if not config.settings.spells_filter_ignored_spells and
-            config.settings.spells_ignore_list[id] then
-            filtered[i] = nil;
-        end
-        if not config.settings.spells_filter_other_spells and
-            spells[id].train == 0 then
-            filtered[i] = nil;
-        end
-        if config.settings.spells_filter_only_highest_learned_ranks then
-            local highest_learned = highest_learned_rank(spells[id].base_id);
-            if not highest_learned or highest_learned ~= id then
-                filtered[i] = nil;
-            end
-        end
-        if spells[id].race_flags and bit.band(spells[id].race_flags, bit.lshift(1, sc.race-1)) == 0 then
-            filtered[i] = nil;
-        end
-        if filtered[i] then
-            -- spell i is in list
-            if spells[id].train > 0 then
-                if spells[id].lvl_req == next_lvl then
-                    next_cost = next_cost + spells[id].train;
-                end
-                if filtered[i].trigger == spell_filters.spells_filter_available then
-                    avail_cost = avail_cost + spells[id].train;
-                end
-                if filtered[i].trigger ~= spell_filters.spells_filter_already_known then
-                    total_cost = total_cost + spells[id].train;
-                end
-            end
-            -- comparable fields
-            filtered[i].dps = 0;
-            filtered[i].hps = 0;
-            filtered[i].dpc = 0;
-            filtered[i].hpc = 0;
-            if bit.band(spells[id].flags, spell_flags.eval) ~= 0 then
-                local info = calc_spell_eval(spells[id], loadout, effects, eval_flags, id);
-                filtered[i].effect_per_sec = info.effect_per_sec;
-                filtered[i].effect_per_cost = info.effect_per_cost;
-                if bit.band(spells[id].flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 then
-                    filtered[i].dps = info.effect_per_sec;
-                    filtered[i].dpc = info.effect_per_cost;
-                else
-                    filtered[i].hps = info.effect_per_sec;
-                    filtered[i].hpc = info.effect_per_cost;
-                end
-            end
-            i = i + 1;
-            if spells[id].healing_version then
-                filtered[i] = {};
-                for k, v in pairs(filtered[i-1]) do
-                    filtered[i][k] = v;
-                end
-                filtered[i].is_dual = true;
+    local name_filter = string.lower(cat.name_filter);
+    local by_lvl = cat.sort_key == spell_browser_sort_keys.lvl;
+    local prev_lvl = -1;
+    local n = 0;
 
-                local info = calc_spell_eval(spells[id].healing_version, loadout, effects, eval_flags, id);
-                filtered[i].effect_per_sec = info.effect_per_sec;
-                filtered[i].effect_per_cost = info.effect_per_cost;
-                filtered[i].hps = info.effect_per_sec;
-                filtered[i].hpc = info.effect_per_cost;
-                filtered[i].dps = 0;
-                filtered[i].dpc = 0;
-
-                i = i + 1;
+    for _, id in ipairs(spell_ids) do
+        local trigger = spell_view_trigger(filters, id, lvl, name_filter);
+        if trigger then
+            local spell = spells[id];
+            if spell.train > 0 then
+                if spell.lvl_req == next_lvl then
+                    next_cost = next_cost + spell.train;
+                end
+                if trigger == spell_filters.available then
+                    avail_cost = avail_cost + spell.train;
+                end
+                if trigger ~= spell_filters.already_known then
+                    total_cost = total_cost + spell.train;
+                end
+            end
+            if by_lvl and spell.lvl_req ~= prev_lvl then
+                n = n + 1;
+                spell_view_entry(cat, n).lvl_barrier = spell.lvl_req;
+                prev_lvl = spell.lvl_req;
+            end
+            n = n + 1;
+            local v = spell_view_entry(cat, n);
+            v.spell_id = id;
+            v.trigger = trigger;
+            v.evaluable = bit.band(spell.flags, spell_flags.eval) ~= 0;
+            if spell.healing_version then
+                n = n + 1;
+                local dual = spell_view_entry(cat, n);
+                dual.spell_id = id;
+                dual.trigger = trigger;
+                dual.is_dual = true;
+                dual.evaluable = true;
             end
         end
     end
+    local view = cat.view;
+    for i = n + 1, cat.len do
+        view[i] = nil;
+    end
+    cat.len = n;
+    cat.next_lvl = next_lvl;
+    cat.avail_cost = avail_cost;
+    cat.next_cost = next_cost;
+    cat.total_cost = total_cost;
+
+    if not by_lvl then
+        -- sorting needs every entry evaluated
+        for i = 1, n do
+            if view[i].evaluable then
+                eval_spell_view_entry(cat, view[i]);
+            end
+        end
+        if cat.sort_key == spell_browser_sort_keys.dps then
+            table.sort(view, function(lhs, rhs) return lhs.dps > rhs.dps; end);
+        elseif cat.sort_key == spell_browser_sort_keys.hps then
+            table.sort(view, function(lhs, rhs) return lhs.hps > rhs.hps; end);
+        elseif cat.sort_key == spell_browser_sort_keys.dpc then
+            table.sort(view, function(lhs, rhs) return lhs.dpc > rhs.dpc; end);
+        elseif cat.sort_key == spell_browser_sort_keys.hpc then
+            table.sort(view, function(lhs, rhs) return lhs.hpc > rhs.hpc; end);
+        end
+    end
+
+    return view;
+end
+
+local function spell_catalogue_cost_str(cat)
     local cost_str = "";
-    if avail_cost ~= 0 then
-        cost_str = cost_str.."   |cFF00FF00"..L["Available cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(avail_cost);
+    if cat.avail_cost ~= 0 then
+        cost_str = cost_str.."   |cFF00FF00"..L["Available cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(cat.avail_cost);
     end
-    if next_cost ~= 0 then
-        cost_str = cost_str.."   |cFFFF8C00"..L["Next level"].." "..next_lvl..L[" cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(next_cost);
+    if cat.next_cost ~= 0 then
+        cost_str = cost_str.."   |cFFFF8C00"..L["Next level"].." "..cat.next_lvl..L[" cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(cat.next_cost);
     end
-    if total_cost ~= 0 then
-        cost_str = cost_str.."   |cFFFF0000"..L["Total cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(total_cost);
+    if cat.total_cost ~= 0 then
+        cost_str = cost_str.."   |cFFFF0000"..L["Total cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(cat.total_cost);
     end
-    __sc_frame.spells_frame.footer_cost:SetText(cost_str);
-
-    if spell_browser_active_sort_key == spell_browser_sort_keys.lvl then
-        __sc_frame.spells_frame.header_level:Hide();
-        local filtered_with_level_barriers = {};
-        -- injects level brackets into the filtered list
-        local prev_lvl = -1;
-        local i = 1;
-        for _, v in pairs(filtered) do
-            if spells[v.spell_id].lvl_req ~= prev_lvl then
-                filtered_with_level_barriers[i] = {lvl_barrier = spells[v.spell_id].lvl_req, trigger_flag = 0};
-                prev_lvl = spells[v.spell_id].lvl_req;
-                i = i + 1;
-            end
-            filtered_with_level_barriers[i] = v;
-            i = i + 1;
-        end
-        filtered = filtered_with_level_barriers;
-    else
-        -- filtered only contains spell ids from here
-        __sc_frame.spells_frame.header_level:Show();
-
-        if spell_browser_active_sort_key == spell_browser_sort_keys.dps then
-            table.sort(filtered, function(lhs, rhs) return lhs.dps > rhs.dps; end);
-        elseif spell_browser_active_sort_key == spell_browser_sort_keys.hps then
-            table.sort(filtered, function(lhs, rhs) return lhs.hps > rhs.hps; end);
-        elseif spell_browser_active_sort_key == spell_browser_sort_keys.dpc then
-            table.sort(filtered, function(lhs, rhs) return lhs.dpc > rhs.dpc; end);
-        elseif spell_browser_active_sort_key == spell_browser_sort_keys.hpc then
-            table.sort(filtered, function(lhs, rhs) return lhs.hpc > rhs.hpc; end);
-        end
-    end
-
-    return filtered;
+    return cost_str;
 end
 
 local ehp_tex = "Interface\\Icons\\Spell_Nature_Reincarnation";
 
-local function populate_scrollable_spell_view(view, starting_idx)
+local function populate_scrollable_spell_view(cat, starting_idx)
+    local view = cat.view;
+    local by_lvl = cat.sort_key == spell_browser_sort_keys.lvl;
     local cnt = 1;
     local n = #__sc_frame.spells_frame.scroll_view;
     local list_len = #view;
@@ -604,7 +756,15 @@ local function populate_scrollable_spell_view(view, starting_idx)
             --line.spell_icon.__id = v.spell_id;
             line.tooltip_area.__id = v.spell_id;
             line.spell_tex:SetTexture((C_Spell.GetSpellTexture(v.spell_id)));
+            local known = v.trigger == spell_filters.already_known or v.is_dual;
+            line.spell_tex:SetDesaturated(not known);
+            if not known and SPELLBOOK_UNLEARNED_TINT_COLOR then
+                line.spell_tex:SetVertexColor(SPELLBOOK_UNLEARNED_TINT_COLOR:GetRGB());
+            else
+                line.spell_tex:SetVertexColor(1, 1, 1);
+            end
             line.spell_icon:Show();
+            line.hover:Show();
             line.spell_tex:Show();
             line.tooltip_area:Show();
             line.dropdown_menu.__spid = v.spell_id;
@@ -618,29 +778,29 @@ local function populate_scrollable_spell_view(view, starting_idx)
             else
                 line.spell_name:SetText(C_Spell.GetSpellName(v.spell_id));
             end
-            if v.trigger == spell_filters.spells_filter_already_known then
+            if v.trigger == spell_filters.already_known then
                 line.spell_name:SetTextColor(138 / 255, 134 / 255, 125 / 255);
-            elseif v.trigger == spell_filters.spells_filter_available then
+            elseif v.trigger == spell_filters.available then
                 line.spell_name:SetTextColor(0 / 255, 255 / 255,   0 / 255);
-            elseif v.trigger == spell_filters.spells_filter_unavailable then
+            elseif v.trigger == spell_filters.unavailable then
                 line.spell_name:SetTextColor(252 / 255,  69 / 255,   3 / 255);
             end
             line.spell_name:Show();
             -- do level per line if not sorting by lvl
-            if spell_browser_active_sort_key ~= spell_browser_sort_keys.lvl then
+            if not by_lvl then
                 line.lvl_str:SetText(color_by_lvl_diff(lvl, spells[v.spell_id].lvl_req)..spells[v.spell_id].lvl_req);
                 line.lvl_str:Show();
             end
             -- write in currency/book cost column
             if spells[v.spell_id].train > 0 then
-                if v.trigger == spell_filters.spells_filter_already_known or v.is_dual then
+                if v.trigger == spell_filters.already_known or v.is_dual then
                     line.cost_str:SetText("");
                 else
                     line.cost_str:SetText(C_CurrencyInfo.GetCoinTextureString(spells[v.spell_id].train));
                 end
                 line.cost_str:Show();
             elseif spells[v.spell_id].train < -1 then
-                if v.trigger == spell_filters.spells_filter_already_known or v.is_dual then
+                if v.trigger == spell_filters.already_known or v.is_dual then
                 else
                     line.book_icon.__id = -spells[v.spell_id].train;
                     line.book_tex:SetTexture(C_Item.GetItemIconByID(-spells[v.spell_id].train));
@@ -648,7 +808,7 @@ local function populate_scrollable_spell_view(view, starting_idx)
                     line.book_icon:Show();
                 end
             else
-                if v.trigger == spell_filters.spells_filter_already_known or v.is_dual then
+                if v.trigger == spell_filters.already_known or v.is_dual then
                 elseif bit.band(spells[v.spell_id].flags, spell_flags.talent) ~= 0 then
                     line.cost_str:SetText(L["Talent"]);
                     line.cost_str:Show();
@@ -658,6 +818,9 @@ local function populate_scrollable_spell_view(view, starting_idx)
                 end
             end
             if bit.band(spells[v.spell_id].flags, spell_flags.eval) ~= 0 then
+                if v.eval_id ~= cat.eval_id then
+                    eval_spell_view_entry(cat, v);
+                end
                 if v.is_dual or bit.band(spells[v.spell_id].flags, bit.bor(spell_flags.heal, spell_flags.absorb)) ~= 0 then
                     line.effect_type_tex:SetTexCoord(0.25, 0.5, 0.0, 0.25);
                 else
@@ -691,12 +854,44 @@ local function populate_scrollable_spell_view(view, starting_idx)
         i = i + 1;
         cnt = cnt + 1;
     end
+    for _, line in pairs(__sc_frame.spells_frame.scroll_view) do
+        line.hover.update();
+    end
 end
 
-local spell_view_update_id = 0;
+local function render_spells_frame(cat)
+    local frame = __sc_frame.spells_frame;
+    local view = cat.view;
 
-local function update_spells_frame(loadout, effects, eval_flags, force_refresh)
+    frame.footer_cost:SetText(spell_catalogue_cost_str(cat));
+    if cat.sort_key == spell_browser_sort_keys.lvl then
+        frame.header_level:Hide();
+    else
+        frame.header_level:Show();
+    end
 
+    frame.slider:SetMinMaxValues(
+        1,
+        math.max(1, #view - math.floor(#frame.scroll_view/2))
+    );
+    if spell_browser_scroll_to_lvl then
+        local suitable_idx = 1;
+        local lvl = active_loadout().lvl;
+        for k, v in pairs(view) do
+            if v.spell_id and lvl <= spells[v.spell_id].lvl_req then
+                suitable_idx = k;
+                break;
+            end
+        end
+        suitable_idx = math.max(1, suitable_idx-10);
+        frame.slider_val = suitable_idx;
+        spell_browser_scroll_to_lvl = false;
+    end
+    frame.slider:SetValue(frame.slider_val);
+    populate_scrollable_spell_view(cat, math.floor(frame.slider_val));
+end
+
+local function update_spell_catalogue(cat, loadout, effects, eval_flags, force_refresh)
 
     if not loadout then
         local calc_mode = __sc_frame:IsShown() and __sc_frame.calculator_frame:IsShown() or
@@ -710,8 +905,8 @@ local function update_spells_frame(loadout, effects, eval_flags, force_refresh)
             loadout, _, effects, update_id = update_loadout_and_effects();
         end
 
-        if update_id > spell_view_update_id then
-            spell_view_update_id = update_id;
+        if update_id > cat.update_id then
+            cat.update_id = update_id;
         else
             if not force_refresh then
                 return;
@@ -719,33 +914,42 @@ local function update_spells_frame(loadout, effects, eval_flags, force_refresh)
         end
     end
 
-    local view = filtered_spell_view(
-        sc.spells_lvl_ordered,
-        __sc_frame.spells_frame.search:GetText(),
-        loadout,
-        effects,
-        eval_flags
-    );
-    __sc_frame.spells_frame.filtered_list = view;
-    __sc_frame.spells_frame.slider:SetMinMaxValues(
-        1,
-        math.max(1, #view - math.floor(#__sc_frame.spells_frame.scroll_view/2))
-    );
-    if spell_browser_scroll_to_lvl then
-        local suitable_idx = 1;
-        local lvl = active_loadout().lvl;
-        for k, v in pairs(view) do
-            if v.spell_id and lvl <= spells[v.spell_id].lvl_req then
-                suitable_idx = k;
-                break;
-            end
+    cat.eval.loadout = loadout;
+    cat.eval.effects = effects;
+    cat.eval.eval_flags = eval_flags;
+    cat.eval_id = cat.eval_id + 1;
+
+    filtered_spell_view(cat, sc.spells_lvl_ordered);
+    cat.render(cat);
+end
+
+local function spell_catalogue_visible()
+    for _, cat in ipairs(spell_catalogues) do
+        if cat.is_visible() then
+            return true;
         end
-        suitable_idx = math.max(1, suitable_idx-10);
-        __sc_frame.spells_frame.slider_val = suitable_idx;
-        spell_browser_scroll_to_lvl = false;
     end
-    __sc_frame.spells_frame.slider:SetValue(__sc_frame.spells_frame.slider_val);
-    populate_scrollable_spell_view(view, math.floor(__sc_frame.spells_frame.slider_val));
+    return false;
+end
+
+local function update_spell_catalogues(loadout, effects, eval_flags, force_refresh)
+    for _, cat in ipairs(spell_catalogues) do
+        if cat.is_visible() then
+            update_spell_catalogue(cat, loadout, effects, eval_flags, force_refresh);
+        end
+    end
+end
+
+local spells_catalogue = new_spell_catalogue(
+    "spells_filter_",
+    function()
+        return __sc_frame:IsShown() and __sc_frame.spells_frame:IsShown();
+    end,
+    render_spells_frame
+);
+
+local function update_spells_frame(loadout, effects, eval_flags, force_refresh)
+    update_spell_catalogue(spells_catalogue, loadout, effects, eval_flags, force_refresh);
 end
 
 local ui_tabs_order = {
@@ -877,6 +1081,8 @@ local function sw_activate_tab(tab_window)
     end
 
     if tab_window.frame_to_open == __sc_frame.spells_frame then
+        -- in case a change of learned spells came without an event
+        spells_known_changed();
         update_spells_frame(nil, nil, nil, true);
         sc.core.activate_tooltip_refresh();
     elseif tab_window.frame_to_open == __sc_frame.calculator_frame then
@@ -1228,48 +1434,44 @@ local function create_sw_ui_spells_frame(pframe)
 
     spell_filter_listing = {
         {
-            id = "spells_filter_already_known",
+            id = "already_known",
             disp = L["Already known"],
         },
         {
-            id = "spells_filter_available",
+            id = "available",
             disp = L["Available"],
         },
         {
-            id = "spells_filter_unavailable",
+            id = "unavailable",
             disp = L["Unavailable"],
         },
         {
-            id = "spells_filter_learned_from_item",
+            id = "learned_from_item",
             disp = L["Learned from item"],
         },
         {
-            id = "spells_filter_talent",
+            id = "talent",
             disp = L["Talent spells"],
         },
         {
-            id = "spells_filter_pet",
+            id = "pet",
             disp = L["Pet spells"],
         },
         {
-            id = "spells_filter_ignored_spells",
+            id = "ignored_spells",
             disp = L["Ignored spells"],
         },
         {
-            id = "spells_filter_other_spells",
+            id = "other_spells",
             disp = L["Other spells"],
             tooltip = L["Uncategorized spells. Contains seasonal spells and junk."]
         },
         {
-            id = "spells_filter_only_highest_learned_ranks",
+            id = "only_highest_learned_ranks",
             disp = L["Only highest, learned spell ranks"],
         },
     };
 
-    spell_filters = {};
-    for k, v in pairs(spell_filter_listing) do
-        spell_filters[v.id] = k;
-    end
     spell_browser_sort_options = {
         "Level",
         "|cFFFF8000"..L["Damage per second"],
@@ -1286,8 +1488,9 @@ local function create_sw_ui_spells_frame(pframe)
     f:SetSize(100, 15);
     f:SetAutoFocus(false);
     f:SetScript("OnTextChanged", function(self)
+        local txt = self:GetText();
+        spells_catalogue.name_filter = txt;
         update_spells_frame(nil, nil, nil, true);
-        local txt =self:GetText();
         if txt == "" then
             pframe.search_empty_label:Show();
         else
@@ -1309,7 +1512,7 @@ local function create_sw_ui_spells_frame(pframe)
     pframe.sort_by:SetPoint("TOPLEFT", 150, pframe.y_offset+6);
     pframe.sort_by.init_func = function()
 
-        libDD:UIDropDownMenu_SetText(pframe.sort_by, L["Order by "]..spell_browser_sort_options[spell_browser_active_sort_key]);
+        libDD:UIDropDownMenu_SetText(pframe.sort_by, L["Order by "]..spell_browser_sort_options[spells_catalogue.sort_key]);
         libDD:UIDropDownMenu_Initialize(pframe.sort_by, function()
 
             libDD:UIDropDownMenu_SetWidth(pframe.sort_by, 160);
@@ -1317,10 +1520,10 @@ local function create_sw_ui_spells_frame(pframe)
             for k, v in pairs(spell_browser_sort_options) do
                 libDD:UIDropDownMenu_AddButton({
                         text = v;
-                        checked = k == spell_browser_active_sort_key;
+                        checked = k == spells_catalogue.sort_key;
                         func = function()
                             libDD:UIDropDownMenu_SetText(pframe.sort_by, L["Order by "]..spell_browser_sort_options[k]);
-                            spell_browser_active_sort_key = k;
+                            spells_catalogue.sort_key = k;
                             update_spells_frame(nil, nil, nil, true);
                             pframe.slider:SetValue(1);
                         end
@@ -1345,20 +1548,21 @@ local function create_sw_ui_spells_frame(pframe)
 
             for _, v in pairs(spell_filter_listing) do
                 local txt = v.disp;
-                if v.id == "spells_filter_already_known" then
+                if v.id == "already_known" then
                     txt = "|cFF8a867d"..txt;
-                elseif v.id == "spells_filter_available" then
+                elseif v.id == "available" then
                     txt = "|cFF00FF00"..txt;
-                elseif v.id == "spells_filter_unavailable" then
+                elseif v.id == "unavailable" then
                     txt = "|cFFFF0000"..txt;
                 end
-                local is_checked = config.settings[v.id];
+                local key = spells_catalogue.filter_prefix..v.id;
+                local is_checked = config.settings[key];
 
                 libDD:UIDropDownMenu_AddButton({
                         text = txt,
                         checked = is_checked,
                         func = function(self)
-                            config.settings[v.id] = not config.settings[v.id];
+                            config.settings[key] = not config.settings[key];
                             update_spells_frame(nil, nil, nil, true);
                         end,
                         keepShownOnClick = true,
@@ -1423,7 +1627,7 @@ local function create_sw_ui_spells_frame(pframe)
     f:SetHeight(pframe:GetHeight()-81);
     f:SetScript("OnValueChanged", function(self, val)
         pframe.slider_val = val;
-        populate_scrollable_spell_view(pframe.filtered_list, math.floor(val));
+        populate_scrollable_spell_view(spells_catalogue, math.floor(val));
     end);
     pframe.slider = f;
     pframe.slider_val = 1;
@@ -1440,10 +1644,31 @@ local function create_sw_ui_spells_frame(pframe)
         scrollbar:SetValue(scrollbar:GetValue() - delta*5);
     end);
 
+    local function mouse_focus()
+        if GetMouseFoci then
+            return GetMouseFoci()[1];
+        end
+        return GetMouseFocus();
+    end
+
     -- Spell list
-    pframe.filtered_list = {};
     pframe.scroll_view = {};
     for i = 1, num_view_list_entries do
+
+        -- below the line's own frames, by mouse focus as a menu over the line still counts as over it
+        local hover_f = CreateFrame("Frame", nil, pframe);
+        hover_f:SetPoint("TOPLEFT", -10, pframe.y_offset+4);
+        hover_f:SetPoint("TOPRIGHT", -30, pframe.y_offset+4);
+        hover_f:SetHeight(entry_y_offset);
+        hover_f:SetFrameLevel(pframe:GetFrameLevel());
+        hover_f:EnableMouse(true);
+        hover_f:SetScript("OnMouseWheel", function(_, delta)
+            pframe:GetScript("OnMouseWheel")(pframe, delta);
+        end);
+        local hover_tex = hover_f:CreateTexture(nil, "BACKGROUND");
+        hover_tex:SetAllPoints();
+        hover_tex:SetColorTexture(1, 1, 1, 0.08);
+        hover_tex:Hide();
 
         local tooltip_area_f = CreateFrame("Frame", nil, pframe);
         tooltip_area_f:SetSize(220, 16);
@@ -1458,6 +1683,10 @@ local function create_sw_ui_spells_frame(pframe)
             GameTooltip:Hide();
         end);
         tooltip_area_f:HookScript("OnMouseWheel", sc.tooltip.eval_mode_scroll_fn);
+        tooltip_area_f:RegisterForDrag("LeftButton");
+        tooltip_area_f:SetScript("OnDragStart", function(self)
+            pickup_known_spell(self.__id);
+        end);
 
 
         local icon = CreateFrame("Frame", nil, pframe);
@@ -1552,7 +1781,7 @@ local function create_sw_ui_spells_frame(pframe)
                             else
                                 config.settings.spells_ignore_list[spell_options.__spid] = 1;
                             end
-                            update_spells_frame(nil, nil, nil, true);
+                            update_spell_catalogues(nil, nil, nil, true);
                         end,
                     }
                 );
@@ -1563,18 +1792,34 @@ local function create_sw_ui_spells_frame(pframe)
         spell_options.Button:Hide();
         spell_options.Text:Hide();
 
-        local f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
-        f:SetText(":");
-        f:SetSize(15, 15);
+        local f = create_arrow_button(pframe, 15);
+        if not f then
+            f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
+            f:SetText(":");
+            f:SetSize(15, 15);
+        end
         f:SetPoint("TOPLEFT", dropdown_x_offset, pframe.y_offset+3);
         f:SetScript("OnClick", function()
             libDD:ToggleDropDownMenu(1, nil, spell_options, spell_options, 0, 0)
         end);
 
+        hover_f.update = function()
+            local focus = mouse_focus();
+            hover_tex:SetShown(hover_f:IsShown() and focus ~= nil and
+                (focus == hover_f or focus == tooltip_area_f or focus == book or focus == f));
+        end;
+        hover_f:SetScript("OnEnter", hover_f.update);
+        hover_f:SetScript("OnLeave", hover_f.update);
+        for _, frame in ipairs({tooltip_area_f, book, f}) do
+            frame:HookScript("OnEnter", hover_f.update);
+            frame:HookScript("OnLeave", hover_f.update);
+        end
+
         local ignore_line_f = pframe:CreateTexture(nil, "OVERLAY")
         ignore_line_f:SetColorTexture(1.0, 0.0, 0.0, 1.0);
         ignore_line_f:SetDrawLayer("OVERLAY");
-        ignore_line_f:SetHeight(0.5);
+        -- 0.5 rounded to no pixel at smaller frame scales
+        ignore_line_f:SetHeight(1);
         ignore_line_f:SetPoint("TOPLEFT", -10, pframe.y_offset-5);
         ignore_line_f:SetPoint("TOPRIGHT", -30, pframe.y_offset-5);
 
@@ -1596,6 +1841,7 @@ local function create_sw_ui_spells_frame(pframe)
             dropdown_menu = spell_options,
             dropdown_button = f,
             ignore_line = ignore_line_f,
+            hover = hover_f,
         };
         pframe.y_offset = pframe.y_offset - entry_y_offset;
     end
@@ -4804,22 +5050,43 @@ local function create_calculator_items_subframe(pframe)
     pframe.items.item_add_tip = f_txt;
 
 
-    local use_target_equipment = function(self)
-        local found_anything = false;
-        local num = 0;
+    local use_target_equipment;
 
-        self.confirmed_incomplete = false;
+    local same_target = function(self)
+        local guid = UnitGUID("target");
+        return not is_secret(guid) and guid == self.target_guid;
+    end
+
+    local target_item_data_received = function(_, success)
+        local self = pframe.items.targets_item_btn;
+        if success and same_target(self) then
+            use_target_equipment(self);
+        end
+    end
+
+    local target_items_retry = function()
+        local self = pframe.items.targets_item_btn;
+        self.retry_scheduled = false;
+        if self.num_retries < 5 and same_target(self) then
+            self.num_retries = self.num_retries + 1;
+            use_target_equipment(self);
+        end
+    end
+
+    use_target_equipment = function(self)
+        local found_anything = false;
+        local link_missing_when_cached = false;
 
         clear_table(working_item_plan);
         for slot in pairs(pframe.items.slots) do
             local link = GetInventoryItemLink("target", slot);
             local id = GetInventoryItemID("target", slot);
-            if not link and id then
-                self.confirmed_incomplete = true;
+            if not link and id and request_item_data(id, target_item_data_received) then
+                -- no load event will follow, the link may still come with the inspect data
+                link_missing_when_cached = true;
             end
             if link then
                 found_anything = true;
-                num = num + 1;
 
                 working_item_plan[slot] = working_item_plan[slot] or {};
                 if not write_item_info_from_link(working_item_plan[slot], link) then
@@ -4831,12 +5098,14 @@ local function create_calculator_items_subframe(pframe)
             end
         end
 
-        self.num_items_found_last = num;
+        if link_missing_when_cached and not self.retry_scheduled then
+            self.retry_scheduled = true;
+            C_Timer.After(0.5, target_items_retry);
+        end
 
         if found_anything then
             update_calculator_item_planner();
         end
-        return found_anything;
     end
 
     pframe.items.y_offset = pframe.items.y_offset - 18;
@@ -4985,43 +5254,27 @@ local function create_calculator_items_subframe(pframe)
         if not CheckInteractDistance("target", 1) or not CanInspect("target") then
             return;
         end
-        self.num_fetch_attempts = 0;
-        self.num_items_found_last = 0;
-        self.target_name = UnitName("target");
-        self.confirmed_incomplete = false;
-
-        local found_anything = use_target_equipment(self);
-        if not found_anything then
-            -- target is a valid but items not loaded in client
-            -- proceed to subsequent, delayed item fetch attempts
-            self:RegisterEvent("INSPECT_READY");
-            NotifyInspect("target");
+        self.target_guid = UnitGUID("target");
+        if is_secret(self.target_guid) then
+            self.target_guid = nil;
+            return;
         end
+
+        self.num_retries = 0;
+
+        -- visible gear may already be known, the rest only arrives with the inspect
+        use_target_equipment(self);
+        self:RegisterEvent("INSPECT_READY");
+        NotifyInspect("target");
     end);
     pframe.items.targets_item_btn = f;
 
-    local target_item_fetch;
-    target_item_fetch = function()
-        local self = pframe.items.targets_item_btn;
-
-        local target_name = UnitName("target");
-        if not self.confirmed_incomplete and
-            (self.num_fetch_attempts > 5 or
-            is_secret(target_name) or
-            target_name ~= self.target_name) then
-
-            return;
-        end
-        self.num_fetch_attempts = self.num_fetch_attempts + 1;
-
-        use_target_equipment(self);
-
-        C_Timer.After(0.5, target_item_fetch);
-    end;
-    f:SetScript("OnEvent", function(self, e, a)
+    f:SetScript("OnEvent", function(self, e)
         if e == "INSPECT_READY" then
             self:UnregisterEvent("INSPECT_READY");
-            target_item_fetch();
+            if same_target(self) then
+                use_target_equipment(self);
+            end
         end
     end);
 
@@ -7186,6 +7439,7 @@ local function create_sw_base_ui()
     __sc_frame:SetScript("OnDragStart", __sc_frame.StartMoving);
     __sc_frame:SetScript("OnDragStop", __sc_frame.StopMovingOrSizing);
     __sc_frame:HookScript("OnHide", function()
+        __sc_frame.hidden_time = GetTime();
         sc.core.deactivate_tooltip_refresh();
     end);
     __sc_frame:HookScript("OnShow", function()
@@ -7505,6 +7759,1371 @@ local function locale_warning_popup()
             frame:Show()
 end
 
+---------------------------------------------------------------------------------------------------
+-- spell catalogue on the spellbook's pages (forever)
+local function create_book_catalogue(sb, container, open_sc_tab)
+
+    local book = {};
+    local view_w = 680;
+    local modes = {
+        compact = {spell_h = 18, heading_h = 18, value_font = "GameFontBlack", type_icon = 14, ignore_line = 1.5},
+        full = {spell_h = 44, heading_h = 24, value_font = "GameFontBlackMedium", type_icon = 20, ignore_line = 3, full = true},
+    };
+    -- SpellBookItemMixin.ArtSet.Square
+    local icon_border = {
+        known = {atlas = "spellbook-item-iconframe", tl = {-11, 1}, br = {1, -7}},
+        unlearned = {atlas = "spellbook-item-iconframe-inactive", tl = {-10, 1}, br = {2, -5}},
+    };
+    local full_name_x = 60;
+    local title_header_h = 55;
+    local plain_header_h = 33;
+    local plain_divider_y = -21;
+    local paging_rows_bottom = 523;
+    local full_rows_bottom = 585;
+    local content_r = 614;
+    local bottom_bar_y = 56;
+
+
+    local cols = {name = {x = 22}};
+
+    local base_color = {SPELLBOOK_FONT_COLOR:GetRGB()};
+    local lvl_diff_colors = {
+        ["|cFFA9A9A9"] = "|cFF5C5852",
+        ["|cFF00FF00"] = "|cFF1E7A00",
+        ["|cFFFFFF00"] = "|cFFFFD100",
+        ["|cFFFF4500"] = "|cFFB33000",
+        ["|cFFFF0000"] = "|cFFA81000",
+    };
+    -- the configured colors are for a dark background, darkened for parchment
+    local per_sec_color = {};
+    local per_cost_color = {};
+    local function on_parchment(r, g, b)
+        local max_lum = 0.3;
+        -- yellow to orange is the paper's own hue
+        if r > b and g > b then
+            g = b + (g - b) * 0.7;
+            max_lum = 0.22;
+        end
+        local lum = 0.299*r + 0.587*g + 0.114*b;
+        if lum > max_lum then
+            local f = max_lum/lum;
+            return r*f, g*f, b*f;
+        end
+        return r, g, b;
+    end
+
+    local cat;
+    local pages = {};
+    local page_starts = {};
+    local num_pages = 1;
+    local first_page = 1;
+    local top_entry = 1;
+    local jump_to_lvl = true;
+    local rendering = false;
+    local created = false;
+    local paging;
+    local footer = {};
+
+    local function views_shown()
+        if sb:GetWidth() < 1200 then
+            return 1;
+        end
+        return 2;
+    end
+
+    local function current_mode()
+        if config.settings.spellbook_catalogue_compact then
+            return modes.compact;
+        end
+        return modes.full;
+    end
+
+    local function page_height(page_idx, views)
+        if views == 1 then
+            return paging_rows_bottom - title_header_h;
+        elseif page_idx % 2 == 1 then
+            return full_rows_bottom - title_header_h;
+        end
+        return paging_rows_bottom - plain_header_h;
+    end
+
+    local function entry_h(mode, v)
+        if v.lvl_barrier then
+            return mode.heading_h;
+        end
+        return mode.spell_h;
+    end
+
+    local function set_lvl_colored_text(fs, clvl, lvl, txt)
+        local code = color_by_lvl_diff(clvl, lvl);
+        fs:SetText((lvl_diff_colors[code] or code)..txt.."|r");
+        if code == "|cFFFFFF00" then
+            fs:SetShadowOffset(1, -1);
+        else
+            fs:SetShadowOffset(0, 0);
+        end
+    end
+
+    local function set_lvl_text(fs, clvl, lvl)
+        set_lvl_colored_text(fs, clvl, lvl, lvl);
+    end
+
+    local function lvl_font_string(parent, font_obj)
+        local fs = parent:CreateFontString(nil, "ARTWORK", font_obj);
+        fs:SetShadowColor(0.25, 0.12, 0.0, 1.0);
+        return fs;
+    end
+
+    local function set_sort(key)
+        cat.sort_key = key;
+        top_entry = 1;
+        jump_to_lvl = key == spell_browser_sort_keys.lvl;
+        update_spell_catalogue(cat, nil, nil, nil, true);
+    end
+
+    local function spell_menu(owner, spell_id)
+        MenuUtil.CreateContextMenu(owner, function(_, root)
+            root:CreateTitle(C_Spell.GetSpellName(spell_id));
+            if spells[spell_id] and bit.band(spells[spell_id].flags, bit.bor(spell_flags.eval, spell_flags.ehp)) ~= 0 then
+                root:CreateButton(L["Add to calculator list"], function()
+                    config.settings.spell_calc_list[spell_id] = 1;
+                    update_calc_list(true);
+                end);
+            end
+            root:CreateButton(L["Add/remove to spell ignore list"], function()
+                if config.settings.spells_ignore_list[spell_id] then
+                    config.settings.spells_ignore_list[spell_id] = nil;
+                else
+                    config.settings.spells_ignore_list[spell_id] = 1;
+                end
+                update_spell_catalogues(nil, nil, nil, true);
+            end);
+        end);
+    end
+
+    -- by mouse focus, IsMouseOver is true under a menu covering the row
+    local function has_mouse(f)
+        return f:IsMouseMotionFocus();
+    end
+
+    local function update_hover(row)
+        local over = row.spell_id ~= nil and
+            (has_mouse(row) or has_mouse(row.area) or has_mouse(row.item) or has_mouse(row.menu_button));
+        row.hl:SetShown(over);
+        row.menu_button:SetShown(over);
+        if row.icon_hl then
+            row.icon_hl:SetShown(over);
+        end
+    end
+
+    local function layout_columns()
+        local measure = container:CreateFontString(nil, "ARTWORK", "GameFontBlackMedium");
+        measure:Hide();
+        local x = content_r;
+        -- extra for the sort icon left of a header
+        local function col(key, txt, min_w, gap, extra)
+            local w = min_w;
+            if txt then
+                measure:SetText(txt);
+                w = math.max(w, math.ceil(measure:GetUnboundedStringWidth()) + (extra or 0));
+            end
+            x = x - w;
+            cols[key] = {x = x, w = w};
+            x = x - gap;
+        end
+        col("cost", L["Acquisition"], 84, 16);
+        col("per_cost", L["Per cost"], 56, 16, 16);
+        col("per_sec", L["Per second"], 64, 6, 16);
+        col("type", nil, 14, 16);
+        col("lvl", L["Level"], 28, 12);
+        cols.name.w = x - cols.name.x;
+    end
+
+    local function create_row(parent, mode)
+        local row = CreateFrame("Button", nil, parent);
+        row:SetWidth(view_w);
+        row:RegisterForClicks("RightButtonUp");
+        row:SetScript("OnClick", function(self)
+            if self.spell_id then
+                spell_menu(self, self.spell_id);
+            end
+        end);
+        local function hover() update_hover(row); end
+        row:SetScript("OnEnter", hover);
+        row:SetScript("OnLeave", hover);
+
+        row.hl = row:CreateTexture(nil, "BACKGROUND");
+        row.hl:SetAllPoints();
+        row.hl:SetColorTexture(0.35, 0.2, 0.05, 0.12);
+        row.hl:Hide();
+
+        local area = CreateFrame("Button", nil, row);
+        area:SetPoint("TOPLEFT");
+        area:SetPoint("BOTTOMLEFT");
+        area:SetWidth(cols.name.x + cols.name.w);
+        area:RegisterForClicks("RightButtonUp");
+        area:RegisterForDrag("LeftButton");
+        area:SetScript("OnClick", function(self)
+            spell_menu(self, self.spell_id);
+        end);
+        area:SetScript("OnDragStart", function(self)
+            pickup_known_spell(self.spell_id);
+        end);
+        area:SetScript("OnEnter", function(self)
+            hover();
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+            GameTooltip:SetSpellByID(self.spell_id);
+            GameTooltip:Show();
+        end);
+        area:SetScript("OnLeave", function()
+            hover();
+            GameTooltip:Hide();
+        end);
+        area:HookScript("OnMouseWheel", sc.tooltip.eval_mode_scroll_fn);
+        row.area = area;
+
+        if mode.full then
+            -- the overlay's parent
+            local icon_frame = CreateFrame("Frame", nil, area);
+            icon_frame:SetSize(40, 40);
+            icon_frame:SetPoint("LEFT", 10, 0);
+            row.icon_frame = icon_frame;
+
+            local shadow = icon_frame:CreateTexture(nil, "BACKGROUND");
+            shadow:SetAtlas("spellbook-item-iconframe-shadow");
+            shadow:SetPoint("TOPLEFT", -12, 3);
+            shadow:SetPoint("BOTTOMRIGHT", 2, -8);
+
+            row.icon = icon_frame:CreateTexture(nil, "ARTWORK");
+            row.icon:SetSize(36, 36);
+            row.icon:SetPoint("CENTER");
+            local mask = icon_frame:CreateMaskTexture();
+            mask:SetAtlas("spellbook-item-spellicon-mask", false);
+            mask:SetAllPoints(row.icon);
+            row.icon:AddMaskTexture(mask);
+
+            -- below the overlay's font strings on OVERLAY
+            row.icon_border = icon_frame:CreateTexture(nil, "ARTWORK", nil, 2);
+            row.icon_hl = icon_frame:CreateTexture(nil, "ARTWORK", nil, 3);
+            row.icon_hl:SetAtlas("spellbook-item-iconframe-hover", false);
+            row.icon_hl:SetAllPoints();
+            row.icon_hl:SetBlendMode("ADD");
+            row.icon_hl:SetAlpha(0.25);
+            row.icon_hl:Hide();
+
+            local name_w = cols.name.x + cols.name.w - full_name_x;
+            row.name = area:CreateFontString(nil, "ARTWORK", "SystemFont_Large");
+            row.name:SetWidth(name_w);
+            row.name:SetJustifyH("LEFT");
+            row.name:SetWordWrap(false);
+            row.sub_name = area:CreateFontString(nil, "ARTWORK", "SystemFont_Med1");
+            row.sub_name:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2);
+            row.sub_name:SetWidth(name_w);
+            row.sub_name:SetJustifyH("LEFT");
+            row.sub_name:SetWordWrap(false);
+            row.sub_name:SetTextColor(unpack(base_color));
+        else
+            row.icon = area:CreateTexture(nil, "ARTWORK");
+            row.icon:SetSize(16, 16);
+            row.icon:SetPoint("LEFT", 1, 0);
+
+            row.name = area:CreateFontString(nil, "ARTWORK", "GameFontBlack");
+            row.name:SetPoint("LEFT", cols.name.x, 0);
+            row.name:SetWidth(cols.name.w);
+            row.name:SetJustifyH("LEFT");
+            row.name:SetWordWrap(false);
+        end
+
+        row.lvl = lvl_font_string(row, mode.value_font);
+        row.lvl:SetPoint("LEFT", cols.lvl.x, 0);
+        row.lvl:SetWidth(cols.lvl.w);
+        row.lvl:SetJustifyH("CENTER");
+        row.lvl:SetTextColor(unpack(base_color));
+
+        row.type_icon = row:CreateTexture(nil, "ARTWORK");
+        row.type_icon:SetSize(mode.type_icon, mode.type_icon);
+        row.type_icon:SetPoint("CENTER", row, "LEFT", cols.type.x + cols.type.w/2, 0);
+        row.type_icon:SetTexture(role_icons);
+
+        row.per_sec = row:CreateFontString(nil, "ARTWORK", mode.value_font);
+        row.per_sec:SetPoint("LEFT", cols.per_sec.x, 0);
+        row.per_sec:SetWidth(cols.per_sec.w);
+        row.per_sec:SetJustifyH("RIGHT");
+
+        row.per_cost = row:CreateFontString(nil, "ARTWORK", mode.value_font);
+        row.per_cost:SetPoint("LEFT", cols.per_cost.x, 0);
+        row.per_cost:SetWidth(cols.per_cost.w);
+        row.per_cost:SetJustifyH("RIGHT");
+
+        row.cost = row:CreateFontString(nil, "ARTWORK", mode.value_font);
+        row.cost:SetPoint("LEFT", cols.cost.x, 0);
+        row.cost:SetWidth(cols.cost.w);
+        row.cost:SetJustifyH("RIGHT");
+        row.cost:SetTextColor(unpack(base_color));
+
+        local item = CreateFrame("Frame", nil, row);
+        item:SetSize(16, 16);
+        item:EnableMouseMotion(true);
+        item:SetPoint("RIGHT", row, "LEFT", content_r, 0);
+        item:SetScript("OnEnter", function(self)
+            hover();
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+            GameTooltip:SetItemByID(self.item_id);
+            GameTooltip:Show();
+        end);
+        item:SetScript("OnLeave", function()
+            hover();
+            GameTooltip:Hide();
+        end);
+        item.tex = item:CreateTexture(nil, "ARTWORK");
+        item.tex:SetAllPoints();
+        row.item = item;
+
+        local menu_button = create_arrow_button(row, 16);
+        menu_button:SetPoint("LEFT", row, "LEFT", content_r + 8, 0);
+        menu_button:RegisterForClicks("LeftButtonUp", "RightButtonUp");
+        -- the row owns the menu, the button hides under it
+        menu_button:SetScript("OnClick", function()
+            if row.spell_id then
+                spell_menu(row, row.spell_id);
+            end
+        end);
+        menu_button:SetScript("OnEnter", hover);
+        menu_button:SetScript("OnLeave", hover);
+        menu_button:Hide();
+        row.menu_button = menu_button;
+
+        -- over the icon, which is on a child frame
+        local ignore_f = CreateFrame("Frame", nil, row);
+        ignore_f:SetAllPoints();
+        ignore_f:SetFrameLevel(area:GetFrameLevel() + 3);
+        row.ignore_line = ignore_f:CreateTexture(nil, "OVERLAY");
+        row.ignore_line:SetColorTexture(0.62, 0.1, 0.02, 0.8);
+        row.ignore_line:SetHeight(mode.ignore_line);
+        row.ignore_line:SetPoint("LEFT", -6, 0);
+        row.ignore_line:SetPoint("RIGHT", row, "LEFT", content_r, 0);
+
+        row.barrier = row:CreateFontString(nil, "ARTWORK", "GameFontBlackMedium");
+        row.barrier:SetPoint("LEFT", 1, 0);
+        row.barrier:SetTextColor(unpack(base_color));
+        row.barrier:SetText(L["Level"]);
+        row.barrier_lvl = lvl_font_string(row, "GameFontBlackMedium");
+        row.barrier_lvl:SetPoint("LEFT", row.barrier, "RIGHT", 4, 0);
+        row.barrier_line = row:CreateTexture(nil, "ARTWORK");
+        row.barrier_line:SetColorTexture(base_color[1], base_color[2], base_color[3], 0.35);
+        row.barrier_line:SetHeight(1);
+        row.barrier_line:SetPoint("LEFT", row.barrier_lvl, "RIGHT", 6, 0);
+        row.barrier_line:SetPoint("RIGHT", row, "LEFT", content_r, 0);
+
+        return row;
+    end
+
+    local function header_button(page, text, col, justify, on_click)
+        local btn = CreateFrame("Button", nil, page);
+        btn.text = btn:CreateFontString(nil, "ARTWORK", "GameFontBlackMedium");
+        btn.text:SetWordWrap(false);
+        btn.text:SetText(text);
+        btn.text:SetPoint("LEFT", 4, 0);
+        btn.text:SetPoint("RIGHT", -4, 0);
+        btn.text:SetTextColor(unpack(base_color));
+        btn:SetSize(math.min(col.w, math.ceil(btn.text:GetUnboundedStringWidth())) + 8, 16);
+        local y = page.header_y;
+        if justify == "RIGHT" then
+            btn:SetPoint("TOPRIGHT", page, "TOPLEFT", col.x + col.w + 4, y);
+        else
+            btn:SetPoint("TOP", page, "TOPLEFT", col.x + col.w/2, y);
+        end
+        if on_click then
+            btn.hl = btn:CreateTexture(nil, "BACKGROUND");
+            btn.hl:SetPoint("TOPLEFT", 0, 2);
+            btn.hl:SetPoint("BOTTOMRIGHT", 0, -2);
+            btn.hl:SetColorTexture(0.35, 0.2, 0.05, 0.15);
+            btn.hl:Hide();
+            btn:SetScript("OnClick", on_click);
+            btn:SetScript("OnEnter", function(self)
+                self.hl:Show();
+            end);
+            btn:SetScript("OnLeave", function(self)
+                self.hl:Hide();
+            end);
+        end
+        return btn;
+    end
+
+    local function create_divider(page, y)
+        local divider = page:CreateTexture(nil, "ARTWORK");
+        divider:SetAtlas("spellbook-divider");
+        divider:SetHeight(11);
+        divider:SetPoint("TOPLEFT", -32, y);
+        divider:SetPoint("TOPRIGHT", -60, y);
+        return divider;
+    end
+
+    local function create_title(page)
+        local backplate = page:CreateTexture(nil, "BACKGROUND");
+        backplate:SetAtlas("spellbook-list-backplate");
+        backplate:SetSize(416, 106);
+        backplate:SetAlpha(0.65);
+        backplate:SetPoint("LEFT", page, "TOPLEFT", -85, -51/2 + 10);
+
+        local title = page:CreateFontString(nil, "ARTWORK", "SystemFont_Huge2");
+        title:SetPoint("LEFT", page, "TOPLEFT", -8, -13);
+        title:SetText("SpellCoda");
+        title:SetTextColor(unpack(base_color));
+
+        local settings_button = CreateFrame("Button", nil, page);
+        settings_button:SetSize(20, 20);
+        settings_button:SetPoint("RIGHT", page, "TOPLEFT", content_r, -5);
+        settings_button:SetNormalTexture("Interface\\Buttons\\UI-OptionsButton");
+        settings_button:SetHighlightTexture("Interface\\Buttons\\UI-OptionsButton", "ADD");
+        settings_button:GetHighlightTexture():SetAlpha(0.5);
+        settings_button:SetScript("OnMouseDown", function(self) self:GetNormalTexture():SetPoint("TOPLEFT", 1, -1); end);
+        settings_button:SetScript("OnMouseUp", function(self) self:GetNormalTexture():SetPoint("TOPLEFT", 0, 0); end);
+        settings_button:SetScript("OnClick", function()
+            open_sc_tab("settings_frame");
+        end);
+        settings_button:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+            GameTooltip:SetText(L["Settings"]);
+            GameTooltip:Show();
+        end);
+        settings_button:SetScript("OnLeave", function()
+            GameTooltip:Hide();
+        end);
+
+        local calc_button = CreateFrame("Button", nil, page, "UIPanelButtonTemplate");
+        calc_button:SetText(L["Calculator"]);
+        calc_button:SetSize(math.max(90, math.ceil(calc_button:GetFontString():GetUnboundedStringWidth()) + 30), 22);
+        calc_button:SetPoint("RIGHT", settings_button, "LEFT", -8, 0);
+        calc_button:SetScript("OnClick", function()
+            open_sc_tab("calculator_frame");
+        end);
+
+        -- named and typed for activate_config, which syncs it on profile changes
+        local compact = CreateFrame("CheckButton", "__sc_frame_setting_spellbook_catalogue_compact", page, "UICheckButtonTemplate");
+        compact._type = "CheckButton";
+        compact._settings_id = "spellbook_catalogue_compact";
+        compact:SetSize(24, 24);
+        compact.label = compact:CreateFontString(nil, "ARTWORK", "GameFontBlack");
+        compact.label:SetPoint("RIGHT", calc_button, "LEFT", -14, 0);
+        compact.label:SetText(L["Compact"]);
+        compact:SetPoint("RIGHT", compact.label, "LEFT", -2, 0);
+        compact.label:SetTextColor(unpack(base_color));
+        compact:SetHitRectInsets(0, -math.ceil(compact.label:GetUnboundedStringWidth()) - 4, 0, 0);
+        compact:SetChecked(config.settings.spellbook_catalogue_compact);
+        compact:SetScript("OnClick", function(self)
+            config.settings[self._settings_id] = self:GetChecked();
+            book.on_resize();
+        end);
+
+        -- snapped it lands a pixel off blizzard's
+        local divider = create_divider(page, -40.9);
+        divider:SetSnapToPixelGrid(false);
+        divider:SetTexelSnappingBias(0);
+    end
+
+    local function create_page(i)
+        local page = CreateFrame("Frame", nil, container);
+        page:SetSize(view_w, full_rows_bottom);
+        if i == 1 then
+            page:SetPoint("TOPLEFT", 85, -45);
+            page.header_h = title_header_h;
+            page.header_y = -26;
+            create_title(page);
+        else
+            page:SetPoint("TOPRIGHT", -50, -45);
+            page.header_h = plain_header_h;
+            page.header_y = plain_divider_y + 17;
+            create_divider(page, plain_divider_y);
+        end
+        page.footer_divider = create_divider(page, -(paging_rows_bottom + 1));
+
+        local sort_keys = spell_browser_sort_keys;
+        page.header_lvl = header_button(page, L["Level"], cols.lvl, "CENTER", function()
+            set_sort(sort_keys.lvl);
+        end);
+        page.header_per_sec = header_button(page, L["Per second"], cols.per_sec, "RIGHT", function()
+            set_sort(cat.sort_key == sort_keys.dps and sort_keys.hps or sort_keys.dps);
+        end);
+        page.header_per_cost = header_button(page, L["Per cost"], cols.per_cost, "RIGHT", function()
+            set_sort(cat.sort_key == sort_keys.dpc and sort_keys.hpc or sort_keys.dpc);
+        end);
+        header_button(page, L["Acquisition"], cols.cost, "RIGHT");
+
+        page.sort_icon = page:CreateTexture(nil, "ARTWORK");
+        page.sort_icon:SetSize(14, 14);
+        page.sort_icon:SetTexture(role_icons);
+        page.sort_icon:Hide();
+
+        page.content = CreateFrame("Frame", nil, page);
+        page.content:SetAllPoints();
+        page.turn = page.content:CreateAnimationGroup();
+        page.turn_fade = page.turn:CreateAnimation("Alpha");
+        page.turn_fade:SetFromAlpha(0.15);
+        page.turn_fade:SetToAlpha(1);
+        page.turn_fade:SetDuration(0.18);
+        page.turn_fade:SetSmoothing("OUT");
+
+        page.max_rows_h = i == 1 and (full_rows_bottom - title_header_h) or (paging_rows_bottom - plain_header_h);
+        page.row_sets = {};
+        return page;
+    end
+
+    local function page_rows(page, mode)
+        local set = page.row_sets[mode];
+        if not set then
+            set = {frame = CreateFrame("Frame", nil, page.content), rows = {}};
+            set.frame:SetAllPoints();
+            for r = 1, math.floor(page.max_rows_h / math.min(mode.spell_h, mode.heading_h)) do
+                set.rows[r] = create_row(set.frame, mode);
+            end
+            page.row_sets[mode] = set;
+        end
+        for m, other in pairs(page.row_sets) do
+            other.frame:SetShown(m == mode);
+        end
+        return set.rows;
+    end
+
+    local function update_headers(page)
+        local sort_keys = spell_browser_sort_keys;
+        local key = cat.sort_key;
+        page.header_lvl:SetShown(key ~= sort_keys.lvl);
+        page.header_per_sec.text:SetTextColor(unpack(per_sec_color));
+        page.header_per_cost.text:SetTextColor(unpack(per_cost_color));
+        local active, heal;
+        if key == sort_keys.dps or key == sort_keys.hps then
+            active = page.header_per_sec;
+            heal = key == sort_keys.hps;
+        elseif key == sort_keys.dpc or key == sort_keys.hpc then
+            active = page.header_per_cost;
+            heal = key == sort_keys.hpc;
+        end
+        if not active then
+            page.sort_icon:Hide();
+            return;
+        end
+        if heal then
+            page.sort_icon:SetTexCoord(0.25, 0.5, 0.0, 0.25);
+        else
+            page.sort_icon:SetTexCoord(0.25, 0.5, 0.25, 0.5);
+        end
+        page.sort_icon:ClearAllPoints();
+        page.sort_icon:SetPoint("RIGHT", active, "LEFT", 2, 0);
+        page.sort_icon:Show();
+    end
+
+    local function render_row(row, v, by_lvl, lvl, mode)
+        row:Show();
+        if v.lvl_barrier then
+            row.spell_id = nil;
+            row.area:Hide();
+            row.lvl:Hide();
+            row.type_icon:Hide();
+            row.per_sec:Hide();
+            row.per_cost:Hide();
+            row.cost:Hide();
+            row.item:Hide();
+            row.ignore_line:Hide();
+            set_lvl_text(row.barrier_lvl, lvl, v.lvl_barrier);
+            row.barrier:Show();
+            row.barrier_lvl:Show();
+            row.barrier_line:Show();
+            update_hover(row);
+            return;
+        end
+        row.barrier:Hide();
+        row.barrier_lvl:Hide();
+        row.barrier_line:Hide();
+
+        local id = v.spell_id;
+        local spell = spells[id];
+        row.spell_id = id;
+        row.area.spell_id = id;
+        row.area:Show();
+
+        local known = v.trigger == spell_filters.already_known or v.is_dual;
+        row.icon:SetTexture((C_Spell.GetSpellTexture(id)));
+        row.icon:SetDesaturated(not known);
+        if not known and SPELLBOOK_UNLEARNED_TINT_COLOR then
+            row.icon:SetVertexColor(SPELLBOOK_UNLEARNED_TINT_COLOR:GetRGB());
+        else
+            row.icon:SetVertexColor(1, 1, 1);
+        end
+        if mode.full then
+            local border = known and icon_border.known or icon_border.unlearned;
+            row.icon_border:SetAtlas(border.atlas, false);
+            row.icon_border:ClearAllPoints();
+            row.icon_border:SetPoint("TOPLEFT", border.tl[1], border.tl[2]);
+            row.icon_border:SetPoint("BOTTOMRIGHT", border.br[1], border.br[2]);
+
+            row.name:SetText(C_Spell.GetSpellName(id));
+            row.name:ClearAllPoints();
+            if spell.rank ~= 0 then
+                row.sub_name:SetText(L["Rank"].." "..spell.rank);
+                row.sub_name:Show();
+                row.name:SetPoint("BOTTOMLEFT", row.area, "LEFT", full_name_x, 1);
+            else
+                row.sub_name:Hide();
+                row.name:SetPoint("LEFT", row.area, "LEFT", full_name_x, 0);
+            end
+        elseif spell.rank ~= 0 then
+            row.name:SetText(string.format("%s ("..L["Rank"].." %d)", C_Spell.GetSpellName(id), spell.rank));
+        else
+            row.name:SetText(C_Spell.GetSpellName(id));
+        end
+        if v.trigger == spell_filters.available then
+            row.name:SetTextColor(0.0, 0.42, 0.0);
+        elseif v.trigger == spell_filters.unavailable then
+            row.name:SetTextColor(0.62, 0.1, 0.02);
+        else
+            row.name:SetTextColor(unpack(base_color));
+        end
+
+        if by_lvl then
+            row.lvl:Hide();
+        else
+            set_lvl_text(row.lvl, lvl, spell.lvl_req);
+            row.lvl:Show();
+        end
+
+        row.item:Hide();
+        row.cost:Hide();
+        if spell.train > 0 then
+            if not known then
+                row.cost:SetText(C_CurrencyInfo.GetCoinTextureString(spell.train));
+                row.cost:Show();
+            end
+        elseif spell.train < -1 then
+            if not known then
+                row.item.item_id = -spell.train;
+                row.item.tex:SetTexture(C_Item.GetItemIconByID(-spell.train));
+                row.item:Show();
+            end
+        elseif not known then
+            if bit.band(spell.flags, spell_flags.talent) ~= 0 then
+                row.cost:SetText(L["Talent"]);
+            else
+                row.cost:SetText(L["Unknown"]);
+            end
+            row.cost:Show();
+        end
+
+        row.type_icon:Hide();
+        row.per_sec:Hide();
+        row.per_cost:Hide();
+        if bit.band(spell.flags, spell_flags.eval) ~= 0 then
+            if v.eval_id ~= cat.eval_id then
+                eval_spell_view_entry(cat, v);
+            end
+            if v.is_dual or bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) ~= 0 then
+                row.type_icon:SetTexCoord(0.25, 0.5, 0.0, 0.25);
+            else
+                row.type_icon:SetTexCoord(0.25, 0.5, 0.25, 0.5);
+            end
+            row.type_icon:Show();
+            row.per_sec:SetText(format_number(v.effect_per_sec, 1));
+            row.per_cost:SetText(format_number(v.effect_per_cost, 2));
+            row.per_sec:SetTextColor(unpack(per_sec_color));
+            row.per_cost:SetTextColor(unpack(per_cost_color));
+            row.per_sec:Show();
+            row.per_cost:Show();
+        elseif bit.band(spell.flags, spell_flags.ehp) ~= 0 then
+            row.name:SetText(L["Effective Health"]);
+            row.icon:SetTexture(ehp_tex);
+            if mode.full then
+                row.sub_name:Hide();
+                row.name:ClearAllPoints();
+                row.name:SetPoint("LEFT", row.area, "LEFT", full_name_x, 0);
+            end
+            row.type_icon:SetTexCoord(0.0, 0.25, 0.25, 0.5);
+            row.type_icon:Show();
+        end
+
+        row.ignore_line:SetShown(config.settings.spells_ignore_list[id] ~= nil);
+        -- the wheel turns pages under a resting mouse
+        update_hover(row);
+    end
+
+    local function render_page(page, page_idx, mode)
+        update_headers(page);
+        local rows = page_rows(page, mode);
+        local by_lvl = cat.sort_key == spell_browser_sort_keys.lvl;
+        local lvl = active_loadout().lvl;
+        local first = page_starts[page_idx];
+        local last = -1;
+        if first then
+            last = (page_starts[page_idx + 1] or (cat.len + 1)) - 1;
+        end
+        local r = 0;
+        local y = page.header_h;
+        for i = first or 1, last do
+            r = r + 1;
+            local v = cat.view[i];
+            local h = entry_h(mode, v);
+            local row = rows[r];
+            row:ClearAllPoints();
+            row:SetPoint("TOPLEFT", 0, -y);
+            row:SetHeight(h);
+            render_row(row, v, by_lvl, lvl, mode);
+            y = y + h;
+        end
+        for k = r + 1, #rows do
+            rows[k].spell_id = nil;
+            rows[k].hl:Hide();
+            rows[k].menu_button:Hide();
+            rows[k]:Hide();
+        end
+    end
+
+    local function render_pages()
+        local views = views_shown();
+        local mode = current_mode();
+        pages[1].footer_divider:SetShown(views == 1);
+        for i = 1, 2 do
+            if i <= views then
+                pages[i]:Show();
+                render_page(pages[i], first_page + i - 1, mode);
+            else
+                pages[i]:Hide();
+            end
+        end
+        -- these rows changed without a loadout update
+        if mode.full then
+            sc.overlay.update_book_icons();
+        end
+    end
+
+    local function render_footer(views)
+        local lvl = active_loadout().lvl;
+        footer.avail:SetText("|cFF006B00"..L["Available cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(cat.avail_cost));
+        if cat.next_cost ~= 0 then
+            set_lvl_colored_text(footer.next_label, lvl, cat.next_lvl, L["Next level"].." "..cat.next_lvl..L[" cost:"]);
+        end
+        footer.next_amount:SetText(C_CurrencyInfo.GetCoinTextureString(cat.next_cost));
+        footer.total:SetText("|cFF9E1A05"..L["Total cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(cat.total_cost));
+
+        local groups = {};
+        for _, g in ipairs({
+            {shown = cat.avail_cost ~= 0, footer.avail},
+            {shown = cat.next_cost ~= 0, footer.next_label, footer.next_amount},
+            {shown = cat.total_cost ~= 0, footer.total},
+        }) do
+            for _, fs in ipairs(g) do
+                fs:SetShown(g.shown);
+            end
+            if g.shown then
+                table.insert(groups, g);
+            end
+        end
+
+        local left_x = 85;
+        if views ~= 1 then
+            left_x = container:GetWidth() - 50 - view_w;
+        end
+        local max_x = math.huge;
+        if paging:GetLeft() and container:GetLeft() then
+            max_x = paging:GetLeft() - container:GetLeft() - 16;
+        end
+        local group_gap, part_gap, line_h = 16, 4, 13;
+        local lines = {{}};
+        local x = left_x;
+        for _, g in ipairs(groups) do
+            local w = -part_gap;
+            for _, fs in ipairs(g) do
+                w = w + math.ceil(fs:GetUnboundedStringWidth()) + part_gap;
+            end
+            if x > left_x and x + w > max_x then
+                table.insert(lines, {});
+                x = left_x;
+            end
+            table.insert(lines[#lines], {g = g, x = x});
+            x = x + w + group_gap;
+        end
+        for l, line in ipairs(lines) do
+            local y = bottom_bar_y + ((#lines + 1)/2 - l) * line_h;
+            for _, e in ipairs(line) do
+                local px = e.x;
+                for _, fs in ipairs(e.g) do
+                    fs:ClearAllPoints();
+                    fs:SetPoint("LEFT", container, "BOTTOMLEFT", px, y);
+                    px = px + math.ceil(fs:GetUnboundedStringWidth()) + part_gap;
+                end
+            end
+        end
+    end
+
+    local function paginate(views, mode)
+        clear_table(page_starts);
+        local view = cat.view;
+        local i = 1;
+        while i <= cat.len do
+            local p = #page_starts + 1;
+            page_starts[p] = i;
+            local room = page_height(p, views);
+            local start = i;
+            while i <= cat.len do
+                local h = entry_h(mode, view[i]);
+                if h > room or
+                    (view[i].lvl_barrier and i < cat.len and h + entry_h(mode, view[i + 1]) > room) then
+                    break;
+                end
+                room = room - h;
+                i = i + 1;
+            end
+            if i == start then
+                i = i + 1;
+            end
+        end
+        num_pages = math.max(1, #page_starts);
+    end
+
+    local function render(_)
+        rendering = true;
+        per_sec_color[1], per_sec_color[2], per_sec_color[3] = on_parchment(effect_color("effect_per_sec"));
+        per_cost_color[1], per_cost_color[2], per_cost_color[3] = on_parchment(effect_color("effect_per_cost"));
+        local views = views_shown();
+        paginate(views, current_mode());
+
+        if jump_to_lvl and cat.sort_key == spell_browser_sort_keys.lvl then
+            jump_to_lvl = false;
+            local lvl = active_loadout().lvl;
+            for k, v in ipairs(cat.view) do
+                if v.spell_id and lvl <= spells[v.spell_id].lvl_req then
+                    top_entry = k;
+                    break;
+                end
+            end
+        end
+
+        local top_page = 1;
+        for p = #page_starts, 1, -1 do
+            if page_starts[p] <= top_entry then
+                top_page = p;
+                break;
+            end
+        end
+        local spreads = math.ceil(num_pages / views);
+        local spread = math.min(math.floor((top_page - 1) / views) + 1, spreads);
+        first_page = (spread - 1) * views + 1;
+        paging:SetMaxPages(spreads);
+        paging:SetCurrentPage(spread);
+
+        render_footer(views);
+        render_pages();
+        rendering = false;
+    end
+
+    local function create()
+        created = true;
+        layout_columns();
+        pages[1] = create_page(1);
+        pages[2] = create_page(2);
+
+        paging = CreateFrame("Frame", nil, container, "PagingControlsHorizontalTemplate");
+        paging:SetPoint("BOTTOMRIGHT", -75, bottom_bar_y - 16);
+        paging.spacing = 8;
+        paging.canUseShiftKey = true;
+        paging.prevPageSound = SOUNDKIT.IG_ABILITY_PAGE_TURN;
+        paging.nextPageSound = SOUNDKIT.IG_ABILITY_PAGE_TURN;
+        paging.PageText:SetFontObject("SystemFont_Med3");
+        paging.PageText:SetTextColor(unpack(base_color));
+        container.OnPageChanged = function()
+            if rendering then
+                return;
+            end
+            local views = views_shown();
+            local prev_first = first_page;
+            first_page = (paging:GetCurrentPage() - 1) * views + 1;
+            top_entry = page_starts[first_page] or 1;
+            render_pages();
+                local forward = first_page > prev_first;
+            for i = 1, views do
+                local first_to_turn = (i == 1) == forward;
+                pages[i].turn_fade:SetDuration((views == 2 and not first_to_turn) and 0.3 or 0.18);
+                pages[i].turn:Restart();
+            end
+        end;
+        container:EnableMouseWheel(true);
+        container:SetScript("OnMouseWheel", function(_, delta)
+            paging:OnMouseWheel(delta);
+        end);
+
+        for _, k in ipairs({"avail", "next_label", "next_amount", "total"}) do
+            footer[k] = lvl_font_string(container, "GameFontBlackSmall");
+            footer[k]:SetTextColor(unpack(base_color));
+        end
+
+        local settings = CreateFrame("DropdownButton", nil, container, "UIPanelArrowDropdownButtonTemplate");
+        settings:SetPoint("TOPRIGHT", sb.SettingsDropdown, "TOPRIGHT", 0, 0);
+        settings:SetupMenu(function(_, root)
+            root:CreateTitle(L["Includes"]);
+            for _, f in ipairs(spell_filter_listing) do
+                local key = cat.filter_prefix..f.id;
+                local txt = f.disp;
+                if f.id == "available" then
+                    txt = "|cFF00FF00"..txt.."|r";
+                elseif f.id == "unavailable" then
+                    txt = "|cFFFF0000"..txt.."|r";
+                end
+                local checkbox = root:CreateCheckbox(txt,
+                    function()
+                        return config.settings[key];
+                    end,
+                    function()
+                        config.settings[key] = not config.settings[key];
+                        update_spell_catalogue(cat, nil, nil, nil, true);
+                    end
+                );
+                if f.tooltip then
+                    checkbox:SetTooltip(function(tooltip)
+                        GameTooltip_AddNormalLine(tooltip, f.tooltip);
+                    end);
+                end
+            end
+            root:CreateDivider();
+            root:CreateTitle(L["Order by "]);
+            for k, txt in ipairs(spell_browser_sort_options) do
+                root:CreateRadio(txt,
+                    function()
+                        return cat.sort_key == k;
+                    end,
+                    function()
+                        set_sort(k);
+                    end
+                );
+            end
+        end);
+        container.settings = settings;
+
+        -- blizzard's hidden one keeps its place and width
+        local search = CreateFrame("EditBox", nil, container, "SearchBoxTemplate");
+        search:SetAllPoints(sb.SearchBox);
+        search:SetMaxLetters(40);
+        search:SetAutoFocus(false);
+        search:HookScript("OnTextChanged", function(self)
+            cat.name_filter = self:GetText();
+            top_entry = 1;
+            jump_to_lvl = cat.name_filter == "";
+            update_spell_catalogue(cat, nil, nil, nil, true);
+        end);
+        container.search = search;
+    end
+
+    -- the order is not saved, each session starts by level on the player's level page
+    cat = new_spell_catalogue(
+        "spellbook_catalogue_filter_",
+        function()
+            return container:IsVisible();
+        end,
+        render
+    );
+
+    function book.on_open()
+        if not created then
+            create();
+        end
+        -- in case a change of learned spells came without an event
+        spells_known_changed();
+        update_spell_catalogue(cat, nil, nil, nil, true);
+    end
+
+    function book.on_resize()
+        if created and container:IsVisible() then
+            render(cat);
+        end
+    end
+
+    function book.for_each_icon(fn)
+        if not created or not container:IsVisible() then
+            return;
+        end
+        local mode = current_mode();
+        if not mode.full then
+            return;
+        end
+        for i = 1, views_shown() do
+            local set = pages[i].row_sets[mode];
+            if set then
+                for _, row in ipairs(set.rows) do
+                    if row.spell_id and row:IsShown() then
+                        fn(row.icon_frame, row.spell_id);
+                    end
+                end
+            end
+        end
+    end
+
+    return book;
+end
+
+---------------------------------------------------------------------------------------------------
+-- spell catalogue as an addon tab of the modern spellbook (forever)
+-- blizzard rebuilds its tabs on every show and spell change, so this is an own button next to them,
+-- only hooks and show / hide of blizzard frames, never writes to blizzard tables (taint)
+-- state lives in closures, ui.lua is close to the main chunk's 200 locals
+local spellbook_tab = {};
+
+local function init_spellbook_tab()
+    if spellbook_tab.sb or not (PlayerSpellsFrame and PlayerSpellsFrame.SpellBookFrame) then
+        return;
+    end
+    local sb = PlayerSpellsFrame.SpellBookFrame;
+    local tab_row = sb.CategoryTabSystem;
+    spellbook_tab.sb = sb;
+
+
+    local tab, cover, container, book;
+    local is_open = false;
+    -- open again with the spellbook, as blizzard's tabs are
+    local reopen = false;
+    local open_tab_id;
+    local covered_tab;
+    local restore_shown = {};
+    local docked_points;
+
+    local blizzard_row_frames = {};
+    for _, k in ipairs({"SearchBox", "SearchBoxIcon", "SearchPreviewContainer", "SettingsDropdown", "SettingsTopFaceIcon",
+                        "AssistedCombatRotationSpellFrame", "HelpPlateButton", "PreviousCategoryIcon", "NextCategoryIcon",
+                        "PagedSpellsFrame"}) do
+        if sb[k] then
+            blizzard_row_frames[sb[k]] = true;
+        end
+    end
+
+    local function make_square_tab(name, parent)
+        local btn = CreateFrame("Button", name, parent);
+        btn:SetSize(44, 32);
+
+        btn.icon = btn:CreateTexture(nil, "ARTWORK");
+        btn.icon:SetSize(36, 35);
+        btn.icon:SetPoint("BOTTOM");
+        btn.icon:SetPoint("CENTER");
+
+        btn.icon_mask = btn:CreateMaskTexture();
+        btn.icon_mask:SetAtlas("SquareMask");
+        btn.icon_mask:SetPoint("TOPLEFT", btn.icon, "TOPLEFT", 0, -2);
+        btn.icon_mask:SetPoint("BOTTOMRIGHT", btn.icon, "BOTTOMRIGHT", -2, 0);
+        btn.icon:AddMaskTexture(btn.icon_mask);
+
+        btn.frame_tex = btn:CreateTexture(nil, "ARTWORK", nil, 1);
+        btn.frame_tex:SetAtlas("spellbook-Tab-Frame-C60", true);
+        btn.frame_tex:SetPoint("BOTTOM", 0, 1);
+
+        btn.active_tex = btn:CreateTexture(nil, "ARTWORK", nil, 1);
+        btn.active_tex:SetAtlas("spellbook-Tab-Frame-Glow-C60", true);
+        btn.active_tex:SetPoint("BOTTOM", 0, 1);
+        btn.active_tex:Hide();
+
+        btn.glow_tex = btn:CreateTexture(nil, "ARTWORK", nil, 1);
+        btn.glow_tex:SetAtlas("spellbook-Tab-Frame-glow-gradient-C60", true);
+        btn.glow_tex:SetPoint("BOTTOM", 0, 0);
+        btn.glow_tex:Hide();
+
+        return btn;
+    end
+
+    local function set_square_tab_selected(btn, selected)
+        btn.frame_tex:SetShown(not selected);
+        btn.active_tex:SetShown(selected);
+        btn.glow_tex:SetShown(selected);
+    end
+
+    local function uncover_tab()
+        if covered_tab then
+            covered_tab.SquareBackgroundActive:SetAlpha(1);
+            covered_tab.SquareBackgroundActiveGlow:SetAlpha(1);
+            covered_tab = nil;
+        end
+        cover:Hide();
+    end
+
+    -- while the catalogue is open, blizzard's selected tab is drawn unselected and clicking it returns to it
+    local function update_cover()
+        uncover_tab();
+        if not is_open then
+            return;
+        end
+        local selected;
+        for _, btn in ipairs(tab_row.tabs) do
+            if btn.isSelected and btn:IsShown() then
+                selected = btn;
+                break;
+            end
+        end
+        if not selected or not selected.SquareBackgroundActive then
+            return;
+        end
+        covered_tab = selected;
+        selected.SquareBackgroundActive:SetAlpha(0);
+        selected.SquareBackgroundActiveGlow:SetAlpha(0);
+        cover:ClearAllPoints();
+        cover:SetAllPoints(selected);
+        cover:SetFrameLevel(selected:GetFrameLevel() + 5);
+        cover:Show();
+    end
+
+    local function fit_search_box()
+        local search = sb.SearchBox;
+        local tab_right = tab:IsShown() and tab:GetRight();
+        local search_left, search_right = search:GetLeft(), search:GetRight();
+        if tab_right and search_left and search_right and search_left < tab_right + 10 then
+            search:SetWidth(math.max(60, search_right - tab_right - 10));
+        end
+    end
+
+    -- other addons' tabs right of blizzard's are found by position, ours goes after the last of them
+    local function addon_tabs_right()
+        local row_right, row_top, row_bottom = tab_row:GetRight(), tab_row:GetTop(), tab_row:GetBottom();
+        if not row_right or not row_top or not row_bottom then
+            return nil;
+        end
+        local scale = tab_row:GetEffectiveScale();
+        local candidates = {};
+        local function collect(...)
+            for i = 1, select("#", ...) do
+                local f = select(i, ...);
+                if f ~= tab and f ~= cover and f ~= container and not blizzard_row_frames[f] and
+                    not f.layoutIndex and f:IsShown() and f:GetLeft() and f:GetTop() then
+
+                    local s = f:GetEffectiveScale() / scale;
+                    local left, right = f:GetLeft() * s, f:GetRight() * s;
+                    local top, bottom = f:GetTop() * s, f:GetBottom() * s;
+                    local anchored_to_us = false;
+                    for p = 1, f:GetNumPoints() do
+                        local _, relative = f:GetPoint(p);
+                        if relative == tab then
+                            anchored_to_us = true;
+                        end
+                    end
+                    if not anchored_to_us and right - left <= 64 and bottom < row_top and top > row_bottom then
+                        table.insert(candidates, {left = left, right = right});
+                    end
+                end
+            end
+        end
+        collect(sb:GetChildren());
+        collect(tab_row:GetChildren());
+
+        local cursor = row_right;
+        local found = true;
+        while found do
+            found = false;
+            for _, c in ipairs(candidates) do
+                if not c.used and c.left >= cursor - 2 and c.left <= cursor + 24 then
+                    c.used = true;
+                    cursor = math.max(cursor, c.right);
+                    found = true;
+                end
+            end
+        end
+        return cursor - row_right;
+    end
+
+    local function layout_tab()
+        local offset = addon_tabs_right() or 0;
+        if offset > 0 then
+            offset = offset + 2;
+        end
+        tab:ClearAllPoints();
+        -- extra spacing after blizzard's tabs marks the addon tabs
+        tab:SetPoint("TOPLEFT", tab_row, "TOPRIGHT", offset + 12, 0);
+        fit_search_box();
+    end
+
+    local function set_blizzard_shown(shown)
+        for _, f in ipairs({sb.PagedSpellsFrame, sb.SearchBox, sb.SettingsDropdown}) do
+            if shown then
+                f:SetShown(restore_shown[f]);
+            else
+                restore_shown[f] = f:IsShown();
+                f:Hide();
+            end
+        end
+        if not shown then
+            sb.SearchPreviewContainer:Hide();
+        end
+    end
+
+    local function close()
+        if not is_open then
+            return;
+        end
+        is_open = false;
+        container:Hide();
+        set_square_tab_selected(tab, false);
+        uncover_tab();
+        set_blizzard_shown(true);
+        -- spellbook buttons show again with stale overlays
+        sc.loadouts.force_update = true;
+        sc.core.deactivate_tooltip_refresh();
+    end
+
+    local function open()
+        if is_open then
+            return;
+        end
+        is_open = true;
+        open_tab_id = sb:GetTab();
+        set_blizzard_shown(false);
+        container:Show();
+        set_square_tab_selected(tab, true);
+        update_cover();
+        book.on_open();
+        sc.core.activate_tooltip_refresh();
+    end
+
+    local function undock_sc_frame()
+        if docked_points then
+            __sc_frame:ClearAllPoints();
+            for _, p in ipairs(docked_points) do
+                __sc_frame:SetPoint(unpack(p));
+            end
+            docked_points = nil;
+        end
+    end
+
+    local function dock_sc_frame()
+        local ui_scale = UIParent:GetEffectiveScale();
+        local right = PlayerSpellsFrame:GetRight();
+        if not right or
+            right * PlayerSpellsFrame:GetEffectiveScale() + __sc_frame:GetWidth() * __sc_frame:GetEffectiveScale() >
+            GetScreenWidth() * ui_scale then
+            return;
+        end
+        if not spellbook_tab.sc_frame_hooked then
+            spellbook_tab.sc_frame_hooked = true;
+            __sc_frame:HookScript("OnHide", undock_sc_frame);
+            __sc_frame:HookScript("OnDragStart", function()
+                docked_points = nil;
+            end);
+        end
+        docked_points = {};
+        for i = 1, __sc_frame:GetNumPoints() do
+            docked_points[i] = {__sc_frame:GetPoint(i)};
+        end
+        __sc_frame:ClearAllPoints();
+        __sc_frame:SetPoint("TOPLEFT", PlayerSpellsFrame, "TOPRIGHT", 4, 0);
+    end
+
+    -- named so the "Spellbook tab button" setting shows and hides it, as the legacy spellbook button
+    tab = make_square_tab("__sc_frame_spellbook_tab", sb);
+    tab.icon:SetTexture("Interface\\Icons\\spell_fire_elementaldevastation");
+    tab:SetScript("OnClick", function()
+        if not is_open then
+            open();
+            PlaySound(SOUNDKIT.IG_SPELLBOOK_OPEN);
+        end
+    end);
+    tab:SetScript("OnShow", layout_tab);
+    -- the setting hid it, not the spellbook closing
+    tab:SetScript("OnHide", function(self)
+        if not self:IsShown() then
+            close();
+        end
+    end);
+    if not config.settings.general_spellbook_button then
+        tab:Hide();
+    end
+
+    cover = make_square_tab(nil, sb);
+    cover:Hide();
+    cover.icon:Hide();
+    cover:SetScript("OnClick", function()
+        close();
+        PlaySound(SOUNDKIT.IG_SPELLBOOK_OPEN);
+    end);
+    cover:SetScript("OnEnter", function(self)
+        if covered_tab and covered_tab.tooltipText then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT", -12, -6);
+            GameTooltip:AddLine(covered_tab.tooltipText);
+            GameTooltip:Show();
+        end
+    end);
+    cover:SetScript("OnLeave", function()
+        GameTooltip:Hide();
+    end);
+
+    container = CreateFrame("Frame", nil, sb);
+    container:SetPoint("TOPLEFT", 0, -50);
+    container:SetPoint("BOTTOMRIGHT");
+    container:Hide();
+
+    book = create_book_catalogue(sb, container, function(frame_name)
+        -- next to a single page book, a two page one leaves no room
+        local dock = not __sc_frame:IsShown() and sb.isMinimized;
+        sw_activate_frame(frame_name);
+        if dock then
+            dock_sc_frame();
+        end
+    end);
+
+    tab_row:HookScript("OnSizeChanged", layout_tab);
+    sb:HookScript("OnShow", function()
+        layout_tab();
+        if is_open then
+            book.on_open();
+        elseif reopen and tab:IsShown() then
+            open();
+        end
+        reopen = false;
+    end);
+    -- switching between one and two pages hides and shows the spellbook in the same frame
+    local function close_if_hidden()
+        if not sb:IsVisible() then
+            reopen = is_open;
+            close();
+        end
+    end
+    sb:HookScript("OnHide", function()
+        C_Timer.After(0, close_if_hidden);
+    end);
+    hooksecurefunc(sb, "ResizeSearchBox", fit_search_box);
+
+    -- tab clicks, gamepad and spec changes all pass here, spell updates set the same tab again
+    hooksecurefunc(sb, "OnActiveCategoryChanged", function()
+        if is_open and sb:GetTab() ~= open_tab_id then
+            close();
+        end
+    end);
+    hooksecurefunc(sb, "GoToSpell", function()
+        reopen = false;
+        close();
+    end);
+    hooksecurefunc(sb, "SetMinimized", function()
+        -- docked right of a single page, an open book would push it off screen
+        if not sb.isMinimized then
+            undock_sc_frame();
+        end
+        book.on_resize();
+    end);
+    -- tabs are rebuilt from a pool, the selected one may be another button now
+    hooksecurefunc(tab_row, "SetTabVisuallySelected", update_cover);
+    -- opened alone the spellbook is a center panel, showing one closes UISpecialFrames (the addon frame's escape close)
+    hooksecurefunc("ShowUIPanel", function(frame)
+        if frame == PlayerSpellsFrame and __sc_frame.hidden_time == GetTime() then
+            __sc_frame:Show();
+        end
+    end);
+
+    layout_tab();
+
+    spellbook_tab.container = container;
+    spellbook_tab.for_each_icon = book.for_each_icon;
+    spellbook_tab.close = close;
+    spellbook_tab.undock_sc_frame = undock_sc_frame;
+    spellbook_tab.is_open = function()
+        return is_open;
+    end;
+end
+
+-- the client may save the addon frame's position at logout
+local function spellbook_tab_undock_sc_frame()
+    if spellbook_tab.undock_sc_frame then
+        spellbook_tab.undock_sc_frame();
+    end
+end
+
 local function post_login_load()
     -- some things must be done after PLAYER_LOGIN event
     add_spell_book_button();
@@ -7520,6 +9139,17 @@ ui.update_calc_list                     = update_calc_list;
 ui.sw_activate_frame                    = sw_activate_frame;
 ui.update_profile_frame                 = update_profile_frame;
 ui.update_spells_frame                  = update_spells_frame;
+ui.update_spell_catalogues              = update_spell_catalogues;
+ui.spell_catalogue_visible              = spell_catalogue_visible;
+ui.init_spellbook_tab                   = init_spellbook_tab;
+ui.spellbook_tab_undock_sc_frame        = spellbook_tab_undock_sc_frame;
+-- fn(icon_frame, spell_id) for the spellbook catalogue's shown icons (non compact mode, forever)
+ui.for_each_book_icon                   = function(fn)
+    if spellbook_tab.for_each_icon then
+        spellbook_tab.for_each_icon(fn);
+    end
+end;
+ui.spells_known_changed                 = spells_known_changed;
 ui.post_login_load                      = post_login_load;
 ui.forced_buffs_lname_to_id             = forced_buffs_lname_to_id;
 ui.get_font                             = get_font;

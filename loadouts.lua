@@ -28,6 +28,7 @@ local cr_weights                        = sc.scaling.cr_weights;
 local spirit_mana_regen                 = sc.scaling.spirit_mana_regen;
 
 local write_item_info_from_link         = sc.utils.write_item_info_from_link;
+local request_item_data                 = sc.utils.request_item_data;
 local combat_ratings                    = sc.utils.combat_ratings;
 local client_matches                    = sc.utils.client_matches;
 local is_secret                         = sc.utils.is_secret;
@@ -2318,7 +2319,8 @@ local function update_loadout_and_effects(relaxed_update_dt)
     end
     dynamic_loadout(other);
 
-    if not sc.utils.spell_book_shown() and
+    -- the legacy spellbook recycles its buttons without notice, the modern one forces an update itself (overlay.hook_spell_book)
+    if not (SpellBookFrame and SpellBookFrame:IsShown()) and
         not loadouts.force_update and
         not sc.core.equipment_update_needed and
         not sc.core.talents_update_needed and
@@ -2374,6 +2376,10 @@ local function update_loadout_and_effects(relaxed_update_dt)
     return loadout_front, buffed, final, effects_update_id;
 end
 
+local function plan_item_data_received()
+    __sc_frame.calculator_frame.calculator_plan_changed = true;
+end
+
 local function item_plan_slot_ui_diffs(loadout, old_items, new_items)
 
     local planned_items = __sc_frame.calculator_frame.items.working;
@@ -2383,7 +2389,9 @@ local function item_plan_slot_ui_diffs(loadout, old_items, new_items)
             if not new_items[slot] then
                 new_items[slot] = {};
             end
-            write_item_info_from_link(new_items[slot], planned_items[slot].link);
+            if write_item_info_from_link(new_items[slot], planned_items[slot].link) then
+                request_item_data(new_items[slot].id, plan_item_data_received);
+            end
 
             -- old item might not exist
             if not old_items[slot] then
