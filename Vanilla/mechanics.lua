@@ -32,6 +32,7 @@ local mechanics = {};
 -- Vanilla specific behaviour uncompatible with other version
 mechanics.gcd = 1.5;
 mechanics.gcd_min = 1.5;
+mechanics.cast_haste_reduces_gcd = false;
 
 
 local class_stats_spell = (function()

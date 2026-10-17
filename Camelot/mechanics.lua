@@ -32,6 +32,7 @@ local mechanics = {};
 -- Vanilla specific behaviour uncompatible with other version
 mechanics.gcd = 1.5;
 mechanics.gcd_min = 1.0;
+mechanics.cast_haste_reduces_gcd = true;
 
 
 local class_stats_spell = (function()
@@ -227,7 +228,7 @@ local class_cast_time = (function()
                 local casts_in_dur = math.max(1, math.ceil(dur / math.max(cast_time, gcd)));
                 local p = 1.0 - math.pow(1.0 - stats.crit, casts_in_dur);
 
-                local hasted_gcd = gcd * (1.0 - haste);
+                local hasted_gcd = math.max(mechanics.gcd_min, gcd * (1.0 - haste) / (1.0 + haste));
                 local hasted_cast_time = hasted_gcd;
                 if bit.band(spell.flags, spell_flags.instant) == 0 then
                     hasted_cast_time = math.max(hasted_gcd, cast_time / (1.0 + haste));

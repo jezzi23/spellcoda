@@ -290,6 +290,7 @@ local effects_additive = {
         "jumps_flat",
         "jump_amp",
         "gcd_flat",
+        "gcd",
     },
     -- effects that affects the base value (points) of other subauras
     -- indexed by the aura internal idx
@@ -732,6 +733,7 @@ local function init_lnames()
             {"jumps_flat",              L["Extra jumps"],                       },
             {"jump_amp",                L["Jump amplifier"],                true},
             {"gcd_flat",                L["GCD modifier"],                      },
+            {"gcd",                     L["GCD modifier"],                  true},
         },
         ability_multiplicative_fields = { -- lname,                  -is percentage
             {"vuln_mod",                  L["Threat"],                      true},
