@@ -33,17 +33,25 @@ end
 
 local talent_trees;
 local talent_rank;
+local talents_staged;
 if sc.talent_ranks then
     talent_trees = sc.talent_order;
     talent_rank = function(tree, talent_index)
         local _, _, _, _, pts = GetTalentInfo(tree, talent_index);
         return pts;
     end;
+    talents_staged = function()
+        return false;
+    end;
 else
     talent_trees = sc.talent_nodes;
+    -- currentRank includes staged (uncommitted) points
     talent_rank = function(_, node_id)
         local node = C_Traits.GetNodeInfo(C_ClassTalents.GetActiveConfigID(), node_id);
         return node and node.currentRank or 0;
+    end;
+    talents_staged = function()
+        return C_Traits.ConfigHasStagedChanges(C_ClassTalents.GetActiveConfigID());
     end;
 end
 
@@ -208,6 +216,10 @@ local function loadout_talents_info(loadout)
 
     --loadout_front.talents.code = sc.talents.wowhead_talent_code();
     loadout.talents.code = wowhead_talent_code();
+    -- no API gives committed ranks while points are staged, so keep the code from the last unstaged read
+    if not talents_staged() then
+        loadout.talents.committed_code = loadout.talents.code;
+    end
 
     -- weapon skills 
     local success = GetNumSkillLines() ~= 0;

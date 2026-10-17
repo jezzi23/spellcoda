@@ -419,6 +419,20 @@ local event_dispatch = {
         sc.loadouts.force_update = true;
         update_talents_frame();
     end,
+    ["TRAIT_NODE_CHANGED"] = function()
+        core.talents_update_needed = true;
+        sc.loadouts.force_update = true;
+    end,
+    ["TRAIT_CONFIG_UPDATED"] = function(_, config_id)
+        if config_id == C_ClassTalents.GetActiveConfigID() then
+            core.talents_update_needed = true;
+            sc.loadouts.force_update = true;
+        end
+    end,
+    ["PLAYER_TALENT_UPDATE"] = function()
+        core.talents_update_needed = true;
+        sc.loadouts.force_update = true;
+    end,
     ["PLAYER_EQUIPMENT_CHANGED"] = function(_, slot)
         core.equipment_update_needed = true;
         update_calculator_character_items(slot);
@@ -486,6 +500,10 @@ local event_client_filters = {
     ["GLYPH_ADDED"]            = client_flags.wotlk,
     ["GLYPH_REMOVED"]          = client_flags.wotlk,
     ["GLYPH_UPDATED"]          = client_flags.wotlk,
+
+    ["TRAIT_NODE_CHANGED"]     = client_flags.forever,
+    ["TRAIT_CONFIG_UPDATED"]   = client_flags.forever,
+    ["PLAYER_TALENT_UPDATE"]   = client_flags.forever,
 };
 
 core.event_dispatch = event_dispatch;

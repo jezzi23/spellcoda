@@ -2279,6 +2279,7 @@ for _, v in ipairs(loadout_shared) do
     loadout_base2[v] = loadout_base1[v];
 end
 loadout_base1.talents.code = "";
+loadout_base1.talents.committed_code = "";
 
 local equipped = {};
 local talented = {};
@@ -2347,7 +2348,13 @@ local function update_loadout_and_effects(relaxed_update_dt)
         end
 
         local success = sc.talents.loadout_talents_info(loadout_front);
-        sc.talents.apply_talents(loadout_front, talented, loadout_front.talents.code, false, false);
+        local talents = loadout_front.talents;
+        sc.talents.apply_talents(loadout_front, talented, talents.committed_code, false, false);
+        if talents.code ~= talents.committed_code then
+            -- staged talents are not in the game's stats yet
+            sc.talents.apply_talents(loadout_front, talented, talents.committed_code, true, true);
+            sc.talents.apply_talents(loadout_front, talented, talents.code, true, false);
+        end
 
         sc.core.talents_update_needed = not success;
         sc.core.equipment_update_needed = true;
