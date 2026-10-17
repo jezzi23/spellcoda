@@ -22,6 +22,7 @@ local secret_or                                 = sc.utils.secret_or;
 
 local update_loadout_and_effects                = sc.loadouts.update_loadout_and_effects;
 local update_loadout_and_effects_diffed_from_ui = sc.loadouts.update_loadout_and_effects_diffed_from_ui;
+local calculator_has_changes                    = sc.loadouts.calculator_has_changes;
 local effects_finalize_forced                   = sc.loadouts.effects_finalize_forced;
 local cpy_effects                               = sc.loadouts.cpy_effects;
 local empty_effects                             = sc.loadouts.empty_effects;
@@ -179,18 +180,23 @@ end
 local spell_jump_itr = pairs(spells);
 local spell_jump_key = spell_jump_itr(spells);
 
-CreateFrame("GameTooltip", "sc_stat_calc_tooltip", nil, "SharedTooltipTemplate")
-sc_stat_calc_tooltip:SetOwner(UIParent, "ANCHOR_NONE")
+-- SharedTooltipTemplate sets up the header and text fonts of its lines, no AddFontStrings:
+-- that appends a line with the font string given, and the lines created after it copy its font
+local function create_calc_tooltip(name)
+    local tooltip = CreateFrame("GameTooltip", name, nil, "SharedTooltipTemplate");
+    tooltip:SetOwner(UIParent, "ANCHOR_NONE");
+end
 
-local header_txt = sc_stat_calc_tooltip:CreateFontString("$parentHeaderText", nil, "GameTooltipHeaderText")
-local text = sc_stat_calc_tooltip:CreateFontString("$parentText", nil, "GameTooltipText")
-local text_small = sc_stat_calc_tooltip:CreateFontString("$parentTextSmall", nil, "GameTooltipTextSmall")
+create_calc_tooltip("sc_stat_calc_tooltip");
+create_calc_tooltip("sc_calc_diff_tooltip");
 
-header_txt:SetFont(GameTooltipHeaderText:GetFont())
-text:SetFont(GameTooltipText:GetFont())
-text_small:SetFont(GameTooltipTextSmall:GetFont())
+local calc_diff_tooltip_scale = 0.85;
 
-sc_stat_calc_tooltip:AddFontStrings(header_txt, text, text_small);
+-- eval numbers of the before and after tooltips, copied out because calc reuses its result buffers
+local calc_tooltip_snapshots = {
+    [GameTooltip] = {},
+    [sc_stat_calc_tooltip] = {},
+};
 
 local spell_id_of_cleared_tooltip = 0;
 local clear_tooltip_refresh_id = 463;
@@ -464,6 +470,23 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         else
             pwr = L["SP"];
         end
+    end
+
+    local snapshot = calc_tooltip_snapshots[tooltip];
+    if snapshot then
+        snapshot.valid = true;
+        snapshot.kind = "eval";
+        snapshot.effect_str = effect;
+        snapshot.effect_per_sec_str = effect_per_sec;
+        snapshot.effect_per_cost_str = effect_per_cost;
+        snapshot.mana = spell.power_type == sc.powers.mana;
+        snapshot.cd = bit.band(spell.flags, spell_flags.cd) ~= 0;
+        snapshot.expected_st = info.expected_st;
+        snapshot.expected = info.expected;
+        snapshot.effect_per_sec = stats.cast_time ~= 0 and info.effect_per_sec or nil;
+        snapshot.effect_per_cost = stats.cost ~= 0 and info.effect_per_cost or nil;
+        snapshot.effect_until_oom = info.effect_until_oom;
+        snapshot.time_until_oom = info.time_until_oom;
     end
 
 
@@ -1595,7 +1618,11 @@ local function append_tooltip_header(tooltip)
         if config.settings.general_calc_global_compare or
             (__sc_frame.calculator_frame:IsShown() and __sc_frame:IsShown()) then
 
-            tooltip:AddLine(L["CALCULATOR MODE: AFTER CHANGES"], 1.0, 0.0, 0.0);
+            if calculator_has_changes() then
+                tooltip:AddLine(L["CALCULATOR MODE: AFTER CHANGES"], 1.0, 0.0, 0.0);
+            else
+                tooltip:AddLine(L["CALCULATOR MODE"], 1.0, 0.0, 0.0);
+            end
         end
     else
         tooltip:AddLine(L["CALCULATOR MODE: BEFORE CHANGES"], 1.0, 0.0, 0.0);
@@ -1832,6 +1859,12 @@ local function append_tooltip_ehp(tooltip, info, loadout)
     tooltip:AddLine(" ");
     add_line(
         tooltip,
+        string.format("%s:", L["Damage reduction (total)"]),
+        format_percentage(info.player_dr_total),
+        effect_color("normal")
+    );
+    add_line(
+        tooltip,
         string.format("%s:", L["Health"]),
         string.format("%d", info.player_hp),
         effect_color("normal")
@@ -1843,6 +1876,15 @@ local function append_tooltip_ehp(tooltip, info, loadout)
             string.format("%d", info.ehp),
             effect_color("expectation")
         );
+    end
+
+    local snapshot = calc_tooltip_snapshots[tooltip];
+    if snapshot then
+        snapshot.valid = true;
+        snapshot.kind = "ehp";
+        snapshot.ehp = info.ehp;
+        snapshot.player_hp = info.player_hp;
+        snapshot.player_dr_total = info.player_dr_total;
     end
 end
 
@@ -1957,6 +1999,214 @@ local function stat_diffs_included_effects_str(gems, enchants, set_bonuses)
     return "";
 end
 
+local function signed_diff_str(diff, num_digits)
+    local abs_diff = math.abs(diff);
+    local diff_str;
+    if abs_diff < 0.5 * math.pow(10, -num_digits) then
+        -- too small for num_digits, two significant digits instead
+        local decimals = 1 - math.floor(math.log10(abs_diff));
+        diff_str = string.format("%."..decimals.."f", diff):gsub("0+$", "");
+    else
+        diff_str = format_number(diff, num_digits);
+    end
+    return (diff > 0 and "+" or "")..diff_str;
+end
+
+local function calc_diff_str(diff, perc, num_digits)
+    local color = diff > 0 and "|cFF21B915" or "|cFFC32C0B";
+    local diff_str = signed_diff_str(diff, num_digits);
+    if not perc then
+        return color..diff_str.."|r";
+    end
+    return string.format("%s%s (%s%s%%)|r", color, diff_str, perc > 0 and "+" or "", format_number(perc, 2));
+end
+
+local function add_calc_diff_line(tooltip, lhs, before, after, num_digits, color_tag)
+    if not before or not after or before == after or before == math.huge or after == math.huge then
+        return false;
+    end
+    local perc;
+    if before ~= 0 then
+        perc = 100 * (after / before - 1);
+        -- would display as 0.00%
+        if math.abs(perc) < 0.005 then
+            return false;
+        end
+    end
+    local r, g, b = effect_color(color_tag);
+    tooltip:AddDoubleLine(lhs, calc_diff_str(after - before, perc, num_digits), r, g, b, 1.0, 1.0, 1.0);
+    return true;
+end
+
+-- for values that are percentages themselves: the difference in percentage, no relative change
+local function add_calc_diff_perc_line(tooltip, lhs, before, after, color_tag)
+    local diff = 100 * (after - before);
+    -- would display as 0% with the 3 decimals of format_percentage
+    if math.abs(diff) < 0.0005 then
+        return false;
+    end
+    local color = diff > 0 and "|cFF21B915" or "|cFFC32C0B";
+    local r, g, b = effect_color(color_tag);
+    tooltip:AddDoubleLine(lhs, color..signed_diff_str(diff, 2).."%|r", r, g, b, 1.0, 1.0, 1.0);
+    return true;
+end
+
+local function write_calc_diff_ehp_lines(tooltip, before, after)
+    local hp_changed = add_calc_diff_line(
+        tooltip,
+        L["Health"]..":",
+        before.player_hp,
+        after.player_hp,
+        0,
+        "normal"
+    );
+    local dr_changed = add_calc_diff_perc_line(
+        tooltip,
+        L["Damage reduction"]..":",
+        before.player_dr_total,
+        after.player_dr_total,
+        "normal"
+    );
+    local ehp_changed = add_calc_diff_line(
+        tooltip,
+        L["Effective health"]..":",
+        before.ehp,
+        after.ehp,
+        0,
+        "expectation"
+    );
+    return hp_changed or dr_changed or ehp_changed;
+end
+
+local function add_calc_diff_oom_lines(tooltip, before, after)
+    local effect_changed = add_calc_diff_line(
+        tooltip,
+        after.effect_str.." "..L["until OOM"]..":",
+        before.effect_until_oom,
+        after.effect_until_oom,
+        1,
+        "effect_until_oom"
+    );
+    local time_changed = add_calc_diff_line(
+        tooltip,
+        L["Time until OOM"]..":",
+        before.time_until_oom,
+        after.time_until_oom,
+        1,
+        "time_until_oom"
+    );
+    return effect_changed or time_changed;
+end
+
+local function write_calc_diff_eval_lines(tooltip, before, after)
+    local oom_first = config.settings.calc_fight_type == fight_types.cast_until_oom;
+    local show_oom = before.mana and after.mana and
+        (oom_first or config.settings.tooltip_display_cast_until_oom) and
+        not (config.settings.tooltip_hide_cd_coom and after.cd);
+
+    local changed = false;
+    if show_oom and oom_first then
+        changed = add_calc_diff_oom_lines(tooltip, before, after);
+    end
+    changed = add_calc_diff_line(
+        tooltip,
+        after.effect_per_sec_str..":",
+        before.effect_per_sec,
+        after.effect_per_sec,
+        1,
+        "effect_per_sec"
+    ) or changed;
+    changed = add_calc_diff_line(
+        tooltip,
+        L["Expected"]..":",
+        before.expected_st,
+        after.expected_st,
+        1,
+        "expectation"
+    ) or changed;
+    if before.expected ~= before.expected_st or after.expected ~= after.expected_st then
+        changed = add_calc_diff_line(
+            tooltip,
+            L["Optimistic"]..":",
+            before.expected,
+            after.expected,
+            1,
+            "expectation"
+        ) or changed;
+    end
+    changed = add_calc_diff_line(
+        tooltip,
+        after.effect_per_cost_str..":",
+        before.effect_per_cost,
+        after.effect_per_cost,
+        2,
+        "effect_per_cost"
+    ) or changed;
+    if show_oom and not oom_first then
+        changed = add_calc_diff_oom_lines(tooltip, before, after) or changed;
+    end
+    return changed;
+end
+
+local function write_calc_diff_tooltip(tooltip, before, after)
+    tooltip:AddLine(L["Spell changes"], 1.0, 1.0, 1.0);
+
+    local changed;
+    if after.kind == "ehp" then
+        changed = write_calc_diff_ehp_lines(tooltip, before, after);
+    else
+        changed = write_calc_diff_eval_lines(tooltip, before, after);
+    end
+    if not changed then
+        tooltip:AddLine(L["No change"], 0.5, 0.5, 0.5);
+    end
+end
+
+-- screen pixels, nil when unknown
+local function screen_px(region, val, what)
+    val = secret_or(val, nil, what);
+    return val and val * region:GetEffectiveScale();
+end
+
+-- before | diff | after, the after side being GameTooltip which we do not position.
+-- Tooltips are clamped to the screen, so when that row does not fit left of GameTooltip
+-- the before tooltip would be pushed over the diff. Then the diff goes below GameTooltip, or above
+local function anchor_calc_tooltips(show_diff)
+    sc_stat_calc_tooltip:ClearAllPoints();
+    if not show_diff then
+        sc_calc_diff_tooltip:Hide();
+        sc_stat_calc_tooltip:SetPoint("TOPRIGHT", GameTooltip, "TOPLEFT");
+        return;
+    end
+    sc_calc_diff_tooltip:ClearAllPoints();
+
+    local space_left = screen_px(GameTooltip, GameTooltip:GetLeft(), "game tooltip left");
+    local before_w = screen_px(sc_stat_calc_tooltip, sc_stat_calc_tooltip:GetWidth(), "stat calc tooltip width");
+    local diff_w = screen_px(sc_calc_diff_tooltip, sc_calc_diff_tooltip:GetWidth(), "calc diff tooltip width");
+
+    if not space_left or not before_w or not diff_w or space_left >= before_w + diff_w then
+        sc_calc_diff_tooltip:SetPoint("TOPRIGHT", GameTooltip, "TOPLEFT");
+        sc_stat_calc_tooltip:SetPoint("TOPRIGHT", sc_calc_diff_tooltip, "TOPLEFT");
+        return;
+    end
+
+    sc_stat_calc_tooltip:SetPoint("TOPRIGHT", GameTooltip, "TOPLEFT");
+
+    local space_below = screen_px(GameTooltip, GameTooltip:GetBottom(), "game tooltip bottom");
+    local space_above = screen_px(UIParent, UIParent:GetTop(), "ui top");
+    local top = screen_px(GameTooltip, GameTooltip:GetTop(), "game tooltip top");
+    if space_above and top then
+        space_above = space_above - top;
+    end
+    local diff_h = screen_px(sc_calc_diff_tooltip, sc_calc_diff_tooltip:GetHeight(), "calc diff tooltip height");
+
+    if space_below and diff_h and space_above and space_below < diff_h and space_above >= diff_h then
+        sc_calc_diff_tooltip:SetPoint("BOTTOMLEFT", GameTooltip, "TOPLEFT");
+    else
+        sc_calc_diff_tooltip:SetPoint("TOPLEFT", GameTooltip, "BOTTOMLEFT");
+    end
+end
+
 local function write_spell_tooltip()
     local _, spell_id = GameTooltip:GetSpell();
 
@@ -2014,6 +2264,11 @@ local function write_spell_tooltip()
             spell_tooltip_cached.diffed_finalized = update_loadout_and_effects_diffed_from_ui();
         end
 
+        local before = calc_tooltip_snapshots[sc_stat_calc_tooltip];
+        local after = calc_tooltip_snapshots[GameTooltip];
+        before.valid = false;
+        after.valid = false;
+
         write_tooltip_spell_info(
             GameTooltip,
             spell,
@@ -2023,12 +2278,12 @@ local function write_spell_tooltip()
             spell_tooltip_cached.diffed_finalized
         );
 
-        if config.settings.general_calc_secondary_tooltip then
+        if config.settings.general_calc_secondary_tooltip and calculator_has_changes() then
             sc_stat_calc_tooltip:ClearLines();
-            local height = secret_or((select(2, sc_stat_calc_tooltip:GetSize())), 0, "stat calc tooltip height");
-            sc_stat_calc_tooltip:SetOwner(GameTooltip, "ANCHOR_LEFT", 0, -height);
+            sc_stat_calc_tooltip:SetOwner(GameTooltip, "ANCHOR_NONE");
             local parent = sc_stat_calc_tooltip:GetParent();
-            sc_stat_calc_tooltip:SetScale(GameTooltip:GetEffectiveScale() / (parent and parent:GetEffectiveScale() or 1));
+            local scale = GameTooltip:GetEffectiveScale() / (parent and parent:GetEffectiveScale() or 1);
+            sc_stat_calc_tooltip:SetScale(scale);
 
             write_tooltip_spell_info(
                 sc_stat_calc_tooltip,
@@ -2038,6 +2293,19 @@ local function write_spell_tooltip()
                 spell_tooltip_cached.effects,
                 spell_tooltip_cached.effects_finalized
             );
+
+            local show_diff = before.valid and after.valid;
+            if show_diff then
+                sc_calc_diff_tooltip:ClearLines();
+                sc_calc_diff_tooltip:SetOwner(GameTooltip, "ANCHOR_NONE");
+                sc_calc_diff_tooltip:SetScale(scale * calc_diff_tooltip_scale);
+                write_calc_diff_tooltip(sc_calc_diff_tooltip, before, after);
+                sc_calc_diff_tooltip:Show();
+            end
+            anchor_calc_tooltips(show_diff);
+        else
+            sc_stat_calc_tooltip:Hide();
+            sc_calc_diff_tooltip:Hide();
         end
     end
 end
@@ -2742,6 +3010,7 @@ local last_needs_update_time = 0;
 
 local function on_hide_tooltip(tooltip)
     sc_stat_calc_tooltip:Hide();
+    sc_calc_diff_tooltip:Hide();
 end
 
 local function on_show_tooltip(tooltip)

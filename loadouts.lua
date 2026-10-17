@@ -630,6 +630,34 @@ local function effects_negate_for_diff(dst, src)
     end
 end
 
+local function effects_cat_differs(a_cat, b_cat, missing_val)
+    for i, a_e in pairs(a_cat) do
+        local b_e = b_cat[i];
+        if type(a_e) == "table" then
+            for j, v in pairs(a_e) do
+                if math.abs(v - ((b_e and b_e[j]) or missing_val)) > 0.000000001 then
+                    return true;
+                end
+            end
+        elseif math.abs(a_e - (b_e or missing_val)) > 0.000000001 then
+            return true;
+        end
+    end
+    return false;
+end
+
+local function effects_differ(a, b)
+    for _, cat in ipairs(effect_categories) do
+        if effects_cat_differs(a[cat], b[cat], 0.0) or
+            effects_cat_differs(b[cat], a[cat], 0.0) or
+            effects_cat_differs(a.mul[cat], b.mul[cat], 1.0) or
+            effects_cat_differs(b.mul[cat], a.mul[cat], 1.0) then
+            return true;
+        end
+    end
+    return false;
+end
+
 local function add_field_line(info, val, txt, diff, perc, mul, raw, extras)
     local red = (diff and "|cFFC32C0B") or "|cFFFFFFFF";
     local green = (diff and "|cFF21B915") or "|cFFFFFFFF";
@@ -2427,6 +2455,11 @@ local diffed = {};
 local diffed_finalized = {};
 empty_effects(diffed);
 empty_effects(diffed_finalized);
+local diffed_has_changes = false;
+
+local function calculator_has_changes()
+    return diffed_has_changes;
+end
 
 local last_ui_diff_update_id = 0;
 
@@ -2474,6 +2507,8 @@ local function update_loadout_and_effects_diffed_from_ui()
         sc.talents.apply_talents(loadout, diffed, talents_cfg.custom_code, true, false);
     end
 
+    diffed_has_changes = effects_differ(effects, diffed);
+
     cpy_effects(diffed_finalized, diffed);
     effects_finalize_forced(loadout, diffed_finalized);
 
@@ -2496,6 +2531,7 @@ loadouts.manual_effects_zero_diff                     = manual_effects_zero_diff
 loadouts.active_loadout                               = active_loadout;
 loadouts.update_loadout_and_effects                   = update_loadout_and_effects;
 loadouts.update_loadout_and_effects_diffed_from_ui    = update_loadout_and_effects_diffed_from_ui;
+loadouts.calculator_has_changes                       = calculator_has_changes;
 loadouts.loadout_flags                                = loadout_flags;
 loadouts.apply_effect                                 = apply_effect;
 loadouts.apply_flat_scaled                            = apply_flat_scaled;

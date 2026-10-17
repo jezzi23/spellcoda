@@ -7300,7 +7300,7 @@ local function create_sw_ui_settings_frame(pframe)
     local calc_settings = {
         {
             id = "general_calc_secondary_tooltip",
-            txt = L["Secondary tooltip for comparing spell calculations"],
+            txt = L["Spell comparison tooltips (before changes and spell changes)"],
         },
         {
             id = "general_calc_global_compare",

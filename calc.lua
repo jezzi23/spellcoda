@@ -2757,6 +2757,7 @@ local function effective_hp_info(info, loadout, effects, eval_flags)
     info.player_vuln_phys = effects.mul.raw.player_vuln_phys;
 
     local avg_dmg_taken_multiplier = avg_multiplier * (1.0 - info.player_armor_dr) * info.player_vuln_phys;
+    info.player_dr_total = 1.0 - avg_dmg_taken_multiplier;
 
     if bit.band(eval_flags, evaluation_flags.at_max_hp) ~= 0 then
         info.player_hp = loadout.player_hp_max;
