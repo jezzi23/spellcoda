@@ -3538,7 +3538,7 @@ local default_talents_plan = {
 };
 local default_buffs_plan = {
     use_custom = false,
-    preserve_active = false,
+    preserve_active = true,
     player_buffs = {},
     target_buffs = {},
 };
@@ -4006,7 +4006,7 @@ local function load_calculator_plan(plan)
                 end
             end
         else
-            if not plan.buffs[k] then
+            if plan.buffs[k] == nil then
                 working_buffs[k] = v;
             else
                 working_buffs[k] = plan.buffs[k];
@@ -4254,7 +4254,7 @@ local function item_planner_gem_enchant_dropdown_create(parent)
     click_catcher:Hide();
 
     local frame = CreateFrame("Frame", nil, parent, "BackdropTemplate");
-    frame:SetSize(250, 250);
+    frame:SetSize(262, 250);
     frame:SetFrameStrata("DIALOG");
     frame:SetClampedToScreen(true);
     frame:EnableMouse(true);
@@ -4321,7 +4321,7 @@ local function item_planner_gem_enchant_dropdown_create(parent)
 
     local list = CreateFrame("Frame", nil, frame, "BackdropTemplate");
     list:SetPoint("TOPLEFT", 8, -45);
-    list:SetSize(234, 197);
+    list:SetSize(246, 197);
     list:EnableMouseWheel(true);
     list:SetBackdrop({
         bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
@@ -4332,11 +4332,13 @@ local function item_planner_gem_enchant_dropdown_create(parent)
     list:SetBackdropBorderColor(0.4, 0.4, 0.4, 1);
     frame.list = list;
 
-    local slider = CreateFrame("Slider", nil, list);
+    local slider = CreateFrame("Slider", "__sc_frame_item_planner_dropdown_slider", list, "UIPanelScrollBarTrimTemplate");
+    -- template handler scrolls the parent as a ScrollFrame, list is a plain Frame
+    slider:SetScript("OnValueChanged", nil);
     slider:SetOrientation("VERTICAL");
-    slider:SetPoint("TOPRIGHT", list, "TOPRIGHT", -2, -2);
-    slider:SetWidth(10);
-    slider:SetHeight(193);
+    slider:SetPoint("RIGHT", list, "RIGHT", 0, 0);
+    slider:SetHeight(list:GetHeight() - 34);
+    slider.scrollStep = 1;
     slider:SetValueStep(1);
     slider:SetMinMaxValues(0, 0);
     slider:SetValue(0);
@@ -4351,12 +4353,7 @@ local function item_planner_gem_enchant_dropdown_create(parent)
     end);
     local slider_bg = slider:CreateTexture(nil, "BACKGROUND");
     slider_bg:SetAllPoints(slider);
-    slider_bg:SetColorTexture(0.15, 0.15, 0.15, 0.85);
-    slider:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob");
-    local thumb = slider:GetThumbTexture();
-    if thumb then
-        thumb:SetSize(10, 20);
-    end
+    slider_bg:SetColorTexture(0, 0, 0, 0.5);
     frame.slider = slider;
 
     list:SetScript("OnMouseWheel", function(self, delta)
@@ -5552,7 +5549,7 @@ local function create_calculator_buffs_subframe(pframe)
     pframe.buffs.custom_buffs_btn = f;
 
     f = CreateFrame("CheckButton", "__sc_frame_calculator_preserve_buffs", pframe.buffs, "ChatConfigCheckButtonTemplate");
-    f:SetPoint("TOPLEFT", pframe.buffs, 200, pframe.buffs.y_offset);
+    f:SetPoint("TOPLEFT", pframe.buffs, 173, pframe.buffs.y_offset);
     getglobal(f:GetName() .. 'Text'):SetText(L["Preserve active"]);
     f:SetScript("OnClick", function(self)
         sc.loadouts.force_update = true;
@@ -5763,7 +5760,8 @@ local function create_calculator_buffs_subframe(pframe)
         end);
         pframe.buffs[view.side].select_all_buffs_checkbutton = f;
 
-        f = CreateFrame("Slider", nil, pframe.buffs[view.side].buffs_list_frame, "UIPanelScrollBarTrimTemplate");
+        -- named, the template anchors its Middle texture by "$parentTop" which otherwise collides between sliders
+        f = CreateFrame("Slider", "__sc_frame_buffs_slider_"..view.side, pframe.buffs[view.side].buffs_list_frame, "UIPanelScrollBarTrimTemplate");
         f:SetOrientation('VERTICAL');
         f:SetPoint("RIGHT", pframe.buffs[view.side].buffs_list_frame, "RIGHT", 0, 2);
         f:SetHeight(pframe.buffs[view.side].buffs_list_frame:GetHeight()-30);
@@ -7300,7 +7298,7 @@ local function create_sw_ui_settings_frame(pframe)
     local calc_settings = {
         {
             id = "general_calc_secondary_tooltip",
-            txt = L["Spell comparison tooltips (before changes and spell changes)"],
+            txt = L["Before and after comparison tooltips"],
         },
         {
             id = "general_calc_global_compare",
