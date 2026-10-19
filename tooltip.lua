@@ -2163,8 +2163,8 @@ local function write_calc_diff_tooltip(tooltip, before, after)
 end
 
 -- screen pixels, nil when unknown
-local function screen_px(region, val, what)
-    val = secret_or(val, nil, what);
+local function screen_px(region, val)
+    val = secret_or(val, nil);
     return val and val * region:GetEffectiveScale();
 end
 
@@ -2180,9 +2180,9 @@ local function anchor_calc_tooltips(show_diff)
     end
     sc_calc_diff_tooltip:ClearAllPoints();
 
-    local space_left = screen_px(GameTooltip, GameTooltip:GetLeft(), "game tooltip left");
-    local before_w = screen_px(sc_stat_calc_tooltip, sc_stat_calc_tooltip:GetWidth(), "stat calc tooltip width");
-    local diff_w = screen_px(sc_calc_diff_tooltip, sc_calc_diff_tooltip:GetWidth(), "calc diff tooltip width");
+    local space_left = screen_px(GameTooltip, GameTooltip:GetLeft());
+    local before_w = screen_px(sc_stat_calc_tooltip, sc_stat_calc_tooltip:GetWidth());
+    local diff_w = screen_px(sc_calc_diff_tooltip, sc_calc_diff_tooltip:GetWidth());
 
     if not space_left or not before_w or not diff_w or space_left >= before_w + diff_w then
         sc_calc_diff_tooltip:SetPoint("TOPRIGHT", GameTooltip, "TOPLEFT");
@@ -2192,13 +2192,13 @@ local function anchor_calc_tooltips(show_diff)
 
     sc_stat_calc_tooltip:SetPoint("TOPRIGHT", GameTooltip, "TOPLEFT");
 
-    local space_below = screen_px(GameTooltip, GameTooltip:GetBottom(), "game tooltip bottom");
-    local space_above = screen_px(UIParent, UIParent:GetTop(), "ui top");
-    local top = screen_px(GameTooltip, GameTooltip:GetTop(), "game tooltip top");
+    local space_below = screen_px(GameTooltip, GameTooltip:GetBottom());
+    local space_above = screen_px(UIParent, UIParent:GetTop());
+    local top = screen_px(GameTooltip, GameTooltip:GetTop());
     if space_above and top then
         space_above = space_above - top;
     end
-    local diff_h = screen_px(sc_calc_diff_tooltip, sc_calc_diff_tooltip:GetHeight(), "calc diff tooltip height");
+    local diff_h = screen_px(sc_calc_diff_tooltip, sc_calc_diff_tooltip:GetHeight());
 
     if space_below and diff_h and space_above and space_below < diff_h and space_above >= diff_h then
         sc_calc_diff_tooltip:SetPoint("BOTTOMLEFT", GameTooltip, "TOPLEFT");
@@ -2864,9 +2864,9 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     tt.headers.first_fstr:ClearAllPoints();
     tt.headers.second_fstr:ClearAllPoints();
     local offset_to_first = math.max(min_width,
-        secret_or(tt.headers.second_fstr:GetWidth(), min_width, "item tooltip header 2 width"));
+        secret_or(tt.headers.second_fstr:GetWidth(), min_width));
     local offset_to_role_icon = offset_to_first + math.max(min_width,
-        secret_or(tt.headers.first_fstr:GetWidth(), min_width, "item tooltip header 1 width"));
+        secret_or(tt.headers.first_fstr:GetWidth(), min_width));
 
     local tooltip_name = tooltip:GetName();
     local rhs_txt = _G[tooltip_name .. "TextRight" .. num_lines];

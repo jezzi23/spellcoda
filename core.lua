@@ -54,6 +54,7 @@ core.addon_running_time         = 0;
 core.active_spec                = 1;
 core.doing_raid                 = false;
 core.mute_overlay               = false;
+core.in_combat                  = false;
 
 core.talents_update_needed      = true;
 core.equipment_update_needed    = true;
@@ -140,7 +141,9 @@ function core.overlay_refresh_config(overlay_disable_changed)
 
     local in_instance, instance_type = IsInInstance();
     sc.core.doing_raid = in_instance and (instance_type == "pvp" or (IsInRaid() and instance_type == "raid"));
-    local should_mute_overlay = config.settings.overlay_disable_in_raid and sc.core.doing_raid;
+    local should_mute_overlay =
+        (config.settings.overlay_disable_in_raid and sc.core.doing_raid) or
+        (config.settings.overlay_disable_in_combat and core.in_combat);
     if not core.mute_overlay and should_mute_overlay then
         sc.overlay.clear_overlays();
         sc.core.old_ranks_checks_needed = true;
@@ -478,11 +481,19 @@ local event_dispatch = {
         core.equipment_update_needed = true;
     end,
     ["PLAYER_REGEN_DISABLED"] = function()
-        -- Currently only registered when in Hardcore mode
-        -- Hide addon UI when in combat
-        __sc_frame:Hide();
+        -- Hide addon UI when in combat in Hardcore mode
+        if bit.band(sc.game_mode, sc.game_modes.hardcore) ~= 0 then
+            __sc_frame:Hide();
+        end
+        core.in_combat = true;
+        core.overlay_refresh_config();
+    end,
+    ["PLAYER_REGEN_ENABLED"] = function()
+        core.in_combat = false;
+        core.overlay_refresh_config();
     end,
     ["PLAYER_ENTERING_WORLD"] = function()
+        core.in_combat = UnitAffectingCombat("player") and true or false;
         core.overlay_refresh_config();
     end,
     ["GROUP_ROSTER_UPDATE"] = function()
@@ -490,6 +501,11 @@ local event_dispatch = {
     end,
     ["ITEM_DATA_LOAD_RESULT"] = function(_, item_id, success)
         sc.utils.item_data_received(item_id, success);
+    end,
+    ["ADDON_RESTRICTION_STATE_CHANGED"] = function()
+        -- fires before a restriction activates while values are still readable, the last read before they go secret
+        sc.loadouts.force_update = true;
+        sc.loadouts.update_loadout_and_effects();
     end,
 };
 
@@ -504,6 +520,7 @@ local event_client_filters = {
     ["TRAIT_NODE_CHANGED"]     = client_flags.forever,
     ["TRAIT_CONFIG_UPDATED"]   = client_flags.forever,
     ["PLAYER_TALENT_UPDATE"]   = client_flags.forever,
+    ["ADDON_RESTRICTION_STATE_CHANGED"] = client_flags.forever,
 };
 
 core.event_dispatch = event_dispatch;

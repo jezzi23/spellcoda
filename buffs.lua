@@ -1,7 +1,7 @@
 local _, sc               = ...;
 
 local apply_effect        = sc.loadouts.apply_effect;
-local any_secret          = sc.utils.any_secret;
+local is_secret           = sc.utils.is_secret;
 local client_matches      = sc.utils.client_matches;
 local client_flags        = sc.client_flags;
 
@@ -84,7 +84,7 @@ local aura_getters = {
     { get = C_UnitAuras.GetBuffDataByIndex, filter = "HELPFUL" },
     { get = C_UnitAuras.GetDebuffDataByIndex, filter = "HARMFUL" },
 };
-local should_aura_index_be_secret = C_Secrets and C_Secrets.ShouldUnitAuraIndexBeSecret;
+local should_auras_be_secret = C_Secrets and C_Secrets.ShouldAurasBeSecret;
 
 local is_player_owned;
 if client_matches(client_flags.forever) then
@@ -94,7 +94,51 @@ else
     is_player_owned = function(aura) return aura.sourceUnit == "player"; end;
 end
 
-local function detect_buffs(loadout)
+-- keeps the unit's buffs of the last unrestricted read while it is the same unit
+local function keep_restricted_buffs(loadout, prev, unit)
+    local guid = UnitGUID(unit);
+    if is_secret(guid) or guid ~= prev.aura_guids[unit] then
+        return;
+    end
+    loadout.aura_guids[unit] = guid;
+    local kept = loadout.dynamic_buffs[unit];
+    for id, buff_info in pairs(prev.dynamic_buffs[unit]) do
+        kept[id] = buff_info;
+    end
+    for lname, buff_info in pairs(prev.dynamic_buffs_lname[unit]) do
+        if kept[buff_info.id] == buff_info then
+            loadout.dynamic_buffs_lname[unit][lname] = buff_info;
+        end
+    end
+end
+
+-- the form stays readable while restricted, the form aura follows it
+local function restricted_form_buffs(loadout)
+    local kept = loadout.dynamic_buffs["player"];
+    local kept_lname = loadout.dynamic_buffs_lname["player"];
+    for i = 1, GetNumShapeshiftForms() do
+        local spell_id = select(4, GetShapeshiftFormInfo(i));
+        if i == loadout.shapeshift and spell_id then
+            if not kept[spell_id] then
+                local buff_info = { count = 1, id = spell_id, player_owned = true };
+                kept[spell_id] = buff_info;
+                local lname = C_Spell.GetSpellName(spell_id);
+                if lname then
+                    kept_lname[lname] = buff_info;
+                end
+            end
+        elseif kept[spell_id] then
+            kept[spell_id] = nil;
+            for lname, buff_info in pairs(kept_lname) do
+                if buff_info.id == spell_id then
+                    kept_lname[lname] = nil;
+                end
+            end
+        end
+    end
+end
+
+local function detect_buffs(loadout, prev)
     loadout.dynamic_buffs["player"] = {};
     loadout.dynamic_buffs["target"] = {};
     loadout.dynamic_buffs["mouseover"] = {};
@@ -114,20 +158,31 @@ local function detect_buffs(loadout)
         loadout.dynamic_buffs_lname["mouseover"] = loadout.dynamic_buffs_lname["target"]
     end
 
+    wipe(loadout.aura_guids);
+    if should_auras_be_secret and should_auras_be_secret() then
+        -- ignoring buffs leaves only the form, apply_snapshot_deltas takes the snapshot buffs out of the sheet stats
+        if not (sc.config.settings.loadout_combat_ignore_buffs and client_matches(client_flags.forever)) then
+            for k, _ in pairs(loadout.dynamic_buffs) do
+                keep_restricted_buffs(loadout, prev, k);
+            end
+        end
+        restricted_form_buffs(loadout);
+        loadout.snapshot_buffs = prev.snapshot_buffs;
+        return;
+    end
+
     for k, v in pairs(loadout.dynamic_buffs) do
+        loadout.aura_guids[k] = UnitGUID(k);
         for _, getter in ipairs(aura_getters) do
             local i = 1;
             while true do
-                -- querying a restricted aura index errors, stop reading auras of this unit
-                if should_aura_index_be_secret and should_aura_index_be_secret(k, i, getter.filter) then
-                    break;
-                end
                 local aura = getter.get(k, i);
                 if not aura then
                     break;
                 end
                 local spell_id = aura.spellId;
-                if not any_secret(spell_id, aura.name, aura.applications, is_player_owned(aura)) then
+                -- skips auras of spells flagged always secret
+                if not is_secret(spell_id) then
                     -- player owned takes priority
                     local player_owned = is_player_owned(aura);
                     if not v[spell_id] or player_owned then
@@ -154,6 +209,36 @@ local function detect_buffs(loadout)
                     end
                 end
             end
+        end
+    end
+
+    loadout.snapshot_buffs = loadout.dynamic_buffs["player"];
+end
+
+-- the forced application minus the regular one, the part of a buff that is in the sheet stats
+local function apply_sheet_part(effects, id, buff_info, undo)
+    local auras = sc.class_buffs[id] or sc.player_buffs[id];
+    if auras then
+        apply_effect(effects, id, auras, true, buff_info.count, undo, buff_info.player_owned);
+        apply_effect(effects, id, auras, false, buff_info.count, not undo, buff_info.player_owned);
+    end
+end
+
+-- sheet stats are kept from the last unrestricted read, move the sheet part of player buffs lost or gained since
+local function apply_snapshot_deltas(loadout, effects)
+    local snapshot = loadout.snapshot_buffs;
+    local current = loadout.dynamic_buffs["player"];
+    if snapshot == current then
+        return;
+    end
+    for id, buff_info in pairs(snapshot) do
+        if not current[id] then
+            apply_sheet_part(effects, id, buff_info, true);
+        end
+    end
+    for id, buff_info in pairs(current) do
+        if not snapshot[id] then
+            apply_sheet_part(effects, id, buff_info, false);
         end
     end
 end
@@ -307,6 +392,7 @@ buffs_export.buffs                              = buffs;
 buffs_export.target_buffs                       = target_buffs;
 buffs_export.detect_buffs                       = detect_buffs;
 buffs_export.apply_buffs                        = apply_buffs;
+buffs_export.apply_snapshot_deltas              = apply_snapshot_deltas;
 buffs_export.apply_fake_buffs                   = apply_fake_buffs;
 buffs_export.get_buff                           = get_buff;
 buffs_export.get_buff_by_lname                  = get_buff_by_lname;

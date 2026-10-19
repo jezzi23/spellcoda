@@ -23,22 +23,11 @@ local function any_secret(...)
     return false;
 end
 
-local reported_secrets = {};
-
--- for values not expected to be secret: returns fallback instead, debug mode reports each site once
-local function secret_or(v, fallback, what)
-    if not is_secret(v) then
-        return v;
+local function secret_or(v, fallback)
+    if is_secret(v) then
+        return fallback;
     end
-    if __spellcoda_debug__ and not reported_secrets[what] then
-        reported_secrets[what] = true;
-        print(string.format("|cFFFF4040SpellCoda secret:|r %s, in combat: %s, at %s",
-            what,
-            tostring(InCombatLockdown()),
-            (debugstack(2, 1, 0) or ""):gsub("\n", "")
-        ));
-    end
-    return fallback;
+    return v;
 end
 
 local function spell_book_shown()

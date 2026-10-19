@@ -33,6 +33,7 @@ local combat_ratings                    = sc.utils.combat_ratings;
 local client_matches                    = sc.utils.client_matches;
 local is_secret                         = sc.utils.is_secret;
 local any_secret                        = sc.utils.any_secret;
+local secret_or                         = sc.utils.secret_or;
 local client_flags                      = sc.client_flags;
 local spell_lname                       = sc.utils.spell_lname;
 
@@ -164,17 +165,21 @@ local function loadout_zero()
             empty[k][kk] = vv;
         end
     end
+    -- kept while the sheet stats are secret, a reload in combat starts from these
     empty.attack_min_mh, empty.attack_max_mh = 1, 1;
     empty.attack_pos, empty.attack_neg, empty.attack_mod = 0, 0, 1;
     empty.attack_delay_mh = 2;
     empty.base_armor, empty.armor = 0, 0;
+    empty.defense = 0;
 
     empty.dynamic_buffs = {};
+    empty.aura_guids = {};
     empty.dynamic_buffs_lname = {};
     for _, v in ipairs(loadout_units) do
         empty.dynamic_buffs[v] = {};
         empty.dynamic_buffs_lname[v] = {};
     end
+    empty.snapshot_buffs = empty.dynamic_buffs["player"];
 
     return empty;
 end
@@ -324,6 +329,7 @@ local effects_additive = {
         "perc_max_mana_as_mp5",
         "regen_while_casting",
         "healing_power_flat",
+        "heal_crit_mod",
         "phys_dmg_flat",
         "ap_flat",
         "ap_mod",
@@ -1884,30 +1890,122 @@ local function effects_finalize_forced(loadout, effects)
     effects.finalized = true;
 end
 
-local function keep_if_secret(v, previous)
-    if is_secret(v) then
-        return previous;
+local should_unit_stats_be_secret = C_Secrets and C_Secrets.ShouldUnitStatsBeSecret;
+
+-- the sheet stats, secret all together while restricted
+local sheet_stats_values = {
+    "healing_power", "spell_power", "ap", "rap", "melee_crit", "ranged_crit", "block", "dodge", "parry", "defense",
+    "attack_min_mh", "attack_max_mh", "attack_pos", "attack_neg", "attack_mod", "attack_delay_mh", "attack_delay_oh",
+    "base_armor", "armor",
+};
+for _, v in ipairs(ratings) do
+    table.insert(sheet_stats_values, v[2]);
+end
+local sheet_stats_tables = { "stats", "spell_dmg_by_school", "spell_dmg_hit_by_school", "spell_crit_by_school" };
+
+local function keep_sheet_stats(loadout, prev)
+    for _, k in ipairs(sheet_stats_values) do
+        loadout[k] = prev[k];
     end
-    return v;
+    for _, k in ipairs(sheet_stats_tables) do
+        for i, v in pairs(prev[k]) do
+            loadout[k][i] = v;
+        end
+    end
 end
 
-local function scaled_keep_if_secret(v, scale, previous)
-    if is_secret(v) then
-        return previous;
+local function read_sheet_stats(loadout)
+    for i = 1, 5 do
+        local _, s, _, _ = UnitStat("player", i);
+        loadout.stats[i] = s;
     end
-    return scale*v;
+
+    if client_matches(bit.bnot(bit.bor(client_flags.vanilla, client_flags.forever))) then
+        for _, v in ipairs(ratings) do
+            loadout[v[2]] = GetCombatRating(v[1]);
+        end
+    else
+        for _, v in ipairs(ratings) do
+            loadout[v[2]] = 0;
+        end
+    end
+
+    --loadout.phys_hit = 0;
+    --local phys_hit = GetHitModifier();
+    --if phys_hit then
+    --    loadout.phys_hit = 0.01*phys_hit;
+    --end
+
+    if client_matches(bit.bnot(client_flags.wotlk)) then
+        loadout.healing_power = GetSpellBonusHealing();
+        for i = 1, 7 do
+            loadout.spell_dmg_by_school[i] = GetSpellBonusDamage(i);
+        end
+        loadout.spell_dmg_by_school[1] = loadout.spell_dmg_by_school[2];
+        -- use holy as +all schools baseline, write to physical so singular sp by schools can be 
+        -- detected for multischool spells
+
+        -- right after load GetSpellHitModifier seems to sometimes returns a nil.... so check first I guess
+       local spell_hit = 0;
+       local api_hit = GetSpellHitModifier();
+       if api_hit then
+           spell_hit = 0.01*api_hit;
+       end
+       for i = 1, 7 do
+           loadout.spell_dmg_hit_by_school[i] = spell_hit;
+       end
+    else
+        -- in wotlk, healing power will equate to spell power
+        loadout.spell_power = GetSpellBonusHealing();
+        for i = 1, 7 do
+            loadout.spell_dmg_by_school[i] = GetSpellBonusDamage(i) - loadout.spell_power;
+        end
+    end
+
+    for i = 1, 7 do
+        loadout.spell_crit_by_school[i] = 0.01*GetSpellCritChance(i);
+    end
+    local ap_src1, ap_src2, ap_src3 = UnitAttackPower("player");
+    loadout.ap = ap_src1 + ap_src2 + ap_src3;
+    local rap_src1, rap_src2, rap_src3 = UnitRangedAttackPower("player");
+    loadout.rap = rap_src1 + rap_src2 + rap_src3;
+
+    loadout.melee_crit = 0.01*GetCritChance();
+    loadout.ranged_crit = 0.01*GetRangedCritChance();
+    loadout.block = 0.01*GetBlockChance();
+
+    --loadout.r_speed, loadout.r_min, loadout.r_max, loadout.r_pos, loadout.r_neg, loadout.r_mod = UnitRangedDamage("player");
+
+    local _;
+    loadout.attack_min_mh, loadout.attack_max_mh, _, _, loadout.attack_pos, loadout.attack_neg, loadout.attack_mod =
+        UnitDamage("player");
+    loadout.attack_delay_mh, loadout.attack_delay_oh = UnitAttackSpeed("player");
+
+    loadout.dodge = 0.01*(GetDodgeChance() or 0);
+    loadout.parry = 0.01*(GetParryChance() or 0);
+    local def_base, def_bonus;
+    if client_matches(client_flags.forever) then
+        def_base, def_bonus = UnitDefenseSkill("player");
+    else
+        def_base, def_bonus = UnitDefense("player");
+    end
+    loadout.defense = def_base + def_bonus;
+
+    loadout.base_armor, loadout.armor = UnitArmor("player");
 end
 
-local function dynamic_loadout(loadout)
+-- prev is the current front loadout, the sheet stats are kept from it while they are secret
+local function dynamic_loadout(loadout, prev)
     if not config.settings.loadout_use_custom_lvl then
         loadout.lvl = UnitLevel("player");
     else
         loadout.lvl = config.settings.loadout_lvl;
     end
 
-    for i = 1, 5 do
-        local _, s, _, _ = UnitStat("player", i);
-        loadout.stats[i] = keep_if_secret(s, loadout.stats[i]);
+    if should_unit_stats_be_secret and should_unit_stats_be_secret() then
+        keep_sheet_stats(loadout, prev);
+    else
+        read_sheet_stats(loadout);
     end
 
     for pwr, _ in pairs(loadout.resources_max) do
@@ -1935,10 +2033,6 @@ local function dynamic_loadout(loadout)
     end
 
     if client_matches(bit.bnot(bit.bor(client_flags.vanilla, client_flags.forever))) then
-        for _, v in ipairs(ratings) do
-            loadout[v[2]] = keep_if_secret(GetCombatRating(v[1]), loadout[v[2]]);
-        end
-
         if loadout.lvl <= 60 then
             loadout.cr_scaling = (math.max(loadout.lvl, 10) - 8) / 52
         elseif loadout.lvl <= 70 then
@@ -1947,75 +2041,8 @@ local function dynamic_loadout(loadout)
             loadout.cr_scaling = (41/26) * ((131/63)^((loadout.lvl - 70) / 10))
         end
     else
-        for _, v in ipairs(ratings) do
-            loadout[v[2]] = 0;
-        end
         -- dummy combat rating 1 always yield 1% in vanilla
         loadout.cr_scaling = 1;
-    end
-
-
-    --loadout.phys_hit = 0;
-    --local phys_hit = GetHitModifier();
-    --if phys_hit then
-    --    loadout.phys_hit = 0.01*phys_hit;
-    --end
-
-    if client_matches(bit.bnot(client_flags.wotlk)) then
-        loadout.healing_power = keep_if_secret(GetSpellBonusHealing(), loadout.healing_power);
-        for i = 1, 7 do
-            loadout.spell_dmg_by_school[i] = keep_if_secret(GetSpellBonusDamage(i), loadout.spell_dmg_by_school[i]);
-        end
-        loadout.spell_dmg_by_school[1] = loadout.spell_dmg_by_school[2];
-        -- use holy as +all schools baseline, write to physical so singular sp by schools can be 
-        -- detected for multischool spells
-
-        -- right after load GetSpellHitModifier seems to sometimes returns a nil.... so check first I guess
-       local spell_hit = 0;
-       local api_hit = GetSpellHitModifier();
-       if is_secret(api_hit) then
-           spell_hit = loadout.spell_dmg_hit_by_school[1] or 0;
-       elseif api_hit then
-           spell_hit = 0.01*api_hit;
-       end
-       for i = 1, 7 do
-           loadout.spell_dmg_hit_by_school[i] = spell_hit;
-       end
-    else
-        -- in wotlk, healing power will equate to spell power
-        loadout.spell_power = GetSpellBonusHealing();
-        for i = 1, 7 do
-            loadout.spell_dmg_by_school[i] = GetSpellBonusDamage(i) - loadout.spell_power;
-        end
-    end
-
-    for i = 1, 7 do
-        loadout.spell_crit_by_school[i] = scaled_keep_if_secret(GetSpellCritChance(i), 0.01, loadout.spell_crit_by_school[i]);
-    end
-    local ap_src1, ap_src2, ap_src3 = UnitAttackPower("player");
-    if not any_secret(ap_src1, ap_src2, ap_src3) then
-        loadout.ap = ap_src1 + ap_src2 + ap_src3;
-    end
-    local rap_src1, rap_src2, rap_src3 = UnitRangedAttackPower("player");
-    if not any_secret(rap_src1, rap_src2, rap_src3) then
-        loadout.rap = rap_src1 + rap_src2 + rap_src3;
-    end
-
-    loadout.melee_crit = scaled_keep_if_secret(GetCritChance(), 0.01, loadout.melee_crit);
-    loadout.ranged_crit = scaled_keep_if_secret(GetRangedCritChance(), 0.01, loadout.ranged_crit);
-    loadout.block = scaled_keep_if_secret(GetBlockChance(), 0.01, loadout.block);
-
-    --loadout.r_speed, loadout.r_min, loadout.r_max, loadout.r_pos, loadout.r_neg, loadout.r_mod = UnitRangedDamage("player");
-
-    local attack_min_mh, attack_max_mh, _, _, attack_pos, attack_neg, attack_mod = UnitDamage("player");
-    if not any_secret(attack_min_mh, attack_max_mh, attack_pos, attack_neg, attack_mod) then
-        loadout.attack_min_mh, loadout.attack_max_mh = attack_min_mh, attack_max_mh;
-        loadout.attack_pos, loadout.attack_neg, loadout.attack_mod = attack_pos, attack_neg, attack_mod;
-    end
-
-    local attack_delay_mh, attack_delay_oh = UnitAttackSpeed("player");
-    if not any_secret(attack_delay_mh, attack_delay_oh) then
-        loadout.attack_delay_mh, loadout.attack_delay_oh = attack_delay_mh, attack_delay_oh;
     end
 
     loadout.shapeshift = GetShapeshiftForm();
@@ -2032,29 +2059,10 @@ local function dynamic_loadout(loadout)
         loadout.shapeshift_no_weapon = 0;
     end
 
+    -- npc names can be secret, the unit token stands in since it never equals a name
     loadout.player_name = UnitName("player");
-    loadout.target_name = UnitName("target");
-    if is_secret(loadout.target_name) then
-        loadout.target_name = "target";
-    end
-    loadout.mouseover_name = UnitName("mouseover");
-    if is_secret(loadout.mouseover_name) then
-        loadout.mouseover_name = "mouseover";
-    end
-
-    loadout.dodge = scaled_keep_if_secret(GetDodgeChance() or 0, 0.01, loadout.dodge);
-    loadout.parry = scaled_keep_if_secret(GetParryChance() or 0, 0.01, loadout.parry);
-    if client_matches(client_flags.forever) then
-        local def_base, def_bonus = UnitDefenseSkill("player");
-        if is_secret(def_base) or is_secret(def_bonus) then
-            loadout.defense = loadout.lvl*5;
-        else
-            loadout.defense = def_base + def_bonus;
-        end
-    else
-        local def_base, def_bonus = UnitDefense("player");
-        loadout.defense = def_base + def_bonus;
-    end
+    loadout.target_name = secret_or(UnitName("target"), "target");
+    loadout.mouseover_name = secret_or(UnitName("mouseover"), "mouseover");
 
     loadout.target_res = config.settings.loadout_target_res;
 
@@ -2104,8 +2112,8 @@ local function dynamic_loadout(loadout)
                 loadout.target_lvl = target_lvl;
             end
 
-            local creature = UnitCreatureType("target");
-            if creature and not is_secret(creature) then
+            local creature = secret_or(UnitCreatureType("target"), nil);
+            if creature then
                 local creature_id = sc.creature_lname_to_id[creature];
                 if creature_id then
                     loadout.target_creature_mask = bit.lshift(1, creature_id-1);
@@ -2119,13 +2127,13 @@ local function dynamic_loadout(loadout)
     end
     if loadout.hostile_towards == "target" and bit.band(loadout.flags, loadout_flags.target_friendly) == 0 then
         local enemy_hp, enemy_hp_max = UnitHealth("target"), UnitHealthMax("target");
-        if not is_secret(enemy_hp) and not is_secret(enemy_hp_max) then
+        if not any_secret(enemy_hp, enemy_hp_max) then
             loadout.enemy_hp_perc = enemy_hp/math.max(enemy_hp_max, 1);
         end
     end
 
     local friendly_hp, friendly_hp_max = UnitHealth(loadout.friendly_towards), UnitHealthMax(loadout.friendly_towards);
-    if is_secret(friendly_hp) or is_secret(friendly_hp_max) then
+    if any_secret(friendly_hp, friendly_hp_max) then
         loadout.friendly_hp_max = 1;
         loadout.friendly_hp_perc = 1;
     else
@@ -2134,11 +2142,6 @@ local function dynamic_loadout(loadout)
     end
 
     loadout.target_defense = 5*loadout.target_lvl;
-
-    local base_armor, armor = UnitArmor("player");
-    if not any_secret(base_armor, armor) then
-        loadout.base_armor, loadout.armor = base_armor, armor;
-    end
 
     loadout.target_pvpres = config.settings.loadout_target_pvpres;
 
@@ -2159,7 +2162,7 @@ local function dynamic_loadout(loadout)
         end
     end
 
-    sc.buffs.detect_buffs(loadout);
+    sc.buffs.detect_buffs(loadout, prev);
 
     loadout.calculator_mode = false;
 end
@@ -2348,7 +2351,7 @@ local function update_loadout_and_effects(relaxed_update_dt)
     else
         other = loadout_base1;
     end
-    dynamic_loadout(other);
+    dynamic_loadout(other, loadout_front);
 
     -- the legacy spellbook recycles its buttons without notice, the modern one forces an update itself (overlay.hook_spell_book)
     if not (SpellBookFrame and SpellBookFrame:IsShown()) and
@@ -2404,6 +2407,7 @@ local function update_loadout_and_effects(relaxed_update_dt)
     effects_add(buffed, equipped);
 
     sc.buffs.apply_buffs(loadout_front, buffed, false, false);
+    sc.buffs.apply_snapshot_deltas(loadout_front, buffed);
 
     cpy_effects(final, buffed);
     effects_finalize_forced(loadout_front, final);

@@ -2588,14 +2588,22 @@ local function create_sw_ui_overlay_frame(pframe)
 
     multi_row_checkbutton({
         {
-            id = "overlay_disable_in_raid",
-            txt = L["Disable all overlays in raid instances"],
-            tooltip = L["Eliminates dynamic overlay calculations making CPU usage negligible"],
+            id = "overlay_disable_in_combat",
+            txt = L["Disable in combat"],
+            tooltip = client_matches(client_flags.forever) and
+                L["Buffs can not be read in combat, so overlay numbers may not be accurate during combat."] or nil,
             func = function()
                 sc.core.overlay_refresh_config();
             end
         },
-    }, pframe, 1);
+        {
+            id = "overlay_disable_in_raid",
+            txt = L["Disable in raids"],
+            func = function()
+                sc.core.overlay_refresh_config();
+            end
+        },
+    }, pframe, 2);
 
     pframe.y_offset = pframe.y_offset - 5;
 
@@ -6424,6 +6432,25 @@ local function create_sw_ui_loadout_frame(pframe)
     end)
     pframe.max_mana_checkbutton = f;
 
+    if client_matches(client_flags.forever) then
+        pframe.y_offset = pframe.y_offset - 25;
+
+        f = CreateFrame("CheckButton", "__sc_frame_setting_loadout_combat_ignore_buffs", pframe, "ChatConfigCheckButtonTemplate");
+        f._type = "CheckButton";
+        f:SetPoint("TOPLEFT", pframe, x_pad, pframe.y_offset);
+        getglobal(f:GetName()..'Text'):SetText(L["Ignore buffs in combat"]);
+        getglobal(f:GetName()).tooltip =
+            L["Removes buffs from calculations while in combat, except shapeshift forms."];
+        f:SetScript("OnClick", function(self)
+            sc.loadouts.force_update = true;
+            config.settings.loadout_combat_ignore_buffs = self:GetChecked();
+        end)
+
+        local help_icon = make_help_icon_tooltip(nil, pframe, L["Buffs can not be read in combat"],
+            L["Unchecked, buffs active when entering combat are assumed throughout combat."]);
+        help_icon:SetPoint("LEFT", getglobal(f:GetName()..'Text'), "RIGHT", 10, 0);
+    end
+
 
     pframe.y_offset = pframe.y_offset - 30;
     local div = pframe:CreateTexture(nil, "ARTWORK")
@@ -7513,10 +7540,6 @@ local function create_sw_base_ui()
 
             __sc_frame:RegisterEvent(k);
         end
-    end
-
-    if bit.band(sc.game_mode, sc.game_modes.hardcore) == 0 then
-        __sc_frame:UnregisterEvent("PLAYER_REGEN_DISABLED");
     end
 
     __sc_frame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)

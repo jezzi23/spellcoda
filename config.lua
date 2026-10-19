@@ -96,6 +96,7 @@ local default_settings     = {
     overlay_display_effect_until_oom                            = false,
     overlay_display_time_until_oom                              = false,
 
+    overlay_disable_in_combat                                   = false,
     overlay_disable_in_raid                                     = false,
     overlay_disable                                             = false,
     overlay_old_rank                                            = false,
@@ -351,6 +352,7 @@ local default_settings     = {
     loadout_target_facing                                       = false,
     loadout_unbounded_aoe_targets                               = 1,
     loadout_always_max_resource                                 = false,
+    loadout_combat_ignore_buffs                                 = false,
     loadout_behind_target                                       = false,
 
     libstub_icon_conf                                           = { hide = false },
