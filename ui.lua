@@ -7610,12 +7610,10 @@ local function load_sw_ui()
                 tooltip:AddLine("|cFF9CD6DE"..L["Right click"]..":|r |cFFFF0000("..L["IS OFF"]..")|r "..L["Toggle old rank warning overlay"]);
             end
             tooltip:AddLine(" ");
-            tooltip:AddLine("|cFF9CD6DE".."Discord:|r GjgdtDFQv8");
             tooltip:AddLine("|cFF9CD6DE"..L["Addon data generated from"]..":|r");
             tooltip:AddLine("    "..sc.client_name_src.." "..sc.client_version_src);
             tooltip:AddLine("|cFF9CD6DE"..L["Current client build"]..":|r "..sc.client_version_loaded);
             tooltip:AddLine("|cFF9CD6DE"..L["Factory reset (reloads UI)"]..":|r /sc reset");
-            --tooltip:AddLine("https://discord.gg/9ATBkzRQ74");
             tooltip:AddLine("https://www.curseforge.com/wow/addons/spellcoda");
         end;
 
@@ -8947,8 +8945,8 @@ local function init_spellbook_tab()
             offset = offset + 2;
         end
         tab:ClearAllPoints();
-        -- extra spacing after blizzard's tabs marks the addon tabs
-        tab:SetPoint("TOPLEFT", tab_row, "TOPRIGHT", offset + 12, 0);
+        -- extra spacing after blizzard's tabs marks the addon tabs, room for another addon's button is kept before ours
+        tab:SetPoint("TOPLEFT", tab_row, "TOPRIGHT", offset + 12 + 38, 0);
         fit_search_box();
     end
 

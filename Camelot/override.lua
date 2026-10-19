@@ -33,7 +33,7 @@ sc.dual_wield_class =
 
 if sc.class == sc.classes.mage then
     for _, v in pairs(rank_seqs[spids.ice_lance]) do
-        spells[v].direct.coef = 0.429;
+        spells[v].direct.coef = spell_coef_lvl_adjusted(0.429, spells[v].lvl_req);
     end
 
     lookups.averaged_procs = {
@@ -62,10 +62,10 @@ if sc.class == sc.classes.mage then
     end
 
     -- THREAT
-    --add_threat_flat_by_rank({
-    --    { spids.counterspell, {300} },
-    --    { spids.remove_lesser_curse, {14} },
-    --});
+    add_threat_flat_by_rank({
+        { spids.counterspell, {300} },
+        { spids.remove_lesser_curse, {14} },
+    });
 elseif sc.class == sc.classes.druid then
     lookups.wild_growth_lname = C_Spell.GetSpellName(spids.wild_growth);
 
@@ -92,15 +92,8 @@ elseif sc.class == sc.classes.druid then
         spells[v].periodic.per_cp_dur = 0.0;
 
     end
-    if bit.band(sc.game_mode, sc.game_modes.season_of_discovery) ~= 0 then
-
-        -- in SoD rip has special ap scaling
-        for _, v in pairs(rank_seqs[spids.rip]) do
-            spells[v].periodic.coef_ap_by_cp = {0.01, 0.02, 0.03, 0.04, 0.04};
-        end
-
-    else
-        -- new moonkin passive id in SOD, no way to detect if this is active or not at runtime
+    do
+        -- new moonkin passive id unwanted from SOD, no way to detect if this is active or not at runtime
         sc.shapeshift_passives[443359] = nil;
 
         -- TODO: unclear if vanilla rip should have SoD's rip scaling or not
@@ -168,14 +161,13 @@ elseif sc.class == sc.classes.druid then
 
     -- THREAT
     --add_threat_flat_by_rank({
-    --    { spids.demoralizing_roar, {9, 15, 20, 30, 39} },
     --    { spids.faerie_fire_feral, {108, 108, 108, 108} },
     --    { spids.faerie_fire, {108, 108, 108, 108} },
     --});
-    --add_threat_mod_all_ranks({
-    --    {spids.maul, 0.75},
-    --    {spids.swipe, 0.75},
-    --});
+    add_threat_mod_all_ranks({
+        {spids.maul, 0.75},
+        {spids.swipe, 0.75},
+    });
 
 elseif sc.class == sc.classes.priest then
 
@@ -280,7 +272,6 @@ elseif sc.class == sc.classes.warrior then
         { spids.shield_bash, {180, 180, 180} },
         { spids.battle_shout, {5, 11, 17, 26, 39, 55, 70} },
         { spids.cleave, {10, 40, 60, 70, 100} },
-        { spids.demoralizing_shout, {11, 17, 21, 32, 43} },
         { spids.heroic_strike, {20, 39, 59, 78, 98, 118, 137, 145, 175} },
         { spids.hamstring, {61, 101, 141} },
     });
