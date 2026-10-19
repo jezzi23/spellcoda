@@ -394,6 +394,8 @@ local function stats_crit_mod(attack_subclass, bid, comp, spell, loadout, effect
                 end
             end
         end
+    elseif bit.band(spell.flags, spell_flags.heal) ~= 0 then
+        crit_mod_extra = crit_mod_extra + effects.raw.heal_crit_mod;
     end
 
     base_crit_mod = (1.0 + base_crit_mod) * (1.0 + crit_mod_extra) - 1.0;
