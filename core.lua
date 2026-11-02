@@ -505,7 +505,10 @@ local event_dispatch = {
     ["ADDON_RESTRICTION_STATE_CHANGED"] = function()
         -- fires before a restriction activates while values are still readable, the last read before they go secret
         sc.loadouts.force_update = true;
-        sc.loadouts.update_loadout_and_effects();
+        -- can fire before PLAYER_LOGIN (login or reload in combat), the loadout is set up there
+        if core.sw_addon_loaded then
+            sc.loadouts.update_loadout_and_effects();
+        end
     end,
 };
 

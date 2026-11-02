@@ -1512,8 +1512,17 @@ local function update_ccf(frame, spell, info, stats, spell_id)
     end
 end
 
+local function overlay_eval_flags()
+    local eval_flags = 0;
+    if not config.settings.general_prio_multiplied_effect then
+        eval_flags = bit.bor(eval_flags, sc.calc.evaluation_flags.assume_single_effect);
+    end
+    return eval_flags;
+end
+
 local function update_cc()
 
+    local eval_flags = overlay_eval_flags();
     for _, v in pairs(ccfs) do
         if overlay.cc_active == v then
 
@@ -1914,14 +1923,6 @@ local function update_spell_icons(loadout, effects, eval_flags)
             update_overlay_frame(v, loadout, effects, v.spell_id, eval_flags);
         end
     end
-end
-
-local function overlay_eval_flags()
-    local eval_flags = 0;
-    if not config.settings.general_prio_multiplied_effect then
-        eval_flags = bit.bor(eval_flags, sc.calc.evaluation_flags.assume_single_effect);
-    end
-    return eval_flags;
 end
 
 -- the spellbook catalogue's rows changed without a loadout update, its icons with the last one

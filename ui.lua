@@ -4152,7 +4152,7 @@ local function item_planner_gem_enchant_dropdown_filter()
     local frame = item_planner_gem_enchant_dropdown;
 
     clear_table(item_planner_gem_enchant_dropdown_filtered);
-    query = string.lower(frame.search:GetText() or "");
+    local query = string.lower(frame.search:GetText() or "");
 
     if query == "" then
         for i, v in ipairs(item_planner_gem_enchant_dropdown_entries) do

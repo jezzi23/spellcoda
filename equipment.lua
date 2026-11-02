@@ -7,6 +7,7 @@ local special_item_properties          = sc.special_item_properties;
 local apply_effect                     = sc.loadouts.apply_effect;
 local apply_flat_scaled                = sc.loadouts.apply_flat_scaled;
 local write_item_info_from_link        = sc.utils.write_item_info_from_link;
+local request_item_data                = sc.utils.request_item_data;
 local is_secret                        = sc.utils.is_secret;
 local cpy_effects                      = sc.loadouts.cpy_effects;
 local client_matches                   = sc.utils.client_matches;
@@ -165,10 +166,82 @@ local function item_dps(item_info)
     return stats and stats.ITEM_MOD_DAMAGE_PER_SECOND_SHORT;
 end
 
+-- the tooltip's damage line is built from these global strings, so each locale is read in its own wording
+local damage_templates;
+local school_by_lname;
+
+-- order holds the argument index of each capture, positional placeholders (%2$s) can reorder them
+local function damage_pattern(template)
+    local order = {};
+    local marked = string.gsub(template, "%%(%d*)%$?s", function(idx)
+        order[#order + 1] = tonumber(idx) or (#order + 1);
+        return "\001";
+    end);
+    marked = string.gsub(marked, "[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0");
+    marked = string.gsub(marked, "\001", "(.-)");
+    return "^"..marked.."$", order;
+end
+
+local function init_damage_templates()
+    damage_templates = {};
+    for _, t in ipairs({
+        { "DAMAGE_TEMPLATE_WITH_SCHOOL", true },
+        { "DAMAGE_TEMPLATE", true },
+        { "SINGLE_DAMAGE_TEMPLATE_WITH_SCHOOL", false },
+        { "SINGLE_DAMAGE_TEMPLATE", false },
+    }) do
+        local template = _G[t[1]];
+        -- grammar escapes (|3 in ruRU) are expanded in the rendered text and never match
+        if type(template) == "string" and not string.find(template, "|", 1, true) then
+            local pattern, order = damage_pattern(template);
+            damage_templates[#damage_templates + 1] = { pattern = pattern, order = order, range = t[2] };
+        end
+    end
+    school_by_lname = {};
+    for school, key in pairs({ [2] = "HOLY", [3] = "FIRE", [4] = "NATURE", [5] = "FROST", [6] = "SHADOW", [7] = "ARCANE" }) do
+        for _, global in ipairs({ "DAMAGE_SCHOOL"..school, "STRING_SCHOOL_"..key }) do
+            local lname = _G[global];
+            if type(lname) == "string" then
+                school_by_lname[string.lower(lname)] = school;
+            end
+        end
+    end
+end
+
+-- min, max, school or nil
+local function parse_damage_line(text)
+    for _, t in ipairs(damage_templates) do
+        local captures = { string.match(text, t.pattern) };
+        if captures[1] then
+            local args = {};
+            for i, v in ipairs(captures) do
+                args[t.order[i]] = v;
+            end
+            local min, max, school_lname = tonumber(args[1]), nil, nil;
+            if t.range then
+                max, school_lname = tonumber(args[2]), args[3];
+            else
+                max, school_lname = min, args[2];
+            end
+            if min and max then
+                return min, max, school_lname and school_by_lname[string.lower(school_lname)] or 1;
+            end
+        end
+    end
+    -- unknown wording, physical assumed
+    local min, max = text:match("(%d+)%s*%-%s*(%d+)");
+    if min then
+        return tonumber(min), tonumber(max), 1;
+    end
+end
+
 local function weapon_from_tooltip(link)
     local data = link and C_TooltipInfo and C_TooltipInfo.GetHyperlink(link);
     if not data or not data.lines then
         return;
+    end
+    if not damage_templates then
+        init_damage_templates();
     end
     for _, line in ipairs(data.lines) do
         local left, right = line.leftText, line.rightText;
@@ -176,14 +249,16 @@ local function weapon_from_tooltip(link)
             return;
         end
         if left and right then
-            local min, max = left:match("(%d+)%s*%-%s*(%d+)");
             local int, frac = right:match("(%d+)[.,](%d+)");
-            if min and int then
-                local delay = tonumber(int.."."..frac);
-                if delay > 0 then
-                    return tonumber(min), tonumber(max), delay, 1;
+            if int then
+                local min, max, school = parse_damage_line(left);
+                if min then
+                    local delay = tonumber(int.."."..frac);
+                    if delay > 0 then
+                        return min, max, delay, school;
+                    end
+                    return;
                 end
-                return;
             end
         end
     end
@@ -619,6 +694,12 @@ end
 local equipped_wpn_info = {};
 local equipped_ammo_info = {};
 
+-- stats and weapon damage of an item that was not cached at the scan are missing until it is scanned again
+local function equipped_item_data_received()
+    sc.core.equipment_update_needed = true;
+    sc.loadouts.force_update = true;
+end
+
 local function apply_equipment(loadout, effects)
 
     for _, slot in pairs(slots) do
@@ -645,6 +726,9 @@ local function apply_equipment(loadout, effects)
         local item_link = loadout.item_links[item];
         local id = loadout.items[item];
         if item_link then
+            if id then
+                request_item_data(id, equipped_item_data_received);
+            end
             if id and sc.items[id] then
                 for _, effect_id in pairs(sc.items[id]) do
                     apply_effect(effects, effect_id, sc.item_effects[effect_id], false, 1.0);

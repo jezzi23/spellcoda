@@ -2491,10 +2491,13 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             tooltip:AddLine(L["Weapon missing from SpellCoda data, parsing tooltip instead"], 1, 0.2, 0.2);
         end
         if not weapon_stats(tt.new_item) then
+            -- comparing would treat the weapon as doing no damage
             tooltip:AddLine(L["SpellCoda failed to read the weapon's damage"], 1, 0.2, 0.2);
+            return;
         end
     elseif tt.new_item.class_id == 6 and not ammo_dps(tt.new_item) then
         tooltip:AddLine(L["SpellCoda failed to read the ammo's damage"], 1, 0.2, 0.2);
+        return;
     end
 
     local loadout, effects, effects_finalized, update_id = update_loadout_and_effects();
