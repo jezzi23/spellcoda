@@ -32,6 +32,9 @@ local effects_add_manual_diff                       = sc.loadouts.effects_add_ma
 local effects_finalize_forced                       = sc.loadouts.effects_finalize_forced;
 local empty_effects                                 = sc.loadouts.empty_effects;
 local cpy_effects                                   = sc.loadouts.cpy_effects;
+local effects_save_diff_written                     = sc.loadouts.effects_save_diff_written;
+local effects_restore_diff_written                  = sc.loadouts.effects_restore_diff_written;
+local loadout_read_id                               = sc.loadouts.loadout_read_id;
 local apply_effect                                  = sc.loadouts.apply_effect;
 local loadout_flags                                 = sc.loadouts.loadout_flags;
 
@@ -2859,8 +2862,33 @@ local spell_stats_diffed = {};
 local diff = manual_effects_zero_diff();
 local effects_diffed = {};
 empty_effects(effects_diffed);
+local effects_diffed_saved = {};
+
+-- the game sets an action button's tooltip again on every cooldown update, asking for the same weights until the next
+-- loadout read. Only reused while the SpellCoda frame is hidden, the calculator plan can change without a read
+local stat_weights_last = {};
 
 local function stat_weights(normal_info, spell, loadout, effects, eval_flags, spell_id)
+
+    local last = stat_weights_last;
+    local settings = config.settings;
+    local read_id = loadout_read_id();
+    if last.weights and
+        last.read_id == read_id and
+        last.spell == spell and
+        last.spell_id == spell_id and
+        last.loadout == loadout and
+        last.effects == effects and
+        last.eval_flags == eval_flags and
+        last.calculator_mode == loadout.calculator_mode and
+        last.average_proc_effects == settings.general_average_proc_effects and
+        last.behind_target == settings.loadout_behind_target and
+        last.unbounded_aoe_targets == settings.loadout_unbounded_aoe_targets and
+        not __sc_frame:IsShown() then
+
+        return last.weights, last.normalize_table;
+    end
+    last.weights = nil;
 
     local weights;
     local anycomp = spell.direct or spell.periodic;
@@ -2876,13 +2904,15 @@ local function stat_weights(normal_info, spell, loadout, effects, eval_flags, sp
     end
     local normalize_table;
 
+    cpy_effects(effects_diffed, effects);
+    effects_save_diff_written(effects_diffed, effects_diffed_saved);
+
     for l, v in ipairs(weights) do
         if v.normalize_to then
             normalize_table = v;
         end
         diff[v.key] = 1;
 
-        cpy_effects(effects_diffed, effects);
         effects_add_manual_diff(loadout, effects_diffed, diff);
         effects_finalize_forced(loadout, effects_diffed)
 
@@ -2890,6 +2920,7 @@ local function stat_weights(normal_info, spell, loadout, effects, eval_flags, sp
         cast_until_oom(info_diff, spell, spell_stats_diffed, loadout, effects_diffed, true, 0);
 
         diff[v.key] = 0;
+        effects_restore_diff_written(effects_diffed, effects_diffed_saved);
 
         if info_diff.effect_per_sec == math.huge then
             -- because (math.huge - math.huge) != 0
@@ -2945,6 +2976,19 @@ local function stat_weights(normal_info, spell, loadout, effects, eval_flags, sp
             end
         end
     end
+
+    last.read_id = read_id;
+    last.spell = spell;
+    last.spell_id = spell_id;
+    last.loadout = loadout;
+    last.effects = effects;
+    last.eval_flags = eval_flags;
+    last.calculator_mode = loadout.calculator_mode;
+    last.average_proc_effects = settings.general_average_proc_effects;
+    last.behind_target = settings.loadout_behind_target;
+    last.unbounded_aoe_targets = settings.loadout_unbounded_aoe_targets;
+    last.weights = weights;
+    last.normalize_table = normalize_table;
 
     return weights, normalize_table;
 end

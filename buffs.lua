@@ -94,6 +94,29 @@ else
     is_player_owned = function(aura) return aura.sourceUnit == "player"; end;
 end
 
+-- player and target auras are scanned again only after UNIT_AURA for them, a unit change or a read that did not scan,
+-- otherwise the last scan is copied. The mouseover gets no unit events and is scanned on every read
+local aura_changed = { player = true, target = true };
+local last_read_scanned = false;
+
+for unit, _ in pairs(aura_changed) do
+    local f = CreateFrame("Frame");
+    f:RegisterEvent("PLAYER_ENTERING_WORLD");
+    if f.RegisterUnitEvent then
+        f:RegisterUnitEvent("UNIT_AURA", unit);
+        f:SetScript("OnEvent", function()
+            aura_changed[unit] = true;
+        end);
+    else
+        f:RegisterEvent("UNIT_AURA");
+        f:SetScript("OnEvent", function(_, event, event_unit)
+            if event ~= "UNIT_AURA" or event_unit == unit then
+                aura_changed[unit] = true;
+            end
+        end);
+    end
+end
+
 -- keeps the unit's buffs of the last unrestricted read while it is the same unit
 local function keep_restricted_buffs(loadout, prev, unit)
     local guid = UnitGUID(unit);
@@ -168,33 +191,52 @@ local function detect_buffs(loadout, prev)
         end
         restricted_form_buffs(loadout);
         loadout.snapshot_buffs = prev.snapshot_buffs;
+        last_read_scanned = false;
         return;
     end
 
     for k, v in pairs(loadout.dynamic_buffs) do
-        loadout.aura_guids[k] = UnitGUID(k);
-        for _, getter in ipairs(aura_getters) do
-            local i = 1;
-            while true do
-                local aura = getter.get(k, i);
-                if not aura then
-                    break;
-                end
-                local spell_id = aura.spellId;
-                -- skips auras of spells flagged always secret
-                if not is_secret(spell_id) then
-                    -- player owned takes priority
-                    local player_owned = is_player_owned(aura);
-                    if not v[spell_id] or player_owned then
-                        local buff_info = { count = aura.applications, id = spell_id, player_owned = player_owned };
-                        v[spell_id] = buff_info;
-                        loadout.dynamic_buffs_lname[k][aura.name] = buff_info;
+        local guid = UnitGUID(k);
+        loadout.aura_guids[k] = guid;
+        local shared = k ~= "player" and
+            (v == loadout.dynamic_buffs["player"] or (k == "mouseover" and v == loadout.dynamic_buffs["target"]));
+        if aura_changed[k] == false and last_read_scanned and not shared and
+            guid and not is_secret(guid) and guid == prev.aura_guids[k] and not __spellcoda_test_all_data__ then
+
+            for id, buff_info in pairs(prev.dynamic_buffs[k]) do
+                v[id] = buff_info;
+            end
+            for lname, buff_info in pairs(prev.dynamic_buffs_lname[k]) do
+                loadout.dynamic_buffs_lname[k][lname] = buff_info;
+            end
+        else
+            if aura_changed[k] then
+                aura_changed[k] = false;
+            end
+            for _, getter in ipairs(aura_getters) do
+                local i = 1;
+                while true do
+                    local aura = getter.get(k, i);
+                    if not aura then
+                        break;
                     end
+                    local spell_id = aura.spellId;
+                    -- skips auras of spells flagged always secret
+                    if not is_secret(spell_id) then
+                        -- player owned takes priority
+                        local player_owned = is_player_owned(aura);
+                        if not v[spell_id] or player_owned then
+                            local buff_info = { count = aura.applications, id = spell_id, player_owned = player_owned };
+                            v[spell_id] = buff_info;
+                            loadout.dynamic_buffs_lname[k][aura.name] = buff_info;
+                        end
+                    end
+                    i = i + 1;
                 end
-                i = i + 1;
             end
         end
     end
+    last_read_scanned = true;
 
     if __spellcoda_test_all_data__ then
         for k, v in pairs(loadout.dynamic_buffs) do

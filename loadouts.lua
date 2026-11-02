@@ -516,50 +516,50 @@ end
 
 local function cpy_effects(dst, src)
 
+    local type = type;
+
     zero_effects_dynamic_fields(dst);
 
     for _, cat in ipairs(effect_categories) do
         local dst_cat = dst[cat];
-        local src_cat = src[cat];
-        for i, src_e in pairs(src_cat) do
+        for i, src_e in pairs(src[cat]) do
             if type(src_e) == "table" then
                 local dst_e = dst_cat[i];
-                for j, _ in pairs(dst_e) do
+                for j in pairs(dst_e) do
                     if not src_e[j] then
                         -- zero values in dst that are not in src
                         dst_e[j] = 0.0;
                     end
                 end
 
-                for j, _ in pairs(src_e) do
-                    dst_e[j] = src_e[j];
+                for j, v in pairs(src_e) do
+                    dst_e[j] = v;
                 end
             else
-
-                dst_cat[i] = src_cat[i];
+                dst_cat[i] = src_e;
             end
         end
-
     end
 
+    local dst_mul = dst.mul;
+    local src_mul = src.mul;
     for _, cat in ipairs(effect_categories) do
-        local dst_cat = dst.mul[cat];
-        local src_cat = src.mul[cat];
-        for i, src_e in pairs(src_cat) do
+        local dst_cat = dst_mul[cat];
+        for i, src_e in pairs(src_mul[cat]) do
             if type(src_e) == "table" then
                 local dst_e = dst_cat[i];
-                for j, _ in pairs(dst_e) do
+                for j in pairs(dst_e) do
                     if not src_e[j] then
                         -- prevent values in src that are not in dst
                         dst_e[j] = 1.0;
                     end
                 end
 
-                for j, _ in pairs(src_e) do
-                    dst_e[j] = src_e[j];
+                for j, v in pairs(src_e) do
+                    dst_e[j] = v;
                 end
             else
-                dst_cat[i] = src_cat[i];
+                dst_cat[i] = src_e;
             end
         end
     end
@@ -1890,6 +1890,56 @@ local function effects_finalize_forced(loadout, effects)
     effects.finalized = true;
 end
 
+-- every field effects_add_manual_diff and effects_finalize_forced write, restored by value so repeated diffs on one
+-- copy give the same results as diffs on fresh copies
+local diff_written_raw = {
+    "healing_power_flat", "mp5_flat", "mana", "hp_flat", "dodge", "ap_flat", "rap_flat", "phys_crit_forced",
+};
+for _, targets in pairs(manual_diff_ratings) do
+    for _, target in ipairs(targets) do
+        diff_written_raw[#diff_written_raw + 1] = target[1];
+    end
+end
+local diff_written_by_school = { "sp_dmg_flat", "target_res_flat", "crit_forced", "res_flat" };
+
+local function effects_save_diff_written(effects, saved)
+    saved.raw = saved.raw or {};
+    saved.by_school = saved.by_school or {};
+    saved.stat_flat = saved.stat_flat or {};
+    for _, k in ipairs(diff_written_raw) do
+        saved.raw[k] = effects.raw[k];
+    end
+    for _, k in ipairs(diff_written_by_school) do
+        local dst = saved.by_school[k] or {};
+        saved.by_school[k] = dst;
+        for i = 1, 7 do
+            dst[i] = effects.by_school[k][i];
+        end
+    end
+    for i = 1, 5 do
+        saved.stat_flat[i] = effects.by_attr.stat_flat[i];
+    end
+    saved.skill_flat = effects.wpn_subclass.skill_flat[bit.bnot(0)];
+    saved.finalized = effects.finalized;
+end
+
+local function effects_restore_diff_written(effects, saved)
+    for _, k in ipairs(diff_written_raw) do
+        effects.raw[k] = saved.raw[k];
+    end
+    for _, k in ipairs(diff_written_by_school) do
+        local src = saved.by_school[k];
+        for i = 1, 7 do
+            effects.by_school[k][i] = src[i];
+        end
+    end
+    for i = 1, 5 do
+        effects.by_attr.stat_flat[i] = saved.stat_flat[i];
+    end
+    effects.wpn_subclass.skill_flat[bit.bnot(0)] = saved.skill_flat;
+    effects.finalized = saved.finalized;
+end
+
 local should_unit_stats_be_secret = C_Secrets and C_Secrets.ShouldUnitStatsBeSecret;
 
 -- the sheet stats, secret all together while restricted
@@ -2330,6 +2380,72 @@ end
 loadouts.force_update = true;
 local effects_update_id = 0;
 local effects_update_timestamp = -1;
+-- counts loadout reads, the loadout and effects do not change between two reads
+local loadout_read_id = 0;
+
+-- the loadout fields apply_buffs, apply_snapshot_deltas and effects_finalize_forced read, as of the last effects rebuild
+local effects_inputs = { valid = false, stats = {}, buffs = {} };
+local effects_rebuild_id = 0;
+
+local function buffs_equal(lhs, rhs)
+    for id, _ in pairs(lhs) do
+        if not rhs[id] then
+            return false;
+        end
+    end
+    for id, buff_data in pairs(rhs) do
+        local other = lhs[id];
+        if not other then
+            return false;
+        end
+        for k, v in pairs(buff_data) do
+            if other[k] ~= v then
+                return false;
+            end
+        end
+    end
+    return true;
+end
+
+local function remember_effects_inputs(loadout)
+    for i = 1, 5 do
+        effects_inputs.stats[i] = loadout.stats[i];
+    end
+    effects_inputs.lvl = loadout.lvl;
+    effects_inputs.shapeshift = loadout.shapeshift;
+    effects_inputs.base_armor = loadout.base_armor;
+    effects_inputs.armor = loadout.armor;
+    effects_inputs.friendly_towards = loadout.friendly_towards;
+    effects_inputs.hostile_towards = loadout.hostile_towards;
+    for _, u in ipairs(loadout_units) do
+        effects_inputs.buffs[u] = loadout.dynamic_buffs[u];
+    end
+    effects_inputs.snapshot_buffs = loadout.snapshot_buffs;
+    effects_inputs.valid = true;
+end
+
+local function effects_inputs_equal(loadout)
+    if not effects_inputs.valid or
+        effects_inputs.lvl ~= loadout.lvl or
+        effects_inputs.shapeshift ~= loadout.shapeshift or
+        effects_inputs.base_armor ~= loadout.base_armor or
+        effects_inputs.armor ~= loadout.armor or
+        effects_inputs.friendly_towards ~= loadout.friendly_towards or
+        effects_inputs.hostile_towards ~= loadout.hostile_towards then
+        return false;
+    end
+    for i = 1, 5 do
+        if effects_inputs.stats[i] ~= loadout.stats[i] then
+            return false;
+        end
+    end
+    for _, u in ipairs(loadout_units) do
+        if not buffs_equal(loadout.dynamic_buffs[u], effects_inputs.buffs[u]) then
+            return false;
+        end
+    end
+    return buffs_equal(loadout.snapshot_buffs, effects_inputs.snapshot_buffs);
+end
 
 
 local function update_loadout_and_effects(relaxed_update_dt)
@@ -2350,6 +2466,7 @@ local function update_loadout_and_effects(relaxed_update_dt)
         other = loadout_base1;
     end
     dynamic_loadout(other, loadout_front);
+    loadout_read_id = loadout_read_id + 1;
 
     -- the legacy spellbook recycles its buttons without notice, the modern one forces an update itself (overlay.hook_spell_book)
     if not (SpellBookFrame and SpellBookFrame:IsShown()) and
@@ -2362,6 +2479,19 @@ local function update_loadout_and_effects(relaxed_update_dt)
 
         -- No interesting change, early exit here and Overlay
         -- will benefit from not having to update icons
+        return loadout_front, buffed, final, effects_update_id;
+    end
+
+    -- the loadout changed but nothing the effects are built from (e.g. only hp, power or enemy hp),
+    -- the effects stay as they are and only the spell evaluations need the new loadout
+    if not (SpellBookFrame and SpellBookFrame:IsShown()) and
+        not loadouts.force_update and
+        not sc.core.equipment_update_needed and
+        not sc.core.talents_update_needed and
+            effects_inputs_equal(other) then
+
+        loadout_front = other;
+        effects_update_id = effects_update_id + 1;
         return loadout_front, buffed, final, effects_update_id;
     end
 
@@ -2409,6 +2539,8 @@ local function update_loadout_and_effects(relaxed_update_dt)
 
     cpy_effects(final, buffed);
     effects_finalize_forced(loadout_front, final);
+    remember_effects_inputs(loadout_front);
+    effects_rebuild_id = effects_rebuild_id + 1;
 
     effects_update_id = effects_update_id + 1;
 
@@ -2464,6 +2596,10 @@ local function calculator_has_changes()
 end
 
 local last_ui_diff_update_id = 0;
+-- the diffed effects are built from the effects and the plan, the loadout fields they read change only with an effects
+-- rebuild (items, level, form, auras, talents), so they stay valid while the effects were kept
+local diffed_rebuild_id = -1;
+local diffed_build_id = 0;
 
 local function update_loadout_and_effects_diffed_from_ui()
 
@@ -2488,7 +2624,14 @@ local function update_loadout_and_effects_diffed_from_ui()
         -- early exit possible
         last_ui_diff_update_id = update_id;
         return loadout, effects, diffed, effects_finalized, diffed_finalized, update_id;
+    elseif diffed_rebuild_id == effects_rebuild_id then
+
+        effects_update_id = effects_update_id + 1;
+        last_ui_diff_update_id = effects_update_id;
+        return loadout, effects, diffed, effects_finalized, diffed_finalized, effects_update_id;
     end
+    diffed_rebuild_id = effects_rebuild_id;
+    diffed_build_id = diffed_build_id + 1;
 
     cpy_effects(diffed, effects);
 
@@ -2520,6 +2663,54 @@ local function update_loadout_and_effects_diffed_from_ui()
     return loadout, effects, diffed, effects_finalized, diffed_finalized, effects_update_id;
 end
 
+-- the calculator's Changes summary for the effects and the diffed effects, reused while neither was rebuilt and the
+-- sheet values and settings it reads are unchanged
+local diffed_stats_diff = { valid = false, stats = {}, flags = {} };
+
+local function diffed_stats_diff_format(loadout, effects_before, effects_after)
+    local c = diffed_stats_diff;
+    local settings = config.settings;
+    if effects_before ~= final or effects_after ~= diffed_finalized then
+        return stats_diff_format(loadout, effects_before, effects_after);
+    end
+    local same = c.valid and
+        c.effects_rebuild_id == effects_rebuild_id and
+        c.diffed_build_id == diffed_build_id and
+        c.block == loadout.block and
+        c.parry == loadout.parry and
+        c.cr_scaling == loadout.cr_scaling and
+        c.raw_dump == settings.general_calc_stats_raw_dump;
+    if same then
+        for i = 1, 5 do
+            if c.stats[i] ~= loadout.stats[i] then
+                same = false;
+            end
+        end
+        for k, _ in pairs(stat_diff_flag_options) do
+            if c.flags[k] ~= settings[k] then
+                same = false;
+            end
+        end
+    end
+    if not same then
+        c.str, c.total, c.num_in, c.num_out = stats_diff_format(loadout, effects_before, effects_after);
+        c.effects_rebuild_id = effects_rebuild_id;
+        c.diffed_build_id = diffed_build_id;
+        c.block = loadout.block;
+        c.parry = loadout.parry;
+        c.cr_scaling = loadout.cr_scaling;
+        c.raw_dump = settings.general_calc_stats_raw_dump;
+        for i = 1, 5 do
+            c.stats[i] = loadout.stats[i];
+        end
+        for k, _ in pairs(stat_diff_flag_options) do
+            c.flags[k] = settings[k];
+        end
+        c.valid = true;
+    end
+    return c.str, c.total, c.num_in, c.num_out;
+end
+
 ---------------------------------------------------------------------------------------------------
 loadouts.equipped                                     = equipped;
 loadouts.talented                                     = talented;
@@ -2528,16 +2719,20 @@ loadouts.effects_add                                  = effects_add;
 loadouts.effects_add_manual_diff                      = effects_add_manual_diff;
 loadouts.manual_diff_in_pct                           = manual_diff_in_pct;
 loadouts.effects_finalize_forced                      = effects_finalize_forced;
+loadouts.effects_save_diff_written                    = effects_save_diff_written;
+loadouts.effects_restore_diff_written                 = effects_restore_diff_written;
 loadouts.cpy_effects                                  = cpy_effects;
 loadouts.manual_effects_zero_diff                     = manual_effects_zero_diff;
 loadouts.active_loadout                               = active_loadout;
 loadouts.update_loadout_and_effects                   = update_loadout_and_effects;
+loadouts.loadout_read_id                              = function() return loadout_read_id; end;
 loadouts.update_loadout_and_effects_diffed_from_ui    = update_loadout_and_effects_diffed_from_ui;
 loadouts.calculator_has_changes                       = calculator_has_changes;
 loadouts.loadout_flags                                = loadout_flags;
 loadouts.apply_effect                                 = apply_effect;
 loadouts.apply_flat_scaled                            = apply_flat_scaled;
 loadouts.stats_diff_format                            = stats_diff_format;
+loadouts.diffed_stats_diff_format                     = diffed_stats_diff_format;
 loadouts.stats_format                                 = stats_format;
 loadouts.init_lnames                                  = init_lnames;
 

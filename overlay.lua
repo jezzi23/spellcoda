@@ -1097,7 +1097,8 @@ local function init_label_handler()
     sc.overlay.label_handler = overlay_label_handler;
 end
 
-local function update_spell_icon_frame(frame_info, spell, spell_id, loadout, effects, eval_flags)
+-- frames showing the same spell share one evaluation, the label handlers only read it
+local function update_spell_icon_frames(frame_infos, num_frames, spell, spell_id, loadout, effects, eval_flags)
 
     local spell_effect, stats;
     if bit.band(spell.flags, spell_flags.resource_regen) ~= 0 and
@@ -1108,10 +1109,13 @@ local function update_spell_icon_frame(frame_info, spell, spell_id, loadout, eff
         local handler = overlay_label_handler.overlay_display_resource_regen;
 
         local resource_restore_disp_index = config.settings.overlay_resource_regen_display_idx;
-        handler.func(frame_info.overlay_frames[resource_restore_disp_index], spell_effect);
+        for j = 1, num_frames do
+            local frame_info = frame_infos[j];
+            handler.func(frame_info.overlay_frames[resource_restore_disp_index], spell_effect);
 
-        frame_info.overlay_frames[resource_restore_disp_index]:SetTextColor(effect_color(handler.color_tag));
-        frame_info.overlay_frames[resource_restore_disp_index]:Show();
+            frame_info.overlay_frames[resource_restore_disp_index]:SetTextColor(effect_color(handler.color_tag));
+            frame_info.overlay_frames[resource_restore_disp_index]:Show();
+        end
 
     elseif bit.band(spell.flags, spell_flags.ehp) ~= 0 and
         config.settings.overlay_ehp then
@@ -1121,10 +1125,13 @@ local function update_spell_icon_frame(frame_info, spell, spell_id, loadout, eff
         local handler = overlay_label_handler.overlay_display_ehp;
 
         local ehp_disp_index = config.settings.overlay_ehp_display_idx;
-        handler.func(frame_info.overlay_frames[ehp_disp_index], spell_effect);
+        for j = 1, num_frames do
+            local frame_info = frame_infos[j];
+            handler.func(frame_info.overlay_frames[ehp_disp_index], spell_effect);
 
-        frame_info.overlay_frames[ehp_disp_index]:SetTextColor(effect_color(handler.color_tag));
-        frame_info.overlay_frames[ehp_disp_index]:Show();
+            frame_info.overlay_frames[ehp_disp_index]:SetTextColor(effect_color(handler.color_tag));
+            frame_info.overlay_frames[ehp_disp_index]:Show();
+        end
 
     elseif num_overlay_components_toggled > 0 then
 
@@ -1139,40 +1146,66 @@ local function update_spell_icon_frame(frame_info, spell, spell_id, loadout, eff
             spell_effect, stats = calc_spell_dummy_cast_until_oom(spell_id, loadout, effects);
         end
 
+        for j = 1, num_frames do
+            local frame_info = frame_infos[j];
+            for i, v in pairs(active_overlay_indices) do
+                local handler = overlay_label_handler[v];
+                if not handler.requires_spell_flags or
+                    bit.band(spell.flags, handler.requires_spell_flags) ~= 0 then
 
-        for i, v in pairs(active_overlay_indices) do
-            local handler = overlay_label_handler[v];
-            if not handler.requires_spell_flags or
-                bit.band(spell.flags, handler.requires_spell_flags) ~= 0 then
+                    handler.func(
+                        frame_info.overlay_frames[i],
+                        spell_effect,
+                        stats,
+                        spell,
+                        spell_id
+                    );
 
-                handler.func(
-                    frame_info.overlay_frames[i],
-                    spell_effect,
-                    stats,
-                    spell,
-                    spell_id
-                );
+                    frame_info.overlay_frames[i]:SetTextColor(effect_color(handler.color_tag));
 
-                frame_info.overlay_frames[i]:SetTextColor(effect_color(handler.color_tag));
-
-                frame_info.overlay_frames[i]:Show();
+                    frame_info.overlay_frames[i]:Show();
+                end
             end
         end
     end
 end
+
+local function update_overlay_frames(frame_infos, num_frames, loadout, effects, id, eval_flags)
+
+    if spells[id].healing_version and config.settings.general_prio_heal then
+        update_spell_icon_frames(frame_infos, num_frames, spells[id].healing_version, id, loadout, effects, eval_flags);
+    else
+        update_spell_icon_frames(frame_infos, num_frames, spells[id], id, loadout, effects, eval_flags);
+    end
+end
+
+local single_frame = {};
 
 local function update_overlay_frame(frame, loadout, effects, id, eval_flags)
 
     if frame.old_rank_marked then
         return;
     end
-    if spells[id].healing_version and config.settings.general_prio_heal then
-        update_spell_icon_frame(frame, spells[id].healing_version, id, loadout, effects, eval_flags);
-    else
-        update_spell_icon_frame(frame, spells[id], id, loadout, effects, eval_flags);
-    end
+    single_frame[1] = frame;
+    update_overlay_frames(single_frame, 1, loadout, effects, id, eval_flags);
 end
 
+-- frames per spell id for one update, reused between updates
+local overlay_frame_groups = {};
+
+local function group_overlay_frame(frame)
+
+    if frame.old_rank_marked then
+        return;
+    end
+    local group = overlay_frame_groups[frame.spell_id];
+    if not group then
+        group = { n = 0 };
+        overlay_frame_groups[frame.spell_id] = group;
+    end
+    group.n = group.n + 1;
+    group[group.n] = frame;
+end
 
 local ccf_parent = CreateFrame("Frame", nil, UIParent);
 ccf_parent:RegisterForDrag("LeftButton");
@@ -1919,12 +1952,19 @@ local function update_spell_icons(loadout, effects, eval_flags)
     for k, _ in pairs(active_overlays) do
         local v = action_id_frames[k];
         if v.frame and v.frame:IsShown() and spells[v.spell_id] then
-            update_overlay_frame(v, loadout, effects, v.spell_id, eval_flags);
+            group_overlay_frame(v);
         end
     end
     for _, v in pairs(external_overlay_frames) do
         if v.frame and v.frame:IsShown() and spells[v.spell_id] then
-            update_overlay_frame(v, loadout, effects, v.spell_id, eval_flags);
+            group_overlay_frame(v);
+        end
+    end
+    for id, group in pairs(overlay_frame_groups) do
+        local n = group.n;
+        if n > 0 then
+            group.n = 0;
+            update_overlay_frames(group, n, loadout, effects, id, eval_flags);
         end
     end
 end

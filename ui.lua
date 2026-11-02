@@ -297,15 +297,22 @@ local function update_calc_list(was_rearranged, loadout, effects, effects_diffed
 
     eval_flags = bit.bor(eval_flags, evaluation_flags.expectation_of_self);
 
-    local diffs, _, diffs_in, diffs_out = stats_diff_format(loadout, effects, effects_diffed);
+    local diffs, _, diffs_in, diffs_out = sc.loadouts.diffed_stats_diff_format(loadout, effects, effects_diffed);
     frame.diffs_txt = diffs;
-    frame.before_txt = stats_format(loadout, effects);
-    frame.after_txt = stats_format(loadout, effects_diffed);
+    -- Before / After are only shown on hover or click and built then, these effects tables keep the latest values
+    frame.stats_effects = effects;
+    frame.stats_effects_diffed = effects_diffed;
 
     frame.diffs_fontstr:SetText(L["Changes"].."\n|cFF00FF00 +"..diffs_in.." |r|cFFFF0000 -"..diffs_out.."|r");
 
     if frame.diffs_txt ~= "" then
         frame.diffs_txt = stat_diffs_included_effects_str(true, true, true)..frame.diffs_txt;
+    end
+
+    -- a shown Changes / Before / After tooltip follows the new texts
+    local owner = GameTooltip:IsShown() and GameTooltip:GetOwner();
+    if owner and (owner == frame.diffs_area or owner == frame.before_area or owner == frame.after_area) then
+        owner:GetScript("OnEnter")(owner);
     end
 
     local i = 0;
@@ -5969,6 +5976,10 @@ local function create_sw_ui_calculator_frame(pframe)
 
     pframe.diffs_txt = "";
 
+    local function stats_txt(effects)
+        return effects and (stats_format(active_loadout(), effects));
+    end
+
     local diffs_area = CreateFrame("Frame", nil, pframe, "BackdropTemplate");
     diffs_area:SetSize(110, 40);
     diffs_area:SetPoint("TOPLEFT", 119, pframe.y_offset-17);
@@ -6035,7 +6046,7 @@ local function create_sw_ui_calculator_frame(pframe)
             GameTooltip:SetText(L["Before (simplified)"]);
         end
 
-        GameTooltip:AddLine(pframe.before_txt);
+        GameTooltip:AddLine(stats_txt(pframe.stats_effects));
         GameTooltip:Show();
     end);
     before_area:SetScript("OnLeave", function()
@@ -6044,7 +6055,7 @@ local function create_sw_ui_calculator_frame(pframe)
     before_area:SetScript("OnMouseDown", function(self)
         dump_text(
             L["Before"],
-            pframe.before_txt,
+            stats_txt(pframe.stats_effects),
             300,
             400
         );
@@ -6084,7 +6095,7 @@ local function create_sw_ui_calculator_frame(pframe)
         else
             GameTooltip:SetText(L["After (simplified)"]);
         end
-        GameTooltip:AddLine(pframe.after_txt);
+        GameTooltip:AddLine(stats_txt(pframe.stats_effects_diffed));
         GameTooltip:Show();
     end);
     after_area:SetScript("OnLeave", function()
@@ -6093,7 +6104,7 @@ local function create_sw_ui_calculator_frame(pframe)
     after_area:SetScript("OnMouseDown", function(self)
         dump_text(
             L["After"],
-            pframe.after_txt,
+            stats_txt(pframe.stats_effects_diffed),
             300,
             400
         );
