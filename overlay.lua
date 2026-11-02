@@ -172,7 +172,8 @@ end
 
 local function overlay_reconfig()
 
-    if not initialized then
+    -- activate_settings reconfigures once when done
+    if not initialized or config.activating then
         return;
     end
 
@@ -1600,6 +1601,9 @@ local function ccf_anim_reconfig()
 end
 
 local function ccf_label_reconfig(label_id)
+    if config.activating then
+        return;
+    end
 
     local font = sc.ui.get_font(config.settings.overlay_cc_font[1]);
     for _, v in pairs(ccfs) do
@@ -2030,6 +2034,13 @@ overlay.spell_tracking                              = spell_tracking;
 overlay.ccf_hook_events                             = ccf_hook_events;
 overlay.cc_demo                                     = cc_demo;
 overlay.ccf_label_reconfig                          = ccf_label_reconfig;
+overlay.ccf_labels_recolor                          = function()
+    for _, v in pairs(ccfs) do
+        for _, label in pairs(v.labels) do
+            label:SetTextColor(effect_color(overlay_label_handler[label.sel_id].color_tag));
+        end
+    end
+end;
 overlay.ccf_anim_reconfig                           = ccf_anim_reconfig;
 overlay.init_label_handler                          = init_label_handler;
 overlay.register_cc_on_update                       = register_cc_on_update

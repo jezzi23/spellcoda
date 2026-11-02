@@ -388,7 +388,12 @@ local function editbox_config(frame, update_func, close_func)
         self:ClearFocus();
     end);
     frame:SetScript("OnEditFocusLost", close_func);
-    frame:SetScript("OnTextChanged", update_func);
+    -- OnTextSet runs for SetText, a programmatic change also fires OnTextChanged one frame later
+    frame:SetScript("OnTextChanged", function(self, user_input)
+        if user_input then
+            update_func(self);
+        end
+    end);
     frame:SetScript("OnTextSet", update_func);
 end
 
@@ -2296,37 +2301,31 @@ local function create_sw_ui_tooltip_frame(pframe)
         [4] = L["Epic"],
         [5] = L["Legendary"],
     };
+    -- init_func only refreshes the shown text, the menu is built when it opens
     pframe.quality_dd.init_func = function()
-        libDD:UIDropDownMenu_Initialize(pframe.quality_dd, function()
-
-            if config.settings.tooltip_item_quality_threshold < 0 or
-                config.settings.tooltip_item_quality_threshold > 5 then
-                config.settings.tooltip_item_quality_threshold = 2;
-            end
-            local idx = config.settings.tooltip_item_quality_threshold;
-            libDD:UIDropDownMenu_SetText(
-                pframe.quality_dd,
-                ITEM_QUALITY_COLORS[idx].color:WrapTextInColorCode(L["Quality threshold"])
-            );
-            libDD:UIDropDownMenu_SetWidth(
-                pframe.quality_dd,
-                180
-            );
-
-            for i = 0, 5 do
-
-                libDD:UIDropDownMenu_AddButton({
-                    text = ITEM_QUALITY_COLORS[i].color:WrapTextInColorCode(qualities[i]),
-                    checked = config.settings.tooltip_item_quality_threshold == i,
-                    func = function()
-
-                        config.settings.tooltip_item_quality_threshold = i;
-                        pframe.quality_dd.init_func();
-                    end
-                })
-            end
-        end);
+        if config.settings.tooltip_item_quality_threshold < 0 or
+            config.settings.tooltip_item_quality_threshold > 5 then
+            config.settings.tooltip_item_quality_threshold = 2;
+        end
+        local idx = config.settings.tooltip_item_quality_threshold;
+        libDD:UIDropDownMenu_SetText(
+            pframe.quality_dd,
+            ITEM_QUALITY_COLORS[idx].color:WrapTextInColorCode(L["Quality threshold"])
+        );
     end;
+    libDD:UIDropDownMenu_SetWidth(pframe.quality_dd, 180);
+    libDD:UIDropDownMenu_SetInitializeFunction(pframe.quality_dd, function()
+        for i = 0, 5 do
+            libDD:UIDropDownMenu_AddButton({
+                text = ITEM_QUALITY_COLORS[i].color:WrapTextInColorCode(qualities[i]),
+                checked = config.settings.tooltip_item_quality_threshold == i,
+                func = function()
+                    config.settings.tooltip_item_quality_threshold = i;
+                    pframe.quality_dd.init_func();
+                end
+            })
+        end
+    end);
     tifs[#tifs + 1] = pframe.quality_dd;
 
     for _, v in ipairs(multi_row_checkbutton({
@@ -2432,113 +2431,117 @@ local function create_font_dropdown(parent_frame, dropdown_name, font_config_key
     dropdown_frame._type = "DropDownMenu";
     dropdown_frame.font_page = 1;
 
+    local function selected_font_index()
+        local current_font_id = config.settings[font_config_key][1];
+        local current_font_flags = config.settings[font_config_key][2];
+        for idx, font_entry in ipairs(font_dropdowns) do
+            if current_font_id == font_entry[1]
+                and current_font_flags == font_entry[2] then
+                return idx;
+            end
+        end
+    end
+
     dropdown_frame.init_func = function()
-        libDD:UIDropDownMenu_Initialize(dropdown_frame, function()
-            local current_font_id = config.settings[font_config_key][1];
-            local current_font_flags = config.settings[font_config_key][2];
-            local using_external_font = not current_font_id:find("\\");
-            local num_font_entries = #font_dropdowns;
-            local num_pages = math.max(1, math.ceil(num_font_entries / page_size));
-            local selected_index = nil;
+        local current_font_id = config.settings[font_config_key][1];
+        local current_font_flags = config.settings[font_config_key][2];
+        local selected_index = selected_font_index();
 
-            for idx, font_entry in ipairs(font_dropdowns) do
-                if current_font_id == font_entry[1]
-                    and current_font_flags == font_entry[2] then
-                    selected_index = idx;
-                    break;
-                end
+        if selected_index then
+            local selected_entry = font_dropdowns[selected_index];
+            libDD:UIDropDownMenu_SetText(
+                dropdown_frame,
+                (selected_entry[1]:match("([^\\]+)$") or selected_entry[1]) .. "   0123456789  " .. selected_entry[2]
+            );
+        end
+
+        if not current_font_id:find("\\") then
+
+            -- SharedMedia fonts are stored by id/name rather than path.
+            -- If the id no longer resolves, fall back to the configured default.
+            if not external_fonts_found[current_font_id] then
+                config.settings[font_config_key][1] = config.default_settings[font_config_key][1];
+                config.settings[font_config_key][2] = config.default_settings[font_config_key][2];
+                current_font_id = config.settings[font_config_key][1];
+                current_font_flags = config.settings[font_config_key][2];
             end
-
-            if selected_index then
-                if not dropdown_frame.keep_page then
-                    dropdown_frame.font_page = math.ceil(selected_index / page_size);
-                end
-                local selected_entry = font_dropdowns[selected_index];
-                libDD:UIDropDownMenu_SetText(
-                    dropdown_frame,
-                    (selected_entry[1]:match("([^\\]+)$") or selected_entry[1]) .. "   0123456789  " .. selected_entry[2]
-                );
-            end
-
-            dropdown_frame.keep_page = nil;
-            dropdown_frame.font_page = math.min(math.max(dropdown_frame.font_page or 1, 1), num_pages);
-
-            local page_start = (dropdown_frame.font_page - 1) * page_size + 1;
-            local page_end = math.min(page_start + page_size - 1, num_font_entries);
-
-            if dropdown_frame.font_page > 1 then
-                libDD:UIDropDownMenu_AddButton({
-                    text = "   ...",
-                    notCheckable = true,
-                    func = function()
-                        dropdown_frame.font_page = dropdown_frame.font_page - 1;
-                        dropdown_frame.keep_page = true;
-                        libDD:CloseDropDownMenus();
-                        libDD:ToggleDropDownMenu(1, nil, dropdown_frame, dropdown_frame, 0, 0);
-                    end,
-                });
-            end
-
-            for k = page_start, page_end do
-                local v = font_dropdowns[k];
-                local txt = (v[1]:match("([^\\]+)$") or v[1]) .. "   0123456789  " .. v[2];
-                if not font_dropdown_font_objects[k] then
-                    local font_object = CreateFont("__sc_font_dropdown_font_" .. k);
-                    font_object:SetFont(get_font(v[1]), 12, v[2]);
-                    font_dropdown_font_objects[k] = font_object;
-                end
-
-                local btn = {
-                    text = txt,
-                    fontObject = font_dropdown_font_objects[k],
-                    checked = false,
-                    func = function()
-                        libDD:UIDropDownMenu_SetText(dropdown_frame, txt);
-                        config.settings[font_config_key][1] = v[1];
-                        config.settings[font_config_key][2] = v[2];
-                        callback_fn();
-                    end,
-                };
-
-                if selected_index == k then
-                    btn.checked = true;
-                end
-                libDD:UIDropDownMenu_AddButton(btn);
-            end
-
-            if page_end < num_font_entries then
-                libDD:UIDropDownMenu_AddButton({
-                    text = "   ...",
-                    notCheckable = true,
-                    func = function()
-                        dropdown_frame.font_page = dropdown_frame.font_page + 1;
-                        dropdown_frame.keep_page = true;
-                        libDD:CloseDropDownMenus();
-                        libDD:ToggleDropDownMenu(1, nil, dropdown_frame, dropdown_frame, 0, 0);
-                    end,
-                });
-            end
-
-            if using_external_font then
-
-                -- SharedMedia fonts are stored by id/name rather than path.
-                -- If the id no longer resolves, fall back to the configured default.
-                if not external_fonts_found[current_font_id] then
-                    config.settings[font_config_key][1] = config.default_settings[font_config_key][1];
-                    config.settings[font_config_key][2] = config.default_settings[font_config_key][2];
-                    current_font_id = config.settings[font_config_key][1];
-                    current_font_flags = config.settings[font_config_key][2];
-                end
-                local txt = (current_font_id:match("([^\\]+)$") or current_font_id) .. "   0123456789  " .. current_font_flags;
-                libDD:UIDropDownMenu_SetText(dropdown_frame, txt);
-
-            end
-        end);
-
-        libDD:UIDropDownMenu_SetWidth(dropdown_frame, 200);
-        libDD:UIDropDownMenu_SetButtonWidth(dropdown_frame, 224);
-        libDD:UIDropDownMenu_JustifyText(dropdown_frame, "LEFT");
+            local txt = (current_font_id:match("([^\\]+)$") or current_font_id) .. "   0123456789  " .. current_font_flags;
+            libDD:UIDropDownMenu_SetText(dropdown_frame, txt);
+        end
     end;
+
+    libDD:UIDropDownMenu_SetInitializeFunction(dropdown_frame, function()
+        local num_font_entries = #font_dropdowns;
+        local num_pages = math.max(1, math.ceil(num_font_entries / page_size));
+        local selected_index = selected_font_index();
+
+        if selected_index and not dropdown_frame.keep_page then
+            dropdown_frame.font_page = math.ceil(selected_index / page_size);
+        end
+
+        dropdown_frame.keep_page = nil;
+        dropdown_frame.font_page = math.min(math.max(dropdown_frame.font_page or 1, 1), num_pages);
+
+        local page_start = (dropdown_frame.font_page - 1) * page_size + 1;
+        local page_end = math.min(page_start + page_size - 1, num_font_entries);
+
+        if dropdown_frame.font_page > 1 then
+            libDD:UIDropDownMenu_AddButton({
+                text = "   ...",
+                notCheckable = true,
+                func = function()
+                    dropdown_frame.font_page = dropdown_frame.font_page - 1;
+                    dropdown_frame.keep_page = true;
+                    libDD:CloseDropDownMenus();
+                    libDD:ToggleDropDownMenu(1, nil, dropdown_frame, dropdown_frame, 0, 0);
+                end,
+            });
+        end
+
+        for k = page_start, page_end do
+            local v = font_dropdowns[k];
+            local txt = (v[1]:match("([^\\]+)$") or v[1]) .. "   0123456789  " .. v[2];
+            if not font_dropdown_font_objects[k] then
+                local font_object = CreateFont("__sc_font_dropdown_font_" .. k);
+                font_object:SetFont(get_font(v[1]), 12, v[2]);
+                font_dropdown_font_objects[k] = font_object;
+            end
+
+            local btn = {
+                text = txt,
+                fontObject = font_dropdown_font_objects[k],
+                checked = false,
+                func = function()
+                    libDD:UIDropDownMenu_SetText(dropdown_frame, txt);
+                    config.settings[font_config_key][1] = v[1];
+                    config.settings[font_config_key][2] = v[2];
+                    callback_fn();
+                end,
+            };
+
+            if selected_index == k then
+                btn.checked = true;
+            end
+            libDD:UIDropDownMenu_AddButton(btn);
+        end
+
+        if page_end < num_font_entries then
+            libDD:UIDropDownMenu_AddButton({
+                text = "   ...",
+                notCheckable = true,
+                func = function()
+                    dropdown_frame.font_page = dropdown_frame.font_page + 1;
+                    dropdown_frame.keep_page = true;
+                    libDD:CloseDropDownMenus();
+                    libDD:ToggleDropDownMenu(1, nil, dropdown_frame, dropdown_frame, 0, 0);
+                end,
+            });
+        end
+    end);
+
+    libDD:UIDropDownMenu_SetWidth(dropdown_frame, 200);
+    libDD:UIDropDownMenu_SetButtonWidth(dropdown_frame, 224);
+    libDD:UIDropDownMenu_JustifyText(dropdown_frame, "LEFT");
 
     return dropdown_frame;
 end;
@@ -2904,43 +2907,40 @@ local function create_sw_ui_overlay_frame(pframe)
             dd._settings_id = option_key;
             dd:SetPoint("TOPLEFT", 300, pframe.y_offset+3);
             dd.init_func = function()
-                libDD:UIDropDownMenu_Initialize(dd, function(self)
+                if not sc.overlay.label_handler[config.settings[dd._settings_id]] then
+                    config.settings[dd._settings_id] = next(sc.overlay.label_handler);
+                end
+                local active_sel = sc.overlay.label_handler[config.settings[dd._settings_id]];
+                sc.core.update_action_bar_needed = true;
+                sc.loadouts.force_update = true;
 
-                    if not sc.overlay.label_handler[config.settings[self._settings_id]] then
-                        config.settings[self._settings_id] = next(sc.overlay.label_handler);
-                    end
-                    local active_sel = sc.overlay.label_handler[config.settings[self._settings_id]];
-                    sc.core.update_action_bar_needed = true;
-                    sc.loadouts.force_update = true;
-
-                    libDD:UIDropDownMenu_SetText(self, active_sel.desc);
-                    self.Text:SetTextColor(effect_color(active_sel.color_tag));
-                    register_text_frame_color(self.Text, active_sel.color_tag);
-
-                    libDD:UIDropDownMenu_SetWidth(self, 120);
-
-                    for _, sel_k in ipairs(overlay_components_selection_display) do
-                        local sel_v = sc.overlay.label_handler[sel_k];
-                        local r, g, b = effect_color(sel_v.color_tag);
-                        local txt = CreateColor(r, g, b, 1.0):WrapTextInColorCode(sel_v.desc);
-                        libDD:UIDropDownMenu_AddButton(
-                            {
-                                text = txt,
-                                checked = sel_k == config.settings[self._settings_id],
-                                func = function()
-                                    config.settings[self._settings_id] = sel_k;
-                                    sc.core.update_action_bar_needed = true;
-                                    sc.loadouts.force_update = true;
-                                    libDD:UIDropDownMenu_SetText(self, txt);
-                                end,
-                                tooltipTitle = "",
-                                tooltipText = sel_v.tooltip,
-                                tooltipOnButton = sel_v.tooltip ~= nil,
-                            }
-                        );
-                    end
-                end);
+                libDD:UIDropDownMenu_SetText(dd, active_sel.desc);
+                dd.Text:SetTextColor(effect_color(active_sel.color_tag));
+                register_text_frame_color(dd.Text, active_sel.color_tag);
             end;
+            libDD:UIDropDownMenu_SetWidth(dd, 120);
+            libDD:UIDropDownMenu_SetInitializeFunction(dd, function(self)
+                for _, sel_k in ipairs(overlay_components_selection_display) do
+                    local sel_v = sc.overlay.label_handler[sel_k];
+                    local r, g, b = effect_color(sel_v.color_tag);
+                    local txt = CreateColor(r, g, b, 1.0):WrapTextInColorCode(sel_v.desc);
+                    libDD:UIDropDownMenu_AddButton(
+                        {
+                            text = txt,
+                            checked = sel_k == config.settings[self._settings_id],
+                            func = function()
+                                config.settings[self._settings_id] = sel_k;
+                                sc.core.update_action_bar_needed = true;
+                                sc.loadouts.force_update = true;
+                                libDD:UIDropDownMenu_SetText(self, txt);
+                            end,
+                            tooltipTitle = "",
+                            tooltipText = sel_v.tooltip,
+                            tooltipOnButton = sel_v.tooltip ~= nil,
+                        }
+                    );
+                end
+            end);
             ofs[#ofs + 1] = dd;
         end
         pframe.y_offset = pframe.y_offset - 20;
@@ -2975,32 +2975,32 @@ local function create_sw_ui_overlay_frame(pframe)
         dd:SetPoint("TOPLEFT", 165, pframe.y_offset+3);
         local selections =  {L["Top label"], L["Center label"], L["Bottom label"]};
         dd.init_func = function()
-            libDD:UIDropDownMenu_Initialize(dd, function(self)
+            sc.core.update_action_bar_needed = true;
+            sc.loadouts.force_update = true;
 
-                sc.core.update_action_bar_needed = true;
-                sc.loadouts.force_update = true;
-
-                libDD:UIDropDownMenu_SetWidth(self, 120);
-
-                for i, disp in ipairs(selections) do
-                    if config.settings[self._settings_id] == i then
-                        libDD:UIDropDownMenu_SetText(self, disp);
-                    end
-                    libDD:UIDropDownMenu_AddButton(
-                        {
-                            text = disp,
-                            checked = i == config.settings[self._settings_id],
-                            func = function()
-                                config.settings[self._settings_id] = i;
-                                sc.core.update_action_bar_needed = true;
-                                sc.loadouts.force_update = true;
-                                libDD:UIDropDownMenu_SetText(self, disp);
-                            end,
-                        }
-                    );
+            for i, disp in ipairs(selections) do
+                if config.settings[dd._settings_id] == i then
+                    libDD:UIDropDownMenu_SetText(dd, disp);
                 end
-            end);
+            end
         end;
+        libDD:UIDropDownMenu_SetWidth(dd, 120);
+        libDD:UIDropDownMenu_SetInitializeFunction(dd, function(self)
+            for i, disp in ipairs(selections) do
+                libDD:UIDropDownMenu_AddButton(
+                    {
+                        text = disp,
+                        checked = i == config.settings[self._settings_id],
+                        func = function()
+                            config.settings[self._settings_id] = i;
+                            sc.core.update_action_bar_needed = true;
+                            sc.loadouts.force_update = true;
+                            libDD:UIDropDownMenu_SetText(self, disp);
+                        end,
+                    }
+                );
+            end
+        end);
         ofs[#ofs + 1] = dd;
     end
     pframe.y_offset = pframe.y_offset - 26;
@@ -3032,32 +3032,32 @@ local function create_sw_ui_overlay_frame(pframe)
         dd:SetPoint("TOPLEFT", 165, pframe.y_offset+3);
         local selections =  {L["Top label"], L["Center label"], L["Bottom label"]};
         dd.init_func = function()
-            libDD:UIDropDownMenu_Initialize(dd, function(self)
+            sc.core.update_action_bar_needed = true;
+            sc.loadouts.force_update = true;
 
-                sc.core.update_action_bar_needed = true;
-                sc.loadouts.force_update = true;
-
-                libDD:UIDropDownMenu_SetWidth(self, 120);
-
-                for i, disp in ipairs(selections) do
-                    if config.settings[self._settings_id] == i then
-                        libDD:UIDropDownMenu_SetText(self, disp);
-                    end
-                    libDD:UIDropDownMenu_AddButton(
-                        {
-                            text = disp,
-                            checked = i == config.settings[self._settings_id],
-                            func = function()
-                                config.settings[self._settings_id] = i;
-                                sc.core.update_action_bar_needed = true;
-                                sc.loadouts.force_update = true;
-                                libDD:UIDropDownMenu_SetText(self, disp);
-                            end,
-                        }
-                    );
+            for i, disp in ipairs(selections) do
+                if config.settings[dd._settings_id] == i then
+                    libDD:UIDropDownMenu_SetText(dd, disp);
                 end
-            end);
+            end
         end;
+        libDD:UIDropDownMenu_SetWidth(dd, 120);
+        libDD:UIDropDownMenu_SetInitializeFunction(dd, function(self)
+            for i, disp in ipairs(selections) do
+                libDD:UIDropDownMenu_AddButton(
+                    {
+                        text = disp,
+                        checked = i == config.settings[self._settings_id],
+                        func = function()
+                            config.settings[self._settings_id] = i;
+                            sc.core.update_action_bar_needed = true;
+                            sc.loadouts.force_update = true;
+                            libDD:UIDropDownMenu_SetText(self, disp);
+                        end,
+                    }
+                );
+            end
+        end);
         ofs[#ofs + 1] = dd;
     end
     pframe.y_offset = pframe.y_offset - 26;
@@ -3497,40 +3497,37 @@ local function create_sw_ui_overlay_frame(pframe)
             dd._settings_id = option_key;
             dd:SetPoint("TOPLEFT", 300, pframe.y_offset+3);
             dd.init_func = function()
-                libDD:UIDropDownMenu_Initialize(dd, function(self)
-
-                    if not sc.overlay.label_handler[config.settings[self._settings_id]] then
-                        config.settings[self._settings_id] = next(sc.overlay.label_handler);
-                    end
-                    local active_sel = sc.overlay.label_handler[config.settings[self._settings_id]];
-                    sc.overlay.ccf_label_reconfig(k);
-                    libDD:UIDropDownMenu_SetText(self, active_sel.desc);
-                    self.Text:SetTextColor(effect_color(active_sel.color_tag));
-                    register_text_frame_color(self.Text, active_sel.color_tag);
-
-                    libDD:UIDropDownMenu_SetWidth(self, 120);
-
-                    for _, sel_k in ipairs(overlay_components_selection_display) do
-                        local sel_v = sc.overlay.label_handler[sel_k];
-                        local r, g, b = effect_color(sel_v.color_tag);
-                        local txt = CreateColor(r, g, b, 1.0):WrapTextInColorCode(sel_v.desc);
-                        libDD:UIDropDownMenu_AddButton(
-                            {
-                                text = txt,
-                                checked = sel_k == config.settings[self._settings_id],
-                                func = function()
-                                    config.settings[self._settings_id] = sel_k;
-                                    sc.overlay.ccf_label_reconfig(k);
-                                    libDD:UIDropDownMenu_SetText(self, txt);
-                                end,
-                                tooltipTitle = "",
-                                tooltipText = sel_v.tooltip,
-                                tooltipOnButton = sel_v.tooltip ~= nil,
-                            }
-                        );
-                    end
-                end);
+                if not sc.overlay.label_handler[config.settings[dd._settings_id]] then
+                    config.settings[dd._settings_id] = next(sc.overlay.label_handler);
+                end
+                local active_sel = sc.overlay.label_handler[config.settings[dd._settings_id]];
+                sc.overlay.ccf_label_reconfig(k);
+                libDD:UIDropDownMenu_SetText(dd, active_sel.desc);
+                dd.Text:SetTextColor(effect_color(active_sel.color_tag));
+                register_text_frame_color(dd.Text, active_sel.color_tag);
             end;
+            libDD:UIDropDownMenu_SetWidth(dd, 120);
+            libDD:UIDropDownMenu_SetInitializeFunction(dd, function(self)
+                for _, sel_k in ipairs(overlay_components_selection_display) do
+                    local sel_v = sc.overlay.label_handler[sel_k];
+                    local r, g, b = effect_color(sel_v.color_tag);
+                    local txt = CreateColor(r, g, b, 1.0):WrapTextInColorCode(sel_v.desc);
+                    libDD:UIDropDownMenu_AddButton(
+                        {
+                            text = txt,
+                            checked = sel_k == config.settings[self._settings_id],
+                            func = function()
+                                config.settings[self._settings_id] = sel_k;
+                                sc.overlay.ccf_label_reconfig(k);
+                                libDD:UIDropDownMenu_SetText(self, txt);
+                            end,
+                            tooltipTitle = "",
+                            tooltipText = sel_v.tooltip,
+                            tooltipOnButton = sel_v.tooltip ~= nil,
+                        }
+                    );
+                end
+            end);
             cfs[#cfs + 1] = dd;
         end
         pframe.y_offset = pframe.y_offset - 20;
@@ -6263,49 +6260,47 @@ local function create_sw_ui_calculator_frame(pframe)
     pframe.sim_type_button._type = "DropDownMenu";
     pframe.sim_type_button:SetPoint("TOPRIGHT", 20, pframe.y_offset+2);
     pframe.sim_type_button.init_func = function()
-        libDD:UIDropDownMenu_Initialize(pframe.sim_type_button, function()
-
-            if config.settings.calc_fight_type == fight_types.repeated_casts then
-                libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Repeated casts"]);
-                pframe.spell_diff_header_center:SetText(L["Effect"]);
-                pframe.spell_diff_header_right:SetText(L["Per sec"]);
-            elseif config.settings.calc_fight_type == fight_types.cast_until_oom then
-                libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Cast until OOM"]);
-                pframe.spell_diff_header_center:SetText(L["Effect"]);
-                pframe.spell_diff_header_right:SetText(L["Duration (sec)"]);
-            end
-            libDD:UIDropDownMenu_SetWidth(pframe.sim_type_button, 120);
-
-            libDD:UIDropDownMenu_AddButton(
-                {
-                    text = L["Repeated cast"],
-                    checked = config.settings.calc_fight_type == fight_types.repeated_casts,
-                    func = function()
-
-                        config.settings.calc_fight_type = fight_types.repeated_casts;
-                        libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Repeated casts"]);
-                        pframe.spell_diff_header_center:SetText(L["Effect"]);
-                        pframe.spell_diff_header_right:SetText(L["Per sec"]);
-                        update_calc_list(true);
-                    end
-                }
-            );
-            libDD:UIDropDownMenu_AddButton(
-                {
-                    text = L["Cast until OOM"],
-                    checked = config.settings.calc_fight_type == fight_types.cast_until_oom,
-                    func = function()
-
-                        config.settings.calc_fight_type = fight_types.cast_until_oom;
-                        libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Cast until OOM"]);
-                        pframe.spell_diff_header_center:SetText(L["Effect"]);
-                        pframe.spell_diff_header_right:SetText(L["Duration (sec)"]);
-                        update_calc_list(true);
-                    end
-                }
-            );
-        end);
+        if config.settings.calc_fight_type == fight_types.repeated_casts then
+            libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Repeated casts"]);
+            pframe.spell_diff_header_center:SetText(L["Effect"]);
+            pframe.spell_diff_header_right:SetText(L["Per sec"]);
+        elseif config.settings.calc_fight_type == fight_types.cast_until_oom then
+            libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Cast until OOM"]);
+            pframe.spell_diff_header_center:SetText(L["Effect"]);
+            pframe.spell_diff_header_right:SetText(L["Duration (sec)"]);
+        end
     end;
+    libDD:UIDropDownMenu_SetWidth(pframe.sim_type_button, 120);
+    libDD:UIDropDownMenu_SetInitializeFunction(pframe.sim_type_button, function()
+        libDD:UIDropDownMenu_AddButton(
+            {
+                text = L["Repeated cast"],
+                checked = config.settings.calc_fight_type == fight_types.repeated_casts,
+                func = function()
+
+                    config.settings.calc_fight_type = fight_types.repeated_casts;
+                    libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Repeated casts"]);
+                    pframe.spell_diff_header_center:SetText(L["Effect"]);
+                    pframe.spell_diff_header_right:SetText(L["Per sec"]);
+                    update_calc_list(true);
+                end
+            }
+        );
+        libDD:UIDropDownMenu_AddButton(
+            {
+                text = L["Cast until OOM"],
+                checked = config.settings.calc_fight_type == fight_types.cast_until_oom,
+                func = function()
+
+                    config.settings.calc_fight_type = fight_types.cast_until_oom;
+                    libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Cast until OOM"]);
+                    pframe.spell_diff_header_center:SetText(L["Effect"]);
+                    pframe.spell_diff_header_right:SetText(L["Duration (sec)"]);
+                    update_calc_list(true);
+                end
+            }
+        );
+    end);
 
     f = pframe:CreateFontString(nil, "OVERLAY");
     f:SetFontObject(GameFontNormal);
@@ -6704,43 +6699,42 @@ local function create_sw_ui_loadout_frame(pframe)
     pframe.creature_type_dd._type = "DropDownMenu";
     pframe.creature_type_dd:SetPoint("RIGHT", f_txt, "RIGHT", 40, -3);
     pframe.creature_type_dd.init_func = function()
-        libDD:UIDropDownMenu_Initialize(pframe.creature_type_dd, function()
-            
-            if config.settings.loadout_default_target_creature_type == 0 then
-                libDD:UIDropDownMenu_SetText(pframe.creature_type_dd, L["None"]);
+        if config.settings.loadout_default_target_creature_type == 0 then
+            libDD:UIDropDownMenu_SetText(pframe.creature_type_dd, L["None"]);
+        end
+        for lname, id in pairs(sc.creature_lname_to_id) do
+            if config.settings.loadout_default_target_creature_type == id then
+                libDD:UIDropDownMenu_SetText(pframe.creature_type_dd, lname);
             end
+        end
+    end;
+    libDD:UIDropDownMenu_SetInitializeFunction(pframe.creature_type_dd, function()
+        libDD:UIDropDownMenu_AddButton({
+                text = L["None"],
+                checked = config.settings.loadout_default_target_creature_type == 0,
+                func = function()
+                    sc.loadouts.force_update = true;
+                    config.settings.loadout_default_target_creature_type = 0;
+
+                    libDD:UIDropDownMenu_SetText(pframe.creature_type_dd, L["None"]);
+                end
+            }
+        );
+        for lname, id in pairs(sc.creature_lname_to_id) do
             libDD:UIDropDownMenu_AddButton({
-                    text = L["None"],
-                    checked = config.settings.loadout_default_target_creature_type == 0,
+                    text = lname,
+                    checked = config.settings.loadout_default_target_creature_type == id,
                     func = function()
                         sc.loadouts.force_update = true;
-                        config.settings.loadout_default_target_creature_type = 0;
+                        config.settings.loadout_default_target_creature_type = id;
+                        config.settings.calc_fight_type = fight_types.repeated_casts;
 
-                        libDD:UIDropDownMenu_SetText(pframe.creature_type_dd, L["None"]);
+                        libDD:UIDropDownMenu_SetText(pframe.creature_type_dd, lname);
                     end
                 }
             );
-            for lname, id in pairs(sc.creature_lname_to_id) do
-                if config.settings.loadout_default_target_creature_type == id then
-                    libDD:UIDropDownMenu_SetText(pframe.creature_type_dd, lname);
-                end
-                libDD:UIDropDownMenu_AddButton({
-                        text = lname,
-                        checked = config.settings.loadout_default_target_creature_type == id,
-                        func = function()
-                            sc.loadouts.force_update = true;
-                            config.settings.loadout_default_target_creature_type = id;
-                            config.settings.calc_fight_type = fight_types.repeated_casts;
-
-                            libDD:UIDropDownMenu_SetText(pframe.creature_type_dd, lname);
-                        end
-                    }
-                );
-
-            end
-
-        end);
-    end;
+        end
+    end);
     pframe.creature_type_dd.init_func();
 
     local help_icon = make_help_icon_tooltip(nil, pframe, L["Used when no hostile target is available"]);
@@ -7346,34 +7340,9 @@ local function create_sw_ui_settings_frame(pframe)
     f_txt:SetText(L["Color palette RGB"]);
     f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
 
-    pframe.y_offset = pframe.y_offset - 15;
-    -- headers
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(font);
-    f_txt:SetPoint("TOPLEFT", 10, pframe.y_offset);
-    f_txt:SetText(L["Tag"]);
-    f_txt:SetTextColor(222/255, 192/255, 40/255);
+    pframe.y_offset = pframe.y_offset - 20;
 
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(font);
-    f_txt:SetPoint("TOPLEFT", 230, pframe.y_offset);
-    f_txt:SetText(L["Red"]);
-    f_txt:SetTextColor(222/255, 192/255, 40/255);
-
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(font);
-    f_txt:SetPoint("TOPLEFT", 310, pframe.y_offset);
-    f_txt:SetText(L["Green"]);
-    f_txt:SetTextColor(222/255, 192/255, 40/255);
-
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(font);
-    f_txt:SetPoint("TOPLEFT", 390, pframe.y_offset);
-    f_txt:SetText(L["Blue"]);
-    f_txt:SetTextColor(222/255, 192/255, 40/255);
-
-    pframe.y_offset = pframe.y_offset - 15;
-    for _, v in ipairs({
+    local color_tags = {
         {"normal", L["Normal"]},
         {"crit", L["Critical"]},
         {"old_rank", L["Old rank"]},
@@ -7385,70 +7354,117 @@ local function create_sw_ui_settings_frame(pframe)
         {"execution_time", L["Execution time"]},
         {"cost", L["Cost"]},
         {"effect_per_cost", L["Effect per cost"]},
-        {"cost_per_sec", L["Effect per sec"]},
+        {"cost_per_sec", L["Cost per second"]},
         {"effect_until_oom", L["Effect until OOM"]},
         {"casts_until_oom", L["Casts until OOM"]},
         {"time_until_oom", L["Time until OOM"]},
         {"sp_effect", L["Spell info internals (coefs etc)"]},
         {"stat_weights", L["Stat weights"]},
         {"spell_rank", L["Spell rank"]},
+    };
+    local color_comps = {"_r", "_g", "_b"};
+    local selected_color = 1;
 
-    }) do
-        local label_frame_setting_subkey = "general_color_"..v[1];
-        do
-            f_txt = pframe:CreateFontString(nil, "OVERLAY");
-            f_txt:SetFontObject(GameFontNormal);
-            f_txt:SetPoint("TOPLEFT", 10, pframe.y_offset-4);
-            f_txt:SetText(v[2]);
-            register_text_frame_color(f_txt, v[1]);
-        end
-
-        for i, rgb_comp in pairs({"_r", "_g", "_b"}) do
-            local option_key = label_frame_setting_subkey..rgb_comp;
-            f = CreateFrame("EditBox", "__sc_frame_setting_"..option_key, pframe, "InputBoxTemplate");
-            f._type = "EditBox";
-            f._settings_id = option_key;
-            f.number_editbox = true;
-            f:SetPoint("TOPLEFT", 230 + (i-1)*80, pframe.y_offset-2);
-            f:SetSize(35, 15);
-            f:SetAutoFocus(false);
-            local update = function(self)
-                local val = tonumber(self:GetText());
-                local valid = val and val >= 0 and val <= 255
-                if valid then
-                    config.settings[self._settings_id] = val;
-                    assign_color_tag(v[1], i, val);
-                    for frame, color_tag in pairs(colored_text_frames) do
-                        if color_tag == v[1] then
-                            frame:SetTextColor(effect_color(v[1]));
-                        end
-                    end
-                    sc.core.update_action_bar_needed = true;
-                    sc.loadouts.force_update = true;
-                    for label in pairs(sc.overlay.ccf_labels) do
-                        sc.overlay.ccf_label_reconfig(label);
-                    end
-                end
-                return valid;
+    -- settings is the profile the edit started on, a profile switch while the picker is open leaves the new one alone
+    local function set_color(settings, tag, r, g, b)
+        for i, c in ipairs({r, g, b}) do
+            local val = math.floor(c * 255 + 0.5);
+            settings["general_color_"..tag..color_comps[i]] = val;
+            if settings == config.settings then
+                assign_color_tag(tag, i, val);
             end
-            local close = function(self)
-                if not update(self) then
-                    self:SetText(""..config.default_settings[self._settings_id]);
-                end
-
-            	self:ClearFocus();
-                self:HighlightText(0,0);
-            end
-            editbox_config(f, update, close);
-
-            f_txt = pframe:CreateFontString(nil, "OVERLAY");
-            f_txt:SetFontObject(GameFontNormal);
-            f_txt:SetPoint("TOPLEFT", 230+(i-1)*80 + 38, pframe.y_offset-4);
-            f_txt:SetText("/255");
-            f_txt:SetTextColor(1, 1, 1);
         end
-        pframe.y_offset = pframe.y_offset - 16;
+        if settings == config.settings then
+            sc.ui.apply_colors(tag);
+        end
     end
+
+    local function set_default_color(tag)
+        local d = config.default_settings;
+        local key = "general_color_"..tag;
+        set_color(config.settings, tag, d[key.."_r"]/255, d[key.."_g"]/255, d[key.."_b"]/255);
+    end
+
+    local color_dd = libDD:Create_UIDropDownMenu("__sc_frame_color_tag", pframe);
+    color_dd:SetPoint("TOPLEFT", -6, pframe.y_offset+3);
+
+    local swatch = CreateFrame("Button", nil, pframe);
+    swatch:SetSize(20, 20);
+    swatch:SetPoint("TOPLEFT", 225, pframe.y_offset);
+    local swatch_border = swatch:CreateTexture(nil, "BACKGROUND");
+    swatch_border:SetAllPoints();
+    swatch_border:SetColorTexture(0.8, 0.8, 0.8, 1.0);
+    swatch.tex = swatch:CreateTexture(nil, "ARTWORK");
+    swatch.tex:SetPoint("TOPLEFT", 2, -2);
+    swatch.tex:SetPoint("BOTTOMRIGHT", -2, 2);
+    local swatch_hl = swatch:CreateTexture(nil, "HIGHLIGHT");
+    swatch_hl:SetAllPoints(swatch.tex);
+    swatch_hl:SetColorTexture(1.0, 1.0, 1.0, 0.25);
+
+    local function show_selected_color()
+        local tag = color_tags[selected_color][1];
+        libDD:UIDropDownMenu_SetText(color_dd, color_tags[selected_color][2]);
+        color_dd.Text:SetTextColor(effect_color(tag));
+        register_text_frame_color(color_dd.Text, tag);
+        swatch.tex:SetColorTexture(effect_color(tag));
+        register_text_frame_color(swatch.tex, tag);
+    end
+
+    libDD:UIDropDownMenu_SetWidth(color_dd, 190);
+    libDD:UIDropDownMenu_SetInitializeFunction(color_dd, function()
+        for i, v in ipairs(color_tags) do
+            local r, g, b = effect_color(v[1]);
+            libDD:UIDropDownMenu_AddButton({
+                text = CreateColor(r, g, b, 1.0):WrapTextInColorCode(v[2]),
+                checked = i == selected_color,
+                func = function()
+                    selected_color = i;
+                    show_selected_color();
+                end,
+            });
+        end
+    end);
+
+    swatch:SetScript("OnClick", function()
+        local tag = color_tags[selected_color][1];
+        local settings = config.settings;
+        local r, g, b = effect_color(tag);
+        ColorPickerFrame:SetupColorPickerAndShow({
+            r = r,
+            g = g,
+            b = b,
+            hasOpacity = false,
+            swatchFunc = function()
+                set_color(settings, tag, ColorPickerFrame:GetColorRGB());
+            end,
+            cancelFunc = function()
+                set_color(settings, tag, ColorPickerFrame:GetPreviousValues());
+            end,
+        });
+    end);
+
+    f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
+    f:SetPoint("TOPLEFT", 255, pframe.y_offset+1);
+    f:SetText(L["Default"]);
+    f:SetWidth(80);
+    f:SetScript("OnClick", function()
+        set_default_color(color_tags[selected_color][1]);
+    end);
+
+    pframe.y_offset = pframe.y_offset - 25;
+
+    f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
+    f:SetPoint("TOPLEFT", 10, pframe.y_offset+1);
+    f:SetText(L["Reset all colors to default"]);
+    f:SetWidth(200);
+    f:SetScript("OnClick", function()
+        for _, v in ipairs(color_tags) do
+            set_default_color(v[1]);
+        end
+    end);
+
+    show_selected_color();
+    pframe.y_offset = pframe.y_offset - 25;
 
     make_frame_scrollable(pframe);
 end
@@ -9177,5 +9193,20 @@ ui.update_calculator_character_items    = update_calculator_character_items;
 ui.effects_from_ui_stats_diff           = effects_from_ui_stats_diff;
 ui.update_talents_frame                 = update_talents_frame;
 ui.ehp_tex                              = ehp_tex;
+-- nil tag recolors everything, registered textures are color swatches
+ui.apply_colors                         = function(tag)
+    for frame, frame_tag in pairs(colored_text_frames) do
+        if not tag or frame_tag == tag then
+            if frame.SetTextColor then
+                frame:SetTextColor(effect_color(frame_tag));
+            else
+                frame:SetColorTexture(effect_color(frame_tag));
+            end
+        end
+    end
+    sc.overlay.ccf_labels_recolor();
+    sc.core.update_action_bar_needed = true;
+    sc.loadouts.force_update = true;
+end;
 
 sc.ui = ui;

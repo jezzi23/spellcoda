@@ -364,6 +364,15 @@ for k, v in pairs(spell_filter_options) do
     default_settings[(string.gsub(k, "^spells_filter_", "spellbook_catalogue_filter_"))] = v;
 end
 
+-- general_color_<tag>_<r|g|b> = {tag, rgb index}
+local color_settings = {};
+for k in pairs(default_settings) do
+    local tag, comp = k:match("^general_color_(.+)_([rgb])$");
+    if tag then
+        color_settings[k] = {tag, ({r = 1, g = 2, b = 3})[comp]};
+    end
+end
+
 local function load_persistent_data(persistent_data, template_data)
     if not persistent_data then
         persistent_data = {};
@@ -503,6 +512,9 @@ local function set_active_settings()
         end
     end
     config.active_profile_name = __sc_p_char[spec_keys[sc.core.active_spec]];
+    for k, v in pairs(color_settings) do
+        sc.utils.assign_color_tag(v[1], v[2], config.settings[k]);
+    end
 end
 
 local function activate_config(config_type, prefix)
@@ -538,7 +550,14 @@ end
 
 local function activate_settings()
 
+    config.activating = true;
     activate_config("settings", "__sc_frame_setting_");
+    config.activating = false;
+    for k in pairs(sc.overlay.ccf_labels) do
+        sc.overlay.ccf_label_reconfig(k);
+    end
+    sc.overlay.overlay_reconfig();
+    sc.ui.apply_colors();
 
     sc.overlay.ccf_parent:ClearAllPoints();
     sc.overlay.ccf_parent:SetPoint(
