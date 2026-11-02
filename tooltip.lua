@@ -1269,7 +1269,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                               L["periodic"]);
         end
         if config.settings.general_average_proc_effects and spell.base_id == spids.shadow_bolt and talent_pts(effects_finalized, talent_idx.improved_shadow_bolt) ~= 0 then
-            local isb_uptime = 1.0 - math.pow(1.0 - stats.crit, 4);
+            local isb_uptime = 1.0 - (1.0 - stats.crit)^4;
 
             extra_info_st = extra_info_st .. string.format("%s %.1f%%", L["ISB debuff uptime"], 100 * isb_uptime);
             extra_info_multi = extra_info_multi .. string.format("%s %.1f%%", L["ISB debuff uptime"], 100 * isb_uptime);
@@ -2002,7 +2002,7 @@ end
 local function signed_diff_str(diff, num_digits)
     local abs_diff = math.abs(diff);
     local diff_str;
-    if abs_diff < 0.5 * math.pow(10, -num_digits) then
+    if abs_diff < 0.5 * 10^(-num_digits) then
         -- too small for num_digits, two significant digits instead
         local decimals = 1 - math.floor(math.log10(abs_diff));
         diff_str = string.format("%."..decimals.."f", diff):gsub("0+$", "");

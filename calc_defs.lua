@@ -18,29 +18,45 @@ local effect_flags = {
     shares_periodic_type    = bit.lshift(1, 10),
 };
 
+-- indexed_keys.x[i] is "x"..i, built once
+local indexed_keys = setmetatable({}, {
+    __index = function(prefixes, prefix)
+        local keys = setmetatable({}, {
+            __index = function(list, i)
+                local key = prefix..i;
+                list[i] = key;
+                return key;
+            end
+        });
+        prefixes[prefix] = keys;
+        return keys;
+    end
+});
+
 -- flexible way to add custom effects that behave according to flags
 -- that both go into expectation calculation and tooltip
 local function add_extra_effect(stats, flags,  utilization, description, value, ticks, freq)
     stats.num_extra_effects = stats.num_extra_effects + 1;
     local i = stats.num_extra_effects;
 
-    stats["extra_effect_flags" .. i] = flags;
-    stats["extra_effect_val" .. i] = value;
-    stats["extra_effect_desc" .. i] = description;
-    stats["extra_effect_util" .. i] = utilization;
+    stats[indexed_keys.extra_effect_flags[i]] = flags;
+    stats[indexed_keys.extra_effect_val[i]] = value;
+    stats[indexed_keys.extra_effect_desc[i]] = description;
+    stats[indexed_keys.extra_effect_util[i]] = utilization;
     if bit.band(flags, effect_flags.is_periodic) ~= 0 then
-        stats["extra_effect_ticks" .. i] = ticks;
-        stats["extra_effect_tick_time" .. i] = freq;
+        stats[indexed_keys.extra_effect_ticks[i]] = ticks;
+        stats[indexed_keys.extra_effect_tick_time[i]] = freq;
     end
     if bit.band(flags, effect_flags.should_track_crit_mod) ~= 0 then
         stats.num_special_crit_mod_tracked = stats.num_special_crit_mod_tracked + 1;
-        stats["special_crit_mod_tracked"..stats.num_special_crit_mod_tracked] = i;
+        stats[indexed_keys.special_crit_mod_tracked[stats.num_special_crit_mod_tracked]] = i;
     end
 end
 --------------------------------------------------------------------------------
 
 calc.effect_flags                   = effect_flags;
 calc.add_extra_effect               = add_extra_effect;
+calc.indexed_keys                   = indexed_keys;
 
 sc.calc = calc;
 

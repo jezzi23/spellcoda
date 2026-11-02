@@ -223,12 +223,21 @@ local function caster_coef_multiplier(slvl, mlvl, clvl)
     return mod;
 end
 
+-- loadout_changes bits the mechanics in this file read for a spell
+local function changing_reads(spell, effects)
+    if class == classes.mage and talent_pts(effects, talent_idx.molten_fury) ~= 0 then
+        return sc.loadouts.loadout_changes.enemy_hp;
+    end
+    return 0;
+end
+
 --------------------------------------------------------------------------------
 mechanics.client_class_stats_spell          = class_stats_spell;
 mechanics.client_special_abilities          = special_abilities;
 mechanics.client_class_cast_time           = class_cast_time;
 mechanics.stats_glance                      = stats_glance;
 mechanics.caster_coef_multiplier            = caster_coef_multiplier;
+mechanics.client_changing_reads             = changing_reads;
 
 sc.mechanics = mechanics;
 

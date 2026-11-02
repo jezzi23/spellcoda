@@ -40,7 +40,7 @@ sc.core                         = core;
 core.addon_name                 = "SpellCoda";
 
 local version_major             = 0;
-local version_minor             = 15;
+local version_minor             = 16;
 local version_build             = sc.addon_build_id;
 
 core.version_id                 = version_build + version_minor*100000 + version_major*100000000;
@@ -368,7 +368,6 @@ local event_dispatch = {
         --core.rescan_action_bar_needed = true;
 
         reassign_overlay_icon(slot);
-        sc.loadouts.force_update = true;
     end,
     ["UPDATE_STEALTH"] = function()
         if not core.sw_addon_loaded then

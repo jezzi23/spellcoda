@@ -1890,8 +1890,7 @@ local function effects_finalize_forced(loadout, effects)
     effects.finalized = true;
 end
 
--- every field effects_add_manual_diff and effects_finalize_forced write, restored by value so repeated diffs on one
--- copy give the same results as diffs on fresh copies
+-- every field effects_add_manual_diff and effects_finalize_forced write, restored by value
 local diff_written_raw = {
     "healing_power_flat", "mp5_flat", "mana", "hp_flat", "dodge", "ap_flat", "rap_flat", "phys_crit_forced",
 };
@@ -1941,6 +1940,7 @@ local function effects_restore_diff_written(effects, saved)
 end
 
 local should_unit_stats_be_secret = C_Secrets and C_Secrets.ShouldUnitStatsBeSecret;
+local should_auras_be_secret = C_Secrets and C_Secrets.ShouldAurasBeSecret;
 
 -- the sheet stats, secret all together while restricted
 local sheet_stats_values = {
@@ -2172,7 +2172,10 @@ local function dynamic_loadout(loadout, prev)
         end
     end
 
-    if UnitExists("mouseover") and UnitIsFriend("player", "mouseover") then
+    -- secret auras would leave the mouseover with none
+    if sc.friendly_mouseover_healer and
+        not (should_auras_be_secret and should_auras_be_secret()) and
+        UnitExists("mouseover") and UnitIsFriend("player", "mouseover") then
         loadout.friendly_towards = "mouseover";
     end
     if loadout.hostile_towards == "target" and bit.band(loadout.flags, loadout_flags.target_friendly) == 0 then
@@ -2387,6 +2390,78 @@ local loadout_read_id = 0;
 local effects_inputs = { valid = false, stats = {}, buffs = {} };
 local effects_rebuild_id = 0;
 
+-- fields that change often without an effects rebuild, power type p is bit.lshift(1, p) (types are below 16)
+local loadout_changes = {
+    enemy_hp    = bit.lshift(1, 16),
+    player_hp   = bit.lshift(1, 17),
+    friendly_hp = bit.lshift(1, 18),
+    other       = bit.lshift(1, 19),
+};
+local changing_fields = {
+    resources = true,
+    enemy_hp_perc = true,
+    player_hp = true,
+    friendly_hp_perc = true,
+    friendly_hp_max = true,
+    -- only detect_buffs reads it, to share the aura tables of the same unit
+    mouseover_name = true,
+};
+-- change mask per update id, for the recent updates that kept the effects
+local update_changes = {};
+local last_rebuild_update_id = 0;
+-- changes in fields loadout_eql does not compare, on reads it found equal since the last update
+local pending_changes = 0;
+
+local function kept_update_changes(prev, cur)
+    local changes = 0;
+    for pwr, v in pairs(cur.resources) do
+        if prev.resources[pwr] ~= v then
+            changes = bit.bor(changes, bit.lshift(1, pwr));
+        end
+    end
+    if prev.enemy_hp_perc ~= cur.enemy_hp_perc then
+        changes = bit.bor(changes, loadout_changes.enemy_hp);
+    end
+    if prev.player_hp ~= cur.player_hp then
+        changes = bit.bor(changes, loadout_changes.player_hp);
+    end
+    if prev.friendly_hp_perc ~= cur.friendly_hp_perc or prev.friendly_hp_max ~= cur.friendly_hp_max then
+        changes = bit.bor(changes, loadout_changes.friendly_hp);
+    end
+    -- also fields loadout_eql skips, the auras equal those of the last rebuild
+    for k, v in pairs(cur) do
+        if not changing_fields[k] and type(v) ~= "table" and prev[k] ~= v then
+            return bit.bor(changes, loadout_changes.other);
+        end
+    end
+    for k in pairs(loadout_tables) do
+        if not changing_fields[k] then
+            for kk, vv in pairs(cur[k]) do
+                if prev[k][kk] ~= vv then
+                    return bit.bor(changes, loadout_changes.other);
+                end
+            end
+        end
+    end
+    return changes;
+end
+
+-- other after a rebuild or an unrecorded (diffed) update
+local function changes_since(update_id)
+    if update_id < last_rebuild_update_id then
+        return loadout_changes.other;
+    end
+    local changes = 0;
+    for id = update_id + 1, effects_update_id do
+        local c = update_changes[id];
+        if not c then
+            return loadout_changes.other;
+        end
+        changes = bit.bor(changes, c);
+    end
+    return changes;
+end
+
 local function buffs_equal(lhs, rhs)
     for id, _ in pairs(lhs) do
         if not rhs[id] then
@@ -2475,6 +2550,7 @@ local function update_loadout_and_effects(relaxed_update_dt)
         not sc.core.talents_update_needed and
             loadout_eql(loadout_front, other) then
 
+        pending_changes = bit.bor(pending_changes, kept_update_changes(loadout_front, other));
         loadout_front = other;
 
         -- No interesting change, early exit here and Overlay
@@ -2482,16 +2558,19 @@ local function update_loadout_and_effects(relaxed_update_dt)
         return loadout_front, buffed, final, effects_update_id;
     end
 
-    -- the loadout changed but nothing the effects are built from (e.g. only hp, power or enemy hp),
-    -- the effects stay as they are and only the spell evaluations need the new loadout
+    -- nothing the effects are built from changed, only the evaluations need the new loadout
     if not (SpellBookFrame and SpellBookFrame:IsShown()) and
         not loadouts.force_update and
         not sc.core.equipment_update_needed and
         not sc.core.talents_update_needed and
             effects_inputs_equal(other) then
 
+        local changes = bit.bor(pending_changes, kept_update_changes(loadout_front, other));
+        pending_changes = 0;
         loadout_front = other;
         effects_update_id = effects_update_id + 1;
+        update_changes[effects_update_id] = changes;
+        update_changes[effects_update_id - 64] = nil;
         return loadout_front, buffed, final, effects_update_id;
     end
 
@@ -2543,6 +2622,8 @@ local function update_loadout_and_effects(relaxed_update_dt)
     effects_rebuild_id = effects_rebuild_id + 1;
 
     effects_update_id = effects_update_id + 1;
+    last_rebuild_update_id = effects_update_id;
+    pending_changes = 0;
 
     return loadout_front, buffed, final, effects_update_id;
 end
@@ -2596,8 +2677,7 @@ local function calculator_has_changes()
 end
 
 local last_ui_diff_update_id = 0;
--- the diffed effects are built from the effects and the plan, the loadout fields they read change only with an effects
--- rebuild (items, level, form, auras, talents), so they stay valid while the effects were kept
+-- the loadout fields the diffed effects read change only with an effects rebuild
 local diffed_rebuild_id = -1;
 local diffed_build_id = 0;
 
@@ -2663,8 +2743,7 @@ local function update_loadout_and_effects_diffed_from_ui()
     return loadout, effects, diffed, effects_finalized, diffed_finalized, effects_update_id;
 end
 
--- the calculator's Changes summary for the effects and the diffed effects, reused while neither was rebuilt and the
--- sheet values and settings it reads are unchanged
+-- reused while neither effects table was rebuilt and the sheet values and settings it reads are unchanged
 local diffed_stats_diff = { valid = false, stats = {}, flags = {} };
 
 local function diffed_stats_diff_format(loadout, effects_before, effects_after)
@@ -2713,6 +2792,8 @@ end
 
 ---------------------------------------------------------------------------------------------------
 loadouts.equipped                                     = equipped;
+loadouts.loadout_changes                              = loadout_changes;
+loadouts.changes_since                                = changes_since;
 loadouts.talented                                     = talented;
 loadouts.empty_effects                                = empty_effects;
 loadouts.effects_add                                  = effects_add;

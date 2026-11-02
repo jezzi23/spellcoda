@@ -348,12 +348,25 @@ local function caster_coef_multiplier(slvl, mlvl, clvl)
     return 1;
 end
 
+-- loadout_changes bits the mechanics in this file read for a spell
+local function changing_reads(spell, effects)
+    if class == classes.mage and spell.base_id == spids.arcane_surge then
+        return bit.lshift(1, powers.mana);
+    end
+    if class == classes.warlock and spell.base_id == spids.drain_soul and
+        has_enchant(effects, lookups.rune_soul_siphon) then
+        return sc.loadouts.loadout_changes.enemy_hp;
+    end
+    return 0;
+end
+
 --------------------------------------------------------------------------------
 mechanics.client_class_stats_spell          = class_stats_spell;
 mechanics.client_special_abilities          = special_abilities;
 mechanics.client_class_cast_time           = class_cast_time;
 mechanics.stats_glance                      = stats_glance;
 mechanics.caster_coef_multiplier            = caster_coef_multiplier;
+mechanics.client_changing_reads             = changing_reads;
 
 sc.mechanics = mechanics;
 

@@ -94,8 +94,8 @@ else
     is_player_owned = function(aura) return aura.sourceUnit == "player"; end;
 end
 
--- player and target auras are scanned again only after UNIT_AURA for them, a unit change or a read that did not scan,
--- otherwise the last scan is copied. The mouseover gets no unit events and is scanned on every read
+-- player and target are scanned again only after UNIT_AURA, a unit change or an unscanned read,
+-- a friendly mouseover on every read
 local aura_changed = { player = true, target = true };
 local last_read_scanned = false;
 
@@ -161,6 +161,9 @@ local function restricted_form_buffs(loadout)
     end
 end
 
+local scanned_units = { "player", "target" };
+local scanned_units_mouseover = { "player", "target", "mouseover" };
+
 local function detect_buffs(loadout, prev)
     loadout.dynamic_buffs["player"] = {};
     loadout.dynamic_buffs["target"] = {};
@@ -172,20 +175,25 @@ local function detect_buffs(loadout, prev)
         loadout.dynamic_buffs["target"] = loadout.dynamic_buffs["player"]
         loadout.dynamic_buffs_lname["target"] = loadout.dynamic_buffs_lname["player"]
     end
-    if loadout.player_name == loadout.mouseover_name then
-        loadout.dynamic_buffs["mouseover"] = loadout.dynamic_buffs["player"]
-        loadout.dynamic_buffs_lname["mouseover"] = loadout.dynamic_buffs_lname["player"]
-    end
-    if loadout.target_name == loadout.mouseover_name then
-        loadout.dynamic_buffs["mouseover"] = loadout.dynamic_buffs["target"]
-        loadout.dynamic_buffs_lname["mouseover"] = loadout.dynamic_buffs_lname["target"]
+    -- only a friendly mouseover's auras are used
+    local units = scanned_units;
+    if loadout.friendly_towards == "mouseover" then
+        units = scanned_units_mouseover;
+        if loadout.player_name == loadout.mouseover_name then
+            loadout.dynamic_buffs["mouseover"] = loadout.dynamic_buffs["player"]
+            loadout.dynamic_buffs_lname["mouseover"] = loadout.dynamic_buffs_lname["player"]
+        end
+        if loadout.target_name == loadout.mouseover_name then
+            loadout.dynamic_buffs["mouseover"] = loadout.dynamic_buffs["target"]
+            loadout.dynamic_buffs_lname["mouseover"] = loadout.dynamic_buffs_lname["target"]
+        end
     end
 
     wipe(loadout.aura_guids);
     if should_auras_be_secret and should_auras_be_secret() then
         -- ignoring buffs leaves only the form, apply_snapshot_deltas takes the snapshot buffs out of the sheet stats
         if not (sc.config.settings.loadout_combat_ignore_buffs and client_matches(client_flags.forever)) then
-            for k, _ in pairs(loadout.dynamic_buffs) do
+            for _, k in ipairs(units) do
                 keep_restricted_buffs(loadout, prev, k);
             end
         end
@@ -195,7 +203,8 @@ local function detect_buffs(loadout, prev)
         return;
     end
 
-    for k, v in pairs(loadout.dynamic_buffs) do
+    for _, k in ipairs(units) do
+        local v = loadout.dynamic_buffs[k];
         local guid = UnitGUID(k);
         loadout.aura_guids[k] = guid;
         local shared = k ~= "player" and

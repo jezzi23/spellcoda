@@ -27,6 +27,9 @@ local calc_spell_threat                             = sc.calc.calc_spell_threat;
 local calc_spell_resource_regen                     = sc.calc.calc_spell_resource_regen;
 local calc_effective_hp                             = sc.calc.calc_effective_hp;
 local calc_spell_dummy_cast_until_oom               = sc.calc.calc_spell_dummy_cast_until_oom;
+local spell_changing_reads                          = sc.calc.spell_changing_reads;
+local changes_since                                 = sc.loadouts.changes_since;
+local loadout_changes                               = sc.loadouts.loadout_changes;
 
 local config                                        = sc.config;
 --------------------------------------------------------------------------------
@@ -43,6 +46,19 @@ local external_overlay_frames = {};
 local action_bar_paging_overrides = {};
 
 local loadout, effects;
+
+-- action bar labels of spells whose evaluation reads none of the fields a kept update changed stay as they are
+local kept_labels = {
+    -- frames stamped with it hold valid labels
+    prev_update_id = -1,
+    update_id = -1,
+    -- nil on the calculator's diffed path
+    changes = nil,
+    -- buttons reassigned during the icon pass are evaluated by it
+    in_icon_pass = false,
+    oom_info = {},
+    oom_stats = {},
+};
 
 overlay.decimals_cap = 3;
 
@@ -88,6 +104,7 @@ sc.ext.register_overlay_frame = function(frame, spell_id)
     for i = 1, 3 do
         external_overlay_frames[frame].overlay_frames[i]:Hide();
     end
+    external_overlay_frames[frame].labels_update_id = nil;
     sc.core.old_ranks_checks_needed = true;
 end
 
@@ -129,6 +146,7 @@ local function check_old_rank(frame_info, spell_id, clvl)
     for i = 1, 3 do
         frame_info.overlay_frames[i]:Hide();
     end
+    frame_info.labels_update_id = nil;
 
     if not config.settings.overlay_disable and not sc.core.mute_overlay and
         config.settings.overlay_old_rank and
@@ -196,6 +214,7 @@ local function clear_overlays()
 
     for _, v in pairs(action_id_frames) do
         v.old_rank_marked = false;
+        v.labels_update_id = nil;
         if v.frame then
             for i = 1, 3 do
                 v.overlay_frames[i]:SetText("");
@@ -205,6 +224,7 @@ local function clear_overlays()
     end
     for _, v in pairs(spell_book_frames) do
         v.old_rank_marked = false;
+        v.labels_update_id = nil;
         for i = 1, 3 do
             v.overlay_frames[i]:SetText("");
             v.overlay_frames[i]:Hide();
@@ -212,6 +232,7 @@ local function clear_overlays()
     end
     for _, v in pairs(external_overlay_frames) do
         v.old_rank_marked = false;
+        v.labels_update_id = nil;
         if v.frame then
             for i = 1, 3 do
                 v.overlay_frames[i]:SetText("");
@@ -538,6 +559,8 @@ local function gather_spell_icons()
     end
 end
 
+local evaluate_frame_now;
+
 local function reassign_overlay_icon_spell(action_id, spell_id)
 
     if action_id_frames[action_id].frame then
@@ -546,10 +569,15 @@ local function reassign_overlay_icon_spell(action_id, spell_id)
                 action_id_frames[action_id].overlay_frames[i]:SetText("");
                 action_id_frames[action_id].overlay_frames[i]:Hide();
             end
+            action_id_frames[action_id].labels_update_id = nil;
             active_overlays[action_id] = nil;
         else
             check_old_rank(action_id_frames[action_id], spell_id, active_loadout().lvl);
             active_overlays[action_id] = spell_id;
+            -- labels written now, hidden until the next update otherwise
+            if not evaluate_frame_now(action_id_frames[action_id], spell_id) then
+                sc.loadouts.force_update = true;
+            end
         end
     end
     action_id_frames[action_id].spell_id = spell_id;
@@ -841,6 +869,7 @@ local function init_label_handler()
             func = function(frame_overlay, _, _, _, spell_id)
                 frame_overlay:SetText(format_number(spell_cost(spell_id), 0));
             end,
+            queries_game = true,
             desc = L["Actual cost"],
             color_tag = "cost",
             tooltip = L["Not computed but queried through game API"],
@@ -849,6 +878,7 @@ local function init_label_handler()
             func = function(frame_overlay, _, _, _, spell_id)
                 frame_overlay:SetText(format_number(spell_cast_time(spell_id), math.min(2, overlay.decimals_cap)));
             end,
+            queries_game = true,
             desc = L["Actual cast time"],
             color_tag = "execution_time",
             tooltip = L["Not computed but queried through game API and GCD capped"],
@@ -935,6 +965,7 @@ local function init_label_handler()
             func = function(frame_overlay, info)
                 frame_overlay:SetText(format_number(info.effect_until_oom, 0));
             end,
+            uses_until_oom = true,
             desc = L["Effect until OOM"],
             color_tag = "effect_until_oom",
             requires_spell_flags = spell_flags.eval,
@@ -943,6 +974,7 @@ local function init_label_handler()
             func = function(frame_overlay, info)
                 frame_overlay:SetText(format_dur(info.time_until_oom));
             end,
+            uses_until_oom = true,
             desc = L["Time until OOM"],
             color_tag = "time_until_oom",
         },
@@ -950,6 +982,7 @@ local function init_label_handler()
             func = function(frame_overlay, info)
                 frame_overlay:SetText(format_number(info.num_casts_until_oom, math.min(1, overlay.decimals_cap), true));
             end,
+            uses_until_oom = true,
             desc = L["Casts until OOM"],
             color_tag = "casts_until_oom",
         },
@@ -1097,8 +1130,45 @@ local function init_label_handler()
     sc.overlay.label_handler = overlay_label_handler;
 end
 
+local function frames_labelled(frame_infos, num_frames, spell, eval_flags, update_id)
+    for j = 1, num_frames do
+        local frame_info = frame_infos[j];
+        if frame_info.labels_update_id ~= update_id or
+            frame_info.labels_spell ~= spell or
+            frame_info.labels_eval_flags ~= eval_flags then
+            return false;
+        end
+    end
+    return true;
+end
+
+-- labels of a kept spell not taken from its evaluation, the until OOM ones from values of its last evaluation
+local function refresh_kept_labels(frame_infos, num_frames, spell, spell_id, loadout, effects, mana_changed)
+    local info, stats = kept_labels.oom_info, kept_labels.oom_stats;
+    local computed = false;
+    mana_changed = mana_changed and spell.power_type == sc.powers.mana;
+    for j = 1, num_frames do
+        local frame_info = frame_infos[j];
+        for i, v in pairs(active_overlay_indices) do
+            local handler = overlay_label_handler[v];
+            if handler.queries_game then
+                handler.func(frame_info.overlay_frames[i], nil, nil, spell, spell_id);
+            elseif handler.uses_until_oom and mana_changed then
+                if not computed then
+                    info.cost_per_sec = frame_info.oom_cost_per_sec;
+                    info.expected = frame_info.oom_expected;
+                    stats.cast_time = frame_info.oom_cast_time;
+                    cast_until_oom(info, spell, stats, loadout, effects, false, 0);
+                    computed = true;
+                end
+                handler.func(frame_info.overlay_frames[i], info, stats, spell, spell_id);
+            end
+        end
+    end
+end
+
 -- frames showing the same spell share one evaluation, the label handlers only read it
-local function update_spell_icon_frames(frame_infos, num_frames, spell, spell_id, loadout, effects, eval_flags)
+local function update_spell_icon_frames(frame_infos, num_frames, spell, spell_id, loadout, effects, eval_flags, changes)
 
     local spell_effect, stats;
     if bit.band(spell.flags, spell_flags.resource_regen) ~= 0 and
@@ -1136,8 +1206,30 @@ local function update_spell_icon_frames(frame_infos, num_frames, spell, spell_id
     elseif num_overlay_components_toggled > 0 then
 
         if bit.band(spell.flags, spell_flags.eval) ~= 0 then
+            if changes and
+                bit.band(changes, bit.bor(loadout_changes.other, spell_changing_reads(spell, effects))) == 0 and
+                frames_labelled(frame_infos, num_frames, spell, eval_flags, kept_labels.prev_update_id) then
+
+                refresh_kept_labels(frame_infos, num_frames, spell, spell_id, loadout, effects,
+                                    bit.band(changes, bit.lshift(1, sc.powers.mana)) ~= 0);
+                for j = 1, num_frames do
+                    frame_infos[j].labels_update_id = kept_labels.update_id;
+                end
+                return;
+            end
             spell_effect, stats = calc_spell_eval(spell, loadout, effects, eval_flags, spell_id);
             cast_until_oom(spell_effect, spell, stats, loadout, effects, false, 0);
+            -- labels of the diffed effects or the spellbook are never kept
+            local labels_update_id = changes and kept_labels.update_id;
+            for j = 1, num_frames do
+                local frame_info = frame_infos[j];
+                frame_info.labels_update_id = labels_update_id;
+                frame_info.labels_spell = spell;
+                frame_info.labels_eval_flags = eval_flags;
+                frame_info.oom_cost_per_sec = spell_effect.cost_per_sec;
+                frame_info.oom_expected = spell_effect.expected;
+                frame_info.oom_cast_time = stats.cast_time;
+            end
 
         elseif bit.band(spell.flags, spell_flags.only_threat) ~= 0 and only_threat_overlay then
             spell_effect, stats = calc_spell_threat(spell, loadout, effects, eval_flags);
@@ -1170,12 +1262,12 @@ local function update_spell_icon_frames(frame_infos, num_frames, spell, spell_id
     end
 end
 
-local function update_overlay_frames(frame_infos, num_frames, loadout, effects, id, eval_flags)
+local function update_overlay_frames(frame_infos, num_frames, loadout, effects, id, eval_flags, changes)
 
     if spells[id].healing_version and config.settings.general_prio_heal then
-        update_spell_icon_frames(frame_infos, num_frames, spells[id].healing_version, id, loadout, effects, eval_flags);
+        update_spell_icon_frames(frame_infos, num_frames, spells[id].healing_version, id, loadout, effects, eval_flags, changes);
     else
-        update_spell_icon_frames(frame_infos, num_frames, spells[id], id, loadout, effects, eval_flags);
+        update_spell_icon_frames(frame_infos, num_frames, spells[id], id, loadout, effects, eval_flags, changes);
     end
 end
 
@@ -1553,6 +1645,20 @@ local function overlay_eval_flags()
     end
     return eval_flags;
 end
+
+evaluate_frame_now = function(frame_info, spell_id)
+    if frame_info.old_rank_marked or kept_labels.in_icon_pass then
+        return true;
+    end
+    if not loadout or not effects or sc.core.mute_overlay or
+        not (frame_info.frame and frame_info.frame:IsShown()) then
+        return false;
+    end
+    single_frame[1] = frame_info;
+    update_overlay_frames(single_frame, 1, loadout, effects, spell_id, overlay_eval_flags(), kept_labels.changes);
+    return true;
+end
+
 
 local function update_cc()
 
@@ -1964,7 +2070,7 @@ local function update_spell_icons(loadout, effects, eval_flags)
         local n = group.n;
         if n > 0 then
             group.n = 0;
-            update_overlay_frames(group, n, loadout, effects, id, eval_flags);
+            update_overlay_frames(group, n, loadout, effects, id, eval_flags, kept_labels.changes);
         end
     end
 end
@@ -1984,6 +2090,7 @@ local function update_overlay()
 
     local effects_before, update_id;
     local updated = false;
+    kept_labels.in_icon_pass = false;
     local eval_flags = overlay_eval_flags();
 
     local catalogue_open = sc.ui.spell_catalogue_visible();
@@ -1993,12 +2100,17 @@ local function update_overlay()
         if not calc_frame_open and not config.settings.general_calc_global_compare then
 
             loadout, _, effects, update_id = update_loadout_and_effects(0.7 / sc.config.settings.overlay_update_freq);
-
+            kept_labels.changes = changes_since(overlay_effects_update_id);
         else
             loadout, _, _, effects_before, effects, update_id =
                 update_loadout_and_effects_diffed_from_ui();
+            kept_labels.changes = nil;
         end
         updated = update_id > overlay_effects_update_id;
+        if updated then
+            kept_labels.prev_update_id = kept_labels.update_id;
+            kept_labels.update_id = update_id;
+        end
         overlay_effects_update_id = update_id;
     end
 
@@ -2015,7 +2127,9 @@ local function update_overlay()
         end
 
         if not config.settings.overlay_disable and not sc.core.mute_overlay then
+            kept_labels.in_icon_pass = true;
             update_spell_icons(loadout, effects, eval_flags);
+            kept_labels.in_icon_pass = false;
         end
 
         for feed, feed_data in pairs(sc.spells_feed.external_feeds) do

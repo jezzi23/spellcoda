@@ -42,6 +42,14 @@ sc.dual_wield_class =
     sc.class == sc.classes.warrior or
     sc.class == sc.classes.rogue;
 
+-- classes whose overlay heals follow a friendly mouseover
+sc.friendly_mouseover_healer =
+    sc.class == sc.classes.priest or
+    sc.class == sc.classes.druid or
+    sc.class == sc.classes.paladin or
+    sc.class == sc.classes.shaman or
+    (sc.class == sc.classes.mage and bit.band(sc.game_mode, sc.game_modes.season_of_discovery) ~= 0);
+
 sc.npc_armor_by_lvl = {
     -- "Intended as typical 100% of Heavy armor values"
     20,     21,     46,     82,     126,    180,    245,    322,    412,    518,    -- npc level 1-10
