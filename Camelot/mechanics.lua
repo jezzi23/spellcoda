@@ -136,6 +136,11 @@ local class_stats_spell = (function()
                 if num_set_pieces(effects, 1808) >= 2 and bid == spids.arcane_missiles then
                     stats.resource_refund = stats.resource_refund + 0.5 * stats.original_base_cost;
                 end
+
+                if bid == spids.arcane_wrath then
+                    stats.extra_spell_power = stats.extra_spell_power +
+                        0.01*dummy_value(spids.arcane_wrath, 1) * (loadout.resources_max[powers.mana] + effects.raw.mana);
+                end
             end
         end
     elseif class == classes.warlock then

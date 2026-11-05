@@ -332,6 +332,13 @@ elseif sc.class == sc.classes.paladin then
 
     -- Blessing of light needs special handling. Added here and 
     -- adjusted later for downranked holy lights
+    lookups.greater_bol_lname = C_Spell.GetSpellName(spids.greater_blessing_of_light);
+    lookups.bol_lname = C_Spell.GetSpellName(spids.blessing_of_light);
+    lookups.bol_rank_to_hl_coef_subtract = {
+        [1] = 1.0 - (1 - (20 - 1) * 0.0375) * 2.5 / 3.5,
+        [2] = 1.0 - 0.4,
+        [3] = 1.0 - 0.7,
+    };
     sc.friendly_buffs[rank_seqs[spids.blessing_of_light][1]] = {
 		{"ability", "effect_mod_flat", 210, {spids.holy_light}, 0, 0},
 		{"ability", "effect_mod_flat", 60, {spids.flash_of_light}, 0, 1},

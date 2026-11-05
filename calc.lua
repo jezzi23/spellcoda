@@ -1275,24 +1275,6 @@ local class_stats_spell = (function()
         end
     elseif class == classes.paladin then
         return function(anycomp, bid, stats, spell, loadout, effects)
-            if bit_band(spell.flags, spell_flags.heal) ~= 0 then
-
-                if bid == spids.holy_light and spell.rank < 4 then
-                    -- Subtract healing to account for blessing of light coef for low rank holy light
-                    local bol_hl_val = nil;
-                    local bol = get_buff_by_lname(loadout, loadout.friendly_towards, lookups.bol_lname, false) or
-                                get_buff_by_lname(loadout, loadout.friendly_towards, lookups.greater_bol_lname, false);
-                    if bol then
-                        -- manually configured to be at index 1
-                        bol_hl_val = sc.friendly_buffs[bol][1][sc.aura_idx_value];
-                    end
-
-                    if bol_hl_val then
-                        stats.effect_mod_flat = stats.effect_mod_flat
-                            - bol_hl_val * lookups.bol_rank_to_hl_coef_subtract[spell.rank];
-                    end
-                end
-            end
         end
     elseif class == classes.hunter then
         return function(anycomp, bid, stats, spell, loadout, effects)

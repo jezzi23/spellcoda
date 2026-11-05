@@ -24,14 +24,6 @@ if sc.class == classes.mage then
         end
     end
 
-elseif class == classes.paladin then
-    lookups.greater_bol_lname = C_Spell.GetSpellName(spids.greater_blessing_of_light);
-    lookups.bol_lname = C_Spell.GetSpellName(spids.blessing_of_light);
-    lookups.bol_rank_to_hl_coef_subtract = {
-        [1] = 1.0 - (1 - (20 - 1) * 0.0375) * 2.5 / 3.5, -- lvl 1 hl coef used
-        [2] = 1.0 - 0.4,
-        [3] = 1.0 - 0.7,
-    };
 elseif class == classes.warlock then
 
     lookups.isb_lname = C_Spell.GetSpellName(lookups.shadow_vulnerability);

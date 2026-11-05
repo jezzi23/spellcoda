@@ -235,25 +235,6 @@ elseif sc.class == sc.classes.rogue then
 
 elseif sc.class == sc.classes.paladin then
 
-    -- Blessing of light needs special handling. Added here and 
-    -- adjusted later for downranked holy lights
-    sc.friendly_buffs[rank_seqs[spids.blessing_of_light][1]] = {
-		{"ability", "effect_mod_flat", 210, {spids.holy_light}, 0, 0},
-		{"ability", "effect_mod_flat", 60, {spids.flash_of_light}, 0, 1},
-    };
-    sc.friendly_buffs[rank_seqs[spids.blessing_of_light][2]] = {
-		{"ability", "effect_mod_flat", 300, {spids.holy_light}, 0, 0},
-		{"ability", "effect_mod_flat", 85, {spids.flash_of_light}, 0, 1},
-    };
-    sc.friendly_buffs[rank_seqs[spids.blessing_of_light][3]] = {
-		{"ability", "effect_mod_flat", 400, {spids.holy_light}, 0, 0},
-		{"ability", "effect_mod_flat", 115, {spids.flash_of_light}, 0, 1},
-    };
-    sc.friendly_buffs[spids.greater_blessing_of_light] = {
-		{"ability", "effect_mod_flat", 400, {spids.holy_light}, 0, 0},
-		{"ability", "effect_mod_flat", 115, {spids.flash_of_light}, 0, 1},
-    };
-
     -- THREAT
     add_threat_flat_by_rank({
         { spids.holy_shield, {20, 30, 40} },
@@ -286,5 +267,4 @@ elseif sc.class == sc.classes.warrior then
 elseif sc.class == sc.classes.hunter then
 
 end
-
 
