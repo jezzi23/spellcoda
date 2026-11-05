@@ -7810,7 +7810,9 @@ end
 local function create_book_catalogue(sb, container, open_sc_tab)
 
     local book = {};
-    local view_w = 680;
+    -- wider than blizzard's 448 views, into the empty margins of each page's art
+    local page_x = 40;
+    local page_w = 508;
     local modes = {
         compact = {spell_h = 18, heading_h = 18, value_font = "GameFontBlack", type_icon = 14, ignore_line = 1.5},
         full = {spell_h = 44, heading_h = 24, value_font = "GameFontBlackMedium", type_icon = 20, ignore_line = 3, full = true},
@@ -7826,7 +7828,8 @@ local function create_book_catalogue(sb, container, open_sc_tab)
     local plain_divider_y = -21;
     local paging_rows_bottom = 523;
     local full_rows_bottom = 585;
-    local content_r = 614;
+    -- the row menu button is right of it
+    local content_r = page_w - 20;
     local bottom_bar_y = 56;
 
 
@@ -7871,7 +7874,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
     local footer = {};
 
     local function views_shown()
-        if sb:GetWidth() < 1200 then
+        if sb.isMinimized then
             return 1;
         end
         return 2;
@@ -7963,7 +7966,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
     end
 
     local function layout_columns()
-        local measure = container:CreateFontString(nil, "ARTWORK", "GameFontBlackMedium");
+        local measure = container:CreateFontString(nil, "ARTWORK", "GameFontBlack");
         measure:Hide();
         local x = content_r;
         -- extra for the sort icon left of a header
@@ -7977,17 +7980,34 @@ local function create_book_catalogue(sb, container, open_sc_tab)
             cols[key] = {x = x, w = w};
             x = x - gap;
         end
-        col("cost", L["Acquisition"], 84, 16);
-        col("per_cost", L["Per cost"], 56, 16, 16);
-        col("per_sec", L["Per second"], 64, 6, 16);
-        col("type", nil, 14, 16);
-        col("lvl", L["Level"], 28, 12);
+        col("cost", L["Acquisition"], 64, 10);
+        col("per_cost", L["Per cost"], 48, 10, 16);
+        -- the damage / heal icon is in the empty left part of this column
+        col("per_sec", L["Per second"], 56, 10, 16);
+        -- by level the level column is hidden and the name takes its room
+        cols.name.wide_w = x - cols.name.x;
+        col("lvl", L["Level"], 28, 8);
         cols.name.w = x - cols.name.x;
+    end
+
+    local function set_name_width(row, mode, by_lvl)
+        local w = by_lvl and cols.name.wide_w or cols.name.w;
+        if row.name_w == w then
+            return;
+        end
+        row.name_w = w;
+        row.area:SetWidth(cols.name.x + w);
+        if mode.full then
+            row.name:SetWidth(cols.name.x + w - full_name_x);
+            row.sub_name:SetWidth(cols.name.x + w - full_name_x);
+        else
+            row.name:SetWidth(w);
+        end
     end
 
     local function create_row(parent, mode)
         local row = CreateFrame("Button", nil, parent);
-        row:SetWidth(view_w);
+        row:SetWidth(page_w);
         row:RegisterForClicks("RightButtonUp");
         row:SetScript("OnClick", function(self)
             if self.spell_id then
@@ -8006,7 +8026,6 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         local area = CreateFrame("Button", nil, row);
         area:SetPoint("TOPLEFT");
         area:SetPoint("BOTTOMLEFT");
-        area:SetWidth(cols.name.x + cols.name.w);
         area:RegisterForClicks("RightButtonUp");
         area:RegisterForDrag("LeftButton");
         area:SetScript("OnClick", function(self)
@@ -8057,14 +8076,11 @@ local function create_book_catalogue(sb, container, open_sc_tab)
             row.icon_hl:SetAlpha(0.25);
             row.icon_hl:Hide();
 
-            local name_w = cols.name.x + cols.name.w - full_name_x;
             row.name = area:CreateFontString(nil, "ARTWORK", "SystemFont_Large");
-            row.name:SetWidth(name_w);
             row.name:SetJustifyH("LEFT");
             row.name:SetWordWrap(false);
             row.sub_name = area:CreateFontString(nil, "ARTWORK", "SystemFont_Med1");
             row.sub_name:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2);
-            row.sub_name:SetWidth(name_w);
             row.sub_name:SetJustifyH("LEFT");
             row.sub_name:SetWordWrap(false);
             row.sub_name:SetTextColor(unpack(base_color));
@@ -8075,10 +8091,10 @@ local function create_book_catalogue(sb, container, open_sc_tab)
 
             row.name = area:CreateFontString(nil, "ARTWORK", "GameFontBlack");
             row.name:SetPoint("LEFT", cols.name.x, 0);
-            row.name:SetWidth(cols.name.w);
             row.name:SetJustifyH("LEFT");
             row.name:SetWordWrap(false);
         end
+        set_name_width(row, mode, false);
 
         row.lvl = lvl_font_string(row, mode.value_font);
         row.lvl:SetPoint("LEFT", cols.lvl.x, 0);
@@ -8088,7 +8104,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
 
         row.type_icon = row:CreateTexture(nil, "ARTWORK");
         row.type_icon:SetSize(mode.type_icon, mode.type_icon);
-        row.type_icon:SetPoint("CENTER", row, "LEFT", cols.type.x + cols.type.w/2, 0);
+        row.type_icon:SetPoint("CENTER", row, "LEFT", cols.per_sec.x + mode.type_icon/2, 0);
         row.type_icon:SetTexture(role_icons);
 
         row.per_sec = row:CreateFontString(nil, "ARTWORK", mode.value_font);
@@ -8126,7 +8142,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         row.item = item;
 
         local menu_button = create_arrow_button(row, 16);
-        menu_button:SetPoint("LEFT", row, "LEFT", content_r + 8, 0);
+        menu_button:SetPoint("LEFT", row, "LEFT", content_r + 4, 0);
         menu_button:RegisterForClicks("LeftButtonUp", "RightButtonUp");
         -- the row owns the menu, the button hides under it
         menu_button:SetScript("OnClick", function()
@@ -8166,7 +8182,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
 
     local function header_button(page, text, col, justify, on_click)
         local btn = CreateFrame("Button", nil, page);
-        btn.text = btn:CreateFontString(nil, "ARTWORK", "GameFontBlackMedium");
+        btn.text = btn:CreateFontString(nil, "ARTWORK", "GameFontBlack");
         btn.text:SetWordWrap(false);
         btn.text:SetText(text);
         btn.text:SetPoint("LEFT", 4, 0);
@@ -8200,8 +8216,8 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         local divider = page:CreateTexture(nil, "ARTWORK");
         divider:SetAtlas("spellbook-divider");
         divider:SetHeight(11);
-        divider:SetPoint("TOPLEFT", -32, y);
-        divider:SetPoint("TOPRIGHT", -60, y);
+        divider:SetPoint("TOPLEFT", -20, y);
+        divider:SetPoint("TOPRIGHT", page, "TOPLEFT", content_r + 6, y);
         return divider;
     end
 
@@ -8210,7 +8226,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         backplate:SetAtlas("spellbook-list-backplate");
         backplate:SetSize(416, 106);
         backplate:SetAlpha(0.65);
-        backplate:SetPoint("LEFT", page, "TOPLEFT", -85, -51/2 + 10);
+        backplate:SetPoint("LEFT", page, "TOPLEFT", -page_x, -51/2 + 10);
 
         local title = page:CreateFontString(nil, "ARTWORK", "SystemFont_Huge2");
         title:SetPoint("LEFT", page, "TOPLEFT", -8, -13);
@@ -8270,14 +8286,15 @@ local function create_book_catalogue(sb, container, open_sc_tab)
 
     local function create_page(i)
         local page = CreateFrame("Frame", nil, container);
-        page:SetSize(view_w, full_rows_bottom);
+        page:SetSize(page_w, full_rows_bottom);
+        -- both pages of an open book use the art of a single page
         if i == 1 then
-            page:SetPoint("TOPLEFT", 85, -45);
+            page:SetPoint("TOPLEFT", page_x, -45);
             page.header_h = title_header_h;
             page.header_y = -26;
             create_title(page);
         else
-            page:SetPoint("TOPRIGHT", -50, -45);
+            page:SetPoint("TOPLEFT", container, "TOP", page_x, -45);
             page.header_h = plain_header_h;
             page.header_y = plain_divider_y + 17;
             create_divider(page, plain_divider_y);
@@ -8387,6 +8404,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         row.spell_id = id;
         row.area.spell_id = id;
         row.area:Show();
+        set_name_width(row, mode, by_lvl);
 
         local known = v.trigger == spell_filters.already_known or v.is_dual;
         row.icon:SetTexture((C_Spell.GetSpellTexture(id)));
@@ -8563,9 +8581,9 @@ local function create_book_catalogue(sb, container, open_sc_tab)
             end
         end
 
-        local left_x = 85;
+        local left_x = page_x;
         if views ~= 1 then
-            left_x = container:GetWidth() - 50 - view_w;
+            left_x = container:GetWidth()/2 + page_x;
         end
         local max_x = math.huge;
         if paging:GetLeft() and container:GetLeft() then
