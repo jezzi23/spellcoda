@@ -319,6 +319,10 @@ local IsAddOnLoaded = IsAddOnLoaded or function(addon_name)
         return DominosActionButton1 ~= nil;
     elseif addon_name == "DragonflightUI" then
         return DragonflightUI ~= nil;
+    elseif addon_name == "EllesmereUIActionBars" then
+        -- namespace is there at load, the bars can come later
+        return EllesmereUI ~= nil and EllesmereUI._ModuleNS ~= nil and
+            EllesmereUI._ModuleNS.EllesmereUIActionBars ~= nil;
     else
         return false;
     end
@@ -540,6 +544,48 @@ local function gather_spell_icons()
             end
         end
         num_actions = math.max(num_actions, highest_action_found);
+
+    elseif IsAddOnLoaded("EllesmereUIActionBars") then
+
+        -- named by slot
+        num_actions = 180;
+        for i = 1, num_actions do
+            action_bar_frame_names[i] = "EABButton"..i;
+        end
+
+        local eab_bar_pages = {
+            MainBar = 1, Bar2 = 6, Bar3 = 5, Bar4 = 3, Bar5 = 4,
+            Bar6 = 13, Bar7 = 14, Bar8 = 15, Bar9 = 2, Bar10 = 10,
+        };
+
+        set_paging_override = function(overrides)
+
+            for key, page in pairs(eab_bar_pages) do
+                if page ~= 1 then
+                    local bar = _G["EABBar_"..key];
+                    if bar and bar._eabPagingConds then
+                        overrides[page] = 1;
+                    else
+                        overrides[page] = nil;
+                    end
+                end
+            end
+        end
+
+        -- hidden bars get their buttons later, rescan then
+        hooksecurefunc(EllesmereUI._ModuleNS.EllesmereUIActionBars, "BuildBarButtons", function(info)
+            local page = eab_bar_pages[info.key];
+            if not page then
+                return;
+            end
+            for i = (page-1)*12 + 1, page*12 do
+                local frame = _G["EABButton"..i];
+                if frame then
+                    frame:HookScript("OnMouseWheel", sc.tooltip.eval_mode_scroll_fn);
+                end
+            end
+            sc.core.rescan_action_bar_needed = true;
+        end);
 
     else -- default action bars
 

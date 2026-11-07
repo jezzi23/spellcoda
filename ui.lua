@@ -7843,10 +7843,46 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         ["|cFFFF4500"] = "|cFFB33000",
         ["|cFFFF0000"] = "|cFFA81000",
     };
+    -- tweak for dark skinned spell books, keeps the embedded page readable
+    local ink = {
+        available = {0.0, 0.42, 0.0},
+        unavailable = {0.62, 0.1, 0.02},
+        available_code = "|cFF006B00",
+        unavailable_code = "|cFF9E1A05",
+        shadow = {0.25, 0.12, 0.0},
+        row_hl = {0.35, 0.2, 0.05, 0.12},
+        button_hl = {0.35, 0.2, 0.05, 0.15},
+    };
+    -- skins lighten blizzard's spell names, so check those
+    local function choose_ink()
+        local lum;
+        sb:ForEachDisplayedSpell(function(entry)
+            if not lum and entry.Name then
+                local r, g, b = entry.Name:GetTextColor();
+                lum = 0.299*r + 0.587*g + 0.114*b;
+            end
+        end);
+        if not lum or lum < 0.5 then
+            return;
+        end
+        ink.light = true;
+        base_color[1], base_color[2], base_color[3] = 0.9, 0.9, 0.9;
+        wipe(lvl_diff_colors);
+        ink.available = {0.65, 1, 0.4};
+        ink.unavailable = {1, 0.55, 0.45};
+        ink.available_code = "|cFFA6FF66";
+        ink.unavailable_code = "|cFFFF8C73";
+        ink.shadow = {0, 0, 0};
+        ink.row_hl = {1, 1, 1, 0.06};
+        ink.button_hl = {1, 1, 1, 0.08};
+    end
     -- the configured colors are for a dark background, darkened for parchment
     local per_sec_color = {};
     local per_cost_color = {};
     local function on_parchment(r, g, b)
+        if ink.light then
+            return r, g, b;
+        end
         local max_lum = 0.3;
         -- yellow to orange is the paper's own hue
         if r > b and g > b then
@@ -7919,7 +7955,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
 
     local function lvl_font_string(parent, font_obj)
         local fs = parent:CreateFontString(nil, "ARTWORK", font_obj);
-        fs:SetShadowColor(0.25, 0.12, 0.0, 1.0);
+        fs:SetShadowColor(ink.shadow[1], ink.shadow[2], ink.shadow[3], 1.0);
         return fs;
     end
 
@@ -8020,7 +8056,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
 
         row.hl = row:CreateTexture(nil, "BACKGROUND");
         row.hl:SetAllPoints();
-        row.hl:SetColorTexture(0.35, 0.2, 0.05, 0.12);
+        row.hl:SetColorTexture(unpack(ink.row_hl));
         row.hl:Hide();
 
         local area = CreateFrame("Button", nil, row);
@@ -8160,7 +8196,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         ignore_f:SetAllPoints();
         ignore_f:SetFrameLevel(area:GetFrameLevel() + 3);
         row.ignore_line = ignore_f:CreateTexture(nil, "OVERLAY");
-        row.ignore_line:SetColorTexture(0.62, 0.1, 0.02, 0.8);
+        row.ignore_line:SetColorTexture(ink.unavailable[1], ink.unavailable[2], ink.unavailable[3], 0.8);
         row.ignore_line:SetHeight(mode.ignore_line);
         row.ignore_line:SetPoint("LEFT", -6, 0);
         row.ignore_line:SetPoint("RIGHT", row, "LEFT", content_r, 0);
@@ -8199,7 +8235,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
             btn.hl = btn:CreateTexture(nil, "BACKGROUND");
             btn.hl:SetPoint("TOPLEFT", 0, 2);
             btn.hl:SetPoint("BOTTOMRIGHT", 0, -2);
-            btn.hl:SetColorTexture(0.35, 0.2, 0.05, 0.15);
+            btn.hl:SetColorTexture(unpack(ink.button_hl));
             btn.hl:Hide();
             btn:SetScript("OnClick", on_click);
             btn:SetScript("OnEnter", function(self)
@@ -8227,6 +8263,8 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         backplate:SetSize(416, 106);
         backplate:SetAlpha(0.65);
         backplate:SetPoint("LEFT", page, "TOPLEFT", -page_x, -51/2 + 10);
+        -- looks off on a dark book
+        backplate:SetShown(not ink.light);
 
         local title = page:CreateFontString(nil, "ARTWORK", "SystemFont_Huge2");
         title:SetPoint("LEFT", page, "TOPLEFT", -8, -13);
@@ -8437,9 +8475,9 @@ local function create_book_catalogue(sb, container, open_sc_tab)
             row.name:SetText(C_Spell.GetSpellName(id));
         end
         if v.trigger == spell_filters.available then
-            row.name:SetTextColor(0.0, 0.42, 0.0);
+            row.name:SetTextColor(unpack(ink.available));
         elseif v.trigger == spell_filters.unavailable then
-            row.name:SetTextColor(0.62, 0.1, 0.02);
+            row.name:SetTextColor(unpack(ink.unavailable));
         else
             row.name:SetTextColor(unpack(base_color));
         end
@@ -8560,12 +8598,12 @@ local function create_book_catalogue(sb, container, open_sc_tab)
 
     local function render_footer(views)
         local lvl = active_loadout().lvl;
-        footer.avail:SetText("|cFF006B00"..L["Available cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(cat.avail_cost));
+        footer.avail:SetText(ink.available_code..L["Available cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(cat.avail_cost));
         if cat.next_cost ~= 0 then
             set_lvl_colored_text(footer.next_label, lvl, cat.next_lvl, L["Next level"].." "..cat.next_lvl..L[" cost:"]);
         end
         footer.next_amount:SetText(C_CurrencyInfo.GetCoinTextureString(cat.next_cost));
-        footer.total:SetText("|cFF9E1A05"..L["Total cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(cat.total_cost));
+        footer.total:SetText(ink.unavailable_code..L["Total cost:"].."|r "..C_CurrencyInfo.GetCoinTextureString(cat.total_cost));
 
         local groups = {};
         for _, g in ipairs({
@@ -8680,6 +8718,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
 
     local function create()
         created = true;
+        choose_ink();
         layout_columns();
         pages[1] = create_page(1);
         pages[2] = create_page(2);
