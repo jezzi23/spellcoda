@@ -2046,11 +2046,14 @@ end
 
 -- prev is the current front loadout, the sheet stats are kept from it while they are secret
 local function dynamic_loadout(loadout, prev)
+    local lvl;
     if not config.settings.loadout_use_custom_lvl then
-        loadout.lvl = UnitLevel("player");
+        lvl = UnitLevel("player");
     else
-        loadout.lvl = config.settings.loadout_lvl;
+        lvl = config.settings.loadout_lvl;
     end
+    -- level can be missing early at login, keep the last one
+    loadout.lvl = lvl or math.max(prev.lvl, 1);
 
     if should_unit_stats_be_secret and should_unit_stats_be_secret() then
         keep_sheet_stats(loadout, prev);

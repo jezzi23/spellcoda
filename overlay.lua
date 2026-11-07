@@ -1579,7 +1579,7 @@ local cc_event_dispatch = {
     ["START_AUTOREPEAT_SPELL"] = function(self, arg1, arg2, arg4)
         cc_noexpire = false;
         for _, id in pairs(auto_repeat_spells_tracking) do
-            if IsCurrentSpell(id) then
+            if C_Spell.IsCurrentSpell(id) then
                 set_cc_spell(id);
                 return;
             end

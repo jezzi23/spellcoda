@@ -1814,6 +1814,8 @@ local function create_sw_ui_spells_frame(pframe)
         f:SetScript("OnClick", function()
             libDD:ToggleDropDownMenu(1, nil, spell_options, spell_options, 0, 0)
         end);
+        -- the library keeps the menu open on a mouse down over .Button, so a click here can close it
+        spell_options.Button = f;
 
         hover_f.update = function()
             local focus = mouse_focus();
@@ -7995,7 +7997,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         local over = row.spell_id ~= nil and
             (has_mouse(row) or has_mouse(row.area) or has_mouse(row.item) or has_mouse(row.menu_button));
         row.hl:SetShown(over);
-        row.menu_button:SetShown(over);
+        row.menu_button:SetShown(row.spell_id ~= nil);
         if row.icon_hl then
             row.icon_hl:SetShown(over);
         end
@@ -8180,12 +8182,19 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         local menu_button = create_arrow_button(row, 16);
         menu_button:SetPoint("LEFT", row, "LEFT", content_r + 4, 0);
         menu_button:RegisterForClicks("LeftButtonUp", "RightButtonUp");
-        -- the row owns the menu, the button hides under it
+        -- the row owns the menu, it closes with the row
         menu_button:SetScript("OnClick", function()
-            if row.spell_id then
+            local open = Menu.GetManager():GetOpenMenu();
+            if open and open:GetOwnerRegion() == row then
+                open:Close();
+            elseif row.spell_id then
                 spell_menu(row, row.spell_id);
             end
         end);
+        -- keeps the menu from closing on the mouse down, the click then toggles it
+        function menu_button:HandlesGlobalMouseEvent(button_name, event)
+            return event == "GLOBAL_MOUSE_DOWN" and (button_name == "LeftButton" or button_name == "RightButton");
+        end
         menu_button:SetScript("OnEnter", hover);
         menu_button:SetScript("OnLeave", hover);
         menu_button:Hide();
@@ -8966,15 +8975,6 @@ local function init_spellbook_tab()
         cover:Show();
     end
 
-    local function fit_search_box()
-        local search = sb.SearchBox;
-        local tab_right = tab:IsShown() and tab:GetRight();
-        local search_left, search_right = search:GetLeft(), search:GetRight();
-        if tab_right and search_left and search_right and search_left < tab_right + 10 then
-            search:SetWidth(math.max(60, search_right - tab_right - 10));
-        end
-    end
-
     -- other addons' tabs right of blizzard's are found by position, ours goes after the last of them
     local function addon_tabs_right()
         local row_right, row_top, row_bottom = tab_row:GetRight(), tab_row:GetTop(), tab_row:GetBottom();
@@ -9025,13 +9025,13 @@ local function init_spellbook_tab()
 
     local function layout_tab()
         local offset = addon_tabs_right() or 0;
-        if offset > 0 then
-            offset = offset + 2;
+        -- move our tab to avoid conflict with other addons
+        if C_AddOns.IsAddOnLoaded("WhatsTraining") then
+            offset = math.max(offset, 8 + 44 - 8);
         end
         tab:ClearAllPoints();
-        -- extra spacing after blizzard's tabs marks the addon tabs, room for another addon's button is kept before ours
-        tab:SetPoint("TOPLEFT", tab_row, "TOPRIGHT", offset + 12 + 38, 0);
-        fit_search_box();
+        -- extra spacing after blizzard's tabs marks the addon tabs, after another addon's tab ours sits right against it
+        tab:SetPoint("TOPLEFT", tab_row, "TOPRIGHT", offset > 0 and offset or 12, 0);
     end
 
     local function set_blizzard_shown(shown)
@@ -9181,7 +9181,6 @@ local function init_spellbook_tab()
     sb:HookScript("OnHide", function()
         C_Timer.After(0, close_if_hidden);
     end);
-    hooksecurefunc(sb, "ResizeSearchBox", fit_search_box);
 
     -- tab clicks, gamepad and spec changes all pass here, spell updates set the same tab again
     hooksecurefunc(sb, "OnActiveCategoryChanged", function()

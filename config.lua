@@ -482,6 +482,8 @@ local function load_config()
     end
     for _, v in pairs(__sc_p_acc.profiles) do
         load_persistent_data(v.settings, default_settings);
+        -- saved data can come from another client, keep values bound by client data in range
+        v.settings.loadout_lvl = math.min(v.settings.loadout_lvl, sc.max_lvl);
     end
 
     -- load settings
