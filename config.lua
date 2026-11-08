@@ -102,6 +102,7 @@ local default_settings     = {
     overlay_old_rank                                            = false,
     overlay_old_rank_limit_to_known                             = true,
     overlay_no_decimals                                         = false,
+    overlay_hide_macro_names                                    = false,
     overlay_resource_regen                                      = true,
     overlay_resource_regen_display_idx                          = 3,
     overlay_ehp                                                 = true,

@@ -213,6 +213,20 @@ local spell_tooltip_cached = {
 
 local tooltip_spell_update_id = 0;
 
+-- retail based clients give macro tooltips their own type, GetSpell is empty there and the first line holds the spell
+local macro_tooltip_type = not GameTooltip:HasScript("OnTooltipSetSpell") and Enum.TooltipDataType.Macro;
+
+local function tooltip_spell_id(tooltip)
+    local _, id = tooltip:GetSpell();
+    if not id and macro_tooltip_type and tooltip:IsTooltipType(macro_tooltip_type) then
+        local line = tooltip:GetPrimaryTooltipData().lines[1];
+        if line and line.tooltipType == Enum.TooltipDataType.Spell then
+            id = line.tooltipID;
+        end
+    end
+    return id;
+end
+
 -- Meddles with tooltip and sets its spell id accordingly,
 -- which in return is handled by "OnTooltipSetSpell" event
 -- which finally calls write_spell_tooltip() to append to tooltip
@@ -227,7 +241,7 @@ local function update_tooltip(tooltip, mod_change)
     end
     if not (PlayerTalentFrame and PlayerTalentFrame:IsShown() and MouseIsOver(PlayerTalentFrame)) and
         tooltip:IsShown() then
-        local _, id = tooltip:GetSpell();
+        local id = tooltip_spell_id(tooltip);
 
         if id and (spells[id] or id == clear_tooltip_refresh_id or id == __sc_frame.spell_viewer_invalid_spell_id) then
 
@@ -2208,7 +2222,7 @@ local function anchor_calc_tooltips(show_diff)
 end
 
 local function write_spell_tooltip()
-    local _, spell_id = GameTooltip:GetSpell();
+    local spell_id = tooltip_spell_id(GameTooltip);
 
     if spell_id == clear_tooltip_refresh_id then
         spell_id = spell_id_of_cleared_tooltip;

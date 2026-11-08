@@ -2674,6 +2674,14 @@ local function create_sw_ui_overlay_frame(pframe)
             tooltip = L["Does not warn about old rank when the higher rank is not learned/known by player. Requires old rank warning option to be toggled."],
         },
         {
+            id = "overlay_hide_macro_names",
+            txt = L["Hide macro names"],
+            func = function()
+                sc.overlay.update_macro_names();
+            end,
+            tooltip = L["Hides the macro name on action bar buttons that show a SpellCoda overlay."],
+        },
+        {
             id = "overlay_no_decimals",
             txt = L["Never show decimals"],
             func = function(self)
@@ -2688,7 +2696,7 @@ local function create_sw_ui_overlay_frame(pframe)
         ofs[#ofs + 1] = v;
     end
 
-    pframe.y_offset = pframe.y_offset - 27;
+    pframe.y_offset = pframe.y_offset - 7;
 
     local slider_frame_type = "Slider";
     f = CreateFrame(slider_frame_type, "__sc_frame_setting_overlay_update_freq", pframe, "UISliderTemplate");

@@ -40,7 +40,7 @@ sc.core                         = core;
 core.addon_name                 = "SpellCoda";
 
 local version_major             = 0;
-local version_minor             = 16;
+local version_minor             = 17;
 local version_build             = sc.addon_build_id;
 
 core.version_id                 = version_build + version_minor*100000 + version_major*100000000;
@@ -164,6 +164,7 @@ function core.overlay_refresh_config(overlay_disable_changed)
 
     if overlay_muted_before ~= core.mute_overlay or overlay_disable_changed then
         sc.spells_feed.external_feed_reconfig(core.mute_overlay, sc.config.settings.overlay_disable);
+        sc.overlay.update_macro_names();
     end
 end
 
@@ -555,11 +556,14 @@ if legacy_tooltip_scripts then
 else
     -- Retail based clients removed OnTooltipSetSpell/OnTooltipSetItem scripts
     -- Post calls fire for every tooltip, restrict to GameTooltip like the script hooks
-    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Spell, function(self)
+    local function on_spell_post_call(self)
         if self == GameTooltip then
             on_tooltip_set_spell();
         end
-    end);
+    end
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Spell, on_spell_post_call);
+    -- macro tooltips are not type Spell, the spell id is read from the macro data
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Macro, on_spell_post_call);
     TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(self)
         if self == GameTooltip then
             on_tooltip_set_item(self);

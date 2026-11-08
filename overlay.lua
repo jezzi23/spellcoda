@@ -85,8 +85,37 @@ local function init_frame_overlay(frame_info)
 
         for i = 1, 3 do
             frame_info.overlay_frames[i] = frame_info.frame:CreateFontString(nil, "OVERLAY");
+            -- above the button's macro name, same sublevel left the order to chance
+            frame_info.overlay_frames[i]:SetDrawLayer("OVERLAY", 2);
         end
         overlay_frames_config(frame_info.overlay_frames);
+    end
+end
+
+-- alpha because the button's own update only rewrites the text
+local function update_macro_name(frame_info)
+    local name = frame_info.frame and frame_info.frame.Name;
+    local target = nil;
+    if name and frame_info.spell_id and frame_info.spell_id ~= 0 and
+        config.settings.overlay_hide_macro_names and
+        not config.settings.overlay_disable and
+        not sc.core.mute_overlay then
+        target = name;
+    end
+    if frame_info.macro_name_hidden ~= target then
+        if frame_info.macro_name_hidden then
+            frame_info.macro_name_hidden:SetAlpha(1);
+        end
+        if target then
+            target:SetAlpha(0);
+        end
+        frame_info.macro_name_hidden = target;
+    end
+end
+
+function overlay.update_macro_names()
+    for _, v in pairs(action_id_frames) do
+        update_macro_name(v);
     end
 end
 
@@ -298,6 +327,7 @@ local function try_register_frame(action_id, frame_name, spell_id)
         end
         action_id_frames[action_id].spell_id = spell_id;
         init_frame_overlay(action_id_frames[action_id]);
+        update_macro_name(action_id_frames[action_id]);
     end
 end
 
@@ -627,6 +657,7 @@ local function reassign_overlay_icon_spell(action_id, spell_id)
         end
     end
     action_id_frames[action_id].spell_id = spell_id;
+    update_macro_name(action_id_frames[action_id]);
 end
 
 local function handle_mirrored_action_button(bar_id, action_id, spell_id)
