@@ -206,11 +206,15 @@ local function detect_buffs(loadout, prev)
     for _, k in ipairs(units) do
         local v = loadout.dynamic_buffs[k];
         local guid = UnitGUID(k);
+        -- a stored secret guid errors on the next compare
+        if is_secret(guid) then
+            guid = nil;
+        end
         loadout.aura_guids[k] = guid;
         local shared = k ~= "player" and
             (v == loadout.dynamic_buffs["player"] or (k == "mouseover" and v == loadout.dynamic_buffs["target"]));
         if aura_changed[k] == false and last_read_scanned and not shared and
-            guid and not is_secret(guid) and guid == prev.aura_guids[k] and not __spellcoda_test_all_data__ then
+            guid and guid == prev.aura_guids[k] and not __spellcoda_test_all_data__ then
 
             for id, buff_info in pairs(prev.dynamic_buffs[k]) do
                 v[id] = buff_info;
