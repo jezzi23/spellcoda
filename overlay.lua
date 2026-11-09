@@ -239,6 +239,18 @@ local function overlay_reconfig()
     end
 end
 
+local function clear_spell_book_overlays()
+
+    for _, v in pairs(spell_book_frames) do
+        v.old_rank_marked = false;
+        v.labels_update_id = nil;
+        for i = 1, 3 do
+            v.overlay_frames[i]:SetText("");
+            v.overlay_frames[i]:Hide();
+        end
+    end
+end
+
 local function clear_overlays()
 
     for _, v in pairs(action_id_frames) do
@@ -251,14 +263,7 @@ local function clear_overlays()
             end
         end
     end
-    for _, v in pairs(spell_book_frames) do
-        v.old_rank_marked = false;
-        v.labels_update_id = nil;
-        for i = 1, 3 do
-            v.overlay_frames[i]:SetText("");
-            v.overlay_frames[i]:Hide();
-        end
-    end
+    clear_spell_book_overlays();
     for _, v in pairs(external_overlay_frames) do
         v.old_rank_marked = false;
         v.labels_update_id = nil;
@@ -449,7 +454,7 @@ local function hook_spell_book()
     spell_book_hooked = true;
     -- the paged frame recycles its buttons on every page/tab change
     hooksecurefunc(PlayerSpellsFrame.SpellBookFrame.PagedSpellsFrame, "DisplayViewsForCurrentPage", function()
-        clear_overlays();
+        clear_spell_book_overlays();
         sc.loadouts.force_update = true;
     end);
 end
