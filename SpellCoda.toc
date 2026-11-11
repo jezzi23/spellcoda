@@ -70,6 +70,7 @@ talents.lua
 calc_defs.lua
 [Game]/mechanics.lua
 calc.lua
+power_curves.lua
 overlay.lua
 tooltip.lua
 ui.lua

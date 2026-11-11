@@ -19,6 +19,7 @@ local format_number                             = sc.utils.format_number;
 local color_by_lvl_diff                         = sc.utils.color_by_lvl_diff;
 local write_item_info_from_link                 = sc.utils.write_item_info_from_link;
 local secret_or                                 = sc.utils.secret_or;
+local is_secret                                 = sc.utils.is_secret;
 
 local update_loadout_and_effects                = sc.loadouts.update_loadout_and_effects;
 local update_loadout_and_effects_diffed_from_ui = sc.loadouts.update_loadout_and_effects_diffed_from_ui;
@@ -81,6 +82,200 @@ local function add_single_line(tooltip, lhs, rhs, rgb_r, rgb_g, rgb_b)
 end
 
 local add_line = add_double_line;
+
+local pc_begin                                  = sc.power_curves.begin;
+local pc_new_slot                               = sc.power_curves.new_slot;
+local pc_fill                                   = sc.power_curves.fill;
+local pc_value                                  = sc.power_curves.value;
+local pc_escape                                 = sc.power_curves.escape;
+
+-- GameTooltip lines whose numbers follow a secret current power, set again while the tooltip shows them
+local live = {
+    ctx = sc.power_curves.new_context(),
+    -- evaluation at max power the line numbers come from
+    info = nil,
+    stats = nil,
+    -- line records, reused
+    lines = {},
+    num = 0,
+    -- curves by record index and number index, reused so a hovered spell keeps its points
+    slots = {},
+    tooltip_id = nil,
+    last_line = 0,
+    last_refresh = 0,
+};
+
+local drop_live_lines;
+
+local function live_begin(tooltip, spell, spell_id, loadout, effects, eval_flags)
+    live.ctx.active = false;
+    if tooltip == GameTooltip then
+        drop_live_lines(true);
+        pc_begin(live.ctx, spell, spell_id, loadout, effects, eval_flags, true);
+    end
+end
+
+local function show_live_line(rec)
+    local s = rec.slots;
+    if rec.n == 1 then
+        rec.fs:SetFormattedText(rec.fmt, pc_value(s[1]));
+    elseif rec.n == 2 then
+        rec.fs:SetFormattedText(rec.fmt, pc_value(s[1]), pc_value(s[2]));
+    elseif rec.n == 3 then
+        rec.fs:SetFormattedText(rec.fmt, pc_value(s[1]), pc_value(s[2]), pc_value(s[3]));
+    else
+        rec.fs:SetFormattedText(rec.fmt, pc_value(s[1]), pc_value(s[2]), pc_value(s[3]), pc_value(s[4]));
+    end
+end
+
+local function plain_piece(spec, v)
+    if spec.fixed then
+        return string.format(spec.fixed, v);
+    end
+    return format_number(v, spec.digits or 0);
+end
+
+-- right side from parts, strings stay as they are, specs are numbers (see power_curves.fill)
+-- numbers that follow a secret power go through curves, the line is plain otherwise
+local function add_live_line(tooltip, lhs, parts, r, g, b)
+    local info, stats = live.info, live.stats;
+    local ctx = live.ctx;
+    local fmt = "";
+    local n = 0;
+    local slots;
+    if ctx.active and tooltip == GameTooltip then
+        local idx = live.num + 1;
+        slots = live.slots[idx];
+        if not slots then
+            slots = {};
+            live.slots[idx] = slots;
+        end
+        for _, part in ipairs(parts) do
+            if type(part) == "string" then
+                fmt = fmt .. pc_escape(part);
+            else
+                local v = part.value(info, stats);
+                local piece;
+                if n < 4 and (part.uses_until_oom and ctx.oom_frac or not part.uses_until_oom and ctx.x0) then
+                    local slot = slots[n + 1];
+                    if not slot then
+                        slot = pc_new_slot();
+                        slots[n + 1] = slot;
+                    end
+                    piece = pc_fill(ctx, slot, part, v, info, stats, part.digits or 0);
+                end
+                if piece then
+                    n = n + 1;
+                    fmt = fmt .. piece;
+                else
+                    fmt = fmt .. pc_escape(plain_piece(part, v));
+                end
+            end
+        end
+    end
+    local text = "";
+    for _, part in ipairs(parts) do
+        if type(part) == "string" then
+            text = text .. part;
+        else
+            text = text .. plain_piece(part, part.value(info, stats));
+        end
+    end
+    add_line(tooltip, lhs, text, r, g, b);
+    if n == 0 then
+        return;
+    end
+
+    -- the tooltip's own line keeps the plain text at max power, invisible, to hold the space
+    -- our font string on top of it shows the secret, a font string that held one stays secret
+    local line = tooltip:NumLines();
+    local target;
+    if add_line == add_double_line then
+        target = _G["GameTooltipTextRight" .. line];
+    else
+        target = _G["GameTooltipTextLeft" .. line];
+        if lhs ~= "" then
+            fmt = pc_escape(lhs) .. " " .. fmt;
+        end
+    end
+    if not target then
+        return;
+    end
+    live.num = live.num + 1;
+    local rec = live.lines[live.num];
+    if not rec then
+        rec = { fs = tooltip:CreateFontString(nil, "OVERLAY") };
+        live.lines[live.num] = rec;
+    end
+    rec.target, rec.placeholder, rec.r, rec.g, rec.b = target, target:GetText(), r, g, b;
+    target:SetTextColor(r, g, b, 0);
+
+    local fs = rec.fs;
+    fs:SetFont(target:GetFont());
+    fs:ClearAllPoints();
+    if add_line == add_double_line then
+        fs:SetPoint("RIGHT", target, "RIGHT", 0, 0);
+    else
+        fs:SetPoint("LEFT", target, "LEFT", 0, 0);
+    end
+    fs:SetTextColor(r, g, b, 1);
+    fs:Show();
+    rec.fmt, rec.n, rec.slots = fmt, n, slots;
+    live.last_line = line;
+    show_live_line(rec);
+end
+
+-- our font strings hidden, the tooltip lines visible again
+-- when the tooltip was refilled without a clear, only lines still holding the placeholder are restored
+drop_live_lines = function(refilled)
+    for i = 1, live.num do
+        local rec = live.lines[i];
+        rec.fs:Hide();
+        local text = refilled and rec.target:GetText();
+        if not refilled or (not is_secret(text) and text == rec.placeholder) then
+            rec.target:SetTextColor(rec.r, rec.g, rec.b, 1);
+        end
+    end
+    live.num = 0;
+end
+
+local function live_written(tooltip_id)
+    live.tooltip_id = tooltip_id;
+    live.ctx.active = false;
+end
+
+-- numbers of the spell tooltip lines that can follow the power
+local live_spec = {
+    min_noncrit_floor = { value = function(info) return math.floor(info.min_noncrit_if_hit1); end, fixed = "%.0f" },
+    max_noncrit_ceil = { value = function(info) return math.ceil(info.max_noncrit_if_hit1); end, fixed = "%.0f" },
+    min_noncrit = { value = function(info) return info.min_noncrit_if_hit1; end, fixed = "%.1f" },
+    min_crit_floor = { value = function(info) return math.floor(info.min_crit_if_hit1); end, fixed = "%.0f" },
+    max_crit_ceil = { value = function(info) return math.ceil(info.max_crit_if_hit1); end, fixed = "%.0f" },
+    min_crit = { value = function(info) return info.min_crit_if_hit1; end, fixed = "%.1f" },
+    expected_st = { value = function(info) return info.expected_st; end, fixed = "%.1f" },
+    expected = { value = function(info) return info.expected; end, fixed = "%.1f" },
+    effect_per_sec = { value = function(info) return info.effect_per_sec; end, fixed = "%.1f" },
+    threat = { value = function(info) return info.threat; end, fixed = "%.1f" },
+    threat_per_sec = { value = function(info) return info.threat_per_sec; end, fixed = "%.1f" },
+    cost = { value = function(_, stats) return stats.cost; end, fixed = "%.1f" },
+    extra_power = { value = function(_, stats) return stats.extra_power; end, fixed = "%.0f" },
+    effect_per_cost = {
+        value = function(info) return info.effect_per_cost; end,
+        num = function(info) return info.expected; end,
+        den = function(_, stats) return stats.cost; end,
+        fixed = "%.2f",
+    },
+    threat_per_cost = {
+        value = function(info) return info.threat_per_cost; end,
+        num = function(info) return info.threat; end,
+        den = function(_, stats) return stats.cost; end,
+        fixed = "%.2f",
+    },
+    effect_until_oom = { value = function(info) return info.effect_until_oom; end, digits = 1, uses_until_oom = true },
+    casts_until_oom = { value = function(info) return info.num_casts_until_oom; end, fixed = "%.1f", uses_until_oom = true },
+    time_until_oom = { value = function(info) return info.time_until_oom; end, fixed = "%.1f", uses_until_oom = true },
+    mana = { value = function(info) return info.mana; end, fixed = "%.0f", uses_until_oom = true },
+};
 
 local function sort_stat_weights(weights, sort_by_field)
     for i = 1, #weights do
@@ -231,6 +426,26 @@ end
 -- Meddles with tooltip and sets its spell id accordingly,
 -- which in return is handled by "OnTooltipSetSpell" event
 -- which finally calls write_spell_tooltip() to append to tooltip
+-- live lines of the shown spell follow the power, dropped once the tooltip shows something else
+local function refresh_live_lines()
+    if live.num == 0 then
+        return;
+    end
+    local t = GetTime();
+    if t - live.last_refresh < 0.25 then
+        return;
+    end
+    live.last_refresh = t;
+    if not GameTooltip:IsShown() or tooltip_spell_id(GameTooltip) ~= live.tooltip_id or
+        GameTooltip:NumLines() < live.last_line then
+        drop_live_lines(true);
+        return;
+    end
+    for i = 1, live.num do
+        show_live_line(live.lines[i]);
+    end
+end
+
 local function update_tooltip(tooltip, mod_change)
     if __spellcoda_test_all_spells__ and __sc_frame.spells_frame:IsShown() then
         spell_jump_key = spell_jump_itr(spells, spell_jump_key);
@@ -414,8 +629,10 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         spell = spell.healing_version;
     end
 
+    live_begin(tooltip, spell, spell_id, loadout, effects_finalized, eval_flags);
     local info, stats = calc_spell_eval(spell, loadout, effects_finalized, eval_flags, spell_id);
     cast_until_oom(info, spell, stats, loadout, effects_finalized, true, 0);
+    live.info, live.stats = info, stats;
 
     local stats_eval, stat_normalize_to;
     if bit.band(eval_flags, evaluation_flags.stat_weights) ~= 0 then
@@ -730,15 +947,10 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                         math.ceil(info.oh_info.max_noncrit_if_hit1)
                     );
                 end
-                add_line(
+                add_live_line(
                     tooltip,
                     string.format("%s%s:", effect, hit_str),
-                    string.format("%.0f %s %.0f%s",
-                        math.floor(info.min_noncrit_if_hit1),
-                        L["to"],
-                        math.ceil(info.max_noncrit_if_hit1),
-                        oh
-                    ),
+                    { live_spec.min_noncrit_floor, " " .. L["to"] .. " ", live_spec.max_noncrit_ceil, oh },
                     effect_color("normal")
                 );
                 if bit.band(eval_flags, evaluation_flags.assume_single_effect) == 0 and
@@ -759,10 +971,10 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 if info.oh_info then
                     oh = string.format(" | %.1f", info.oh_info.min_noncrit_if_hit1);
                 end
-                add_line(
+                add_live_line(
                     tooltip,
                     string.format("%s%s:", effect, hit_str),
-                    string.format("%.1f%s", info.min_noncrit_if_hit1, oh),
+                    { live_spec.min_noncrit, oh },
                     effect_color("normal")
                 );
             end
@@ -854,28 +1066,20 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                         math.ceil(info.oh_info.max_crit_if_hit1)
                     );
                 end
-                add_line(
+                add_live_line(
                     tooltip,
                     string.format("%s%s:", L["Critical"], crit_chance_info_str, oh),
-                    string.format("%.0f %s %0.f%s%s",
-                        math.floor(info.min_crit_if_hit1),
-                        L["to"],
-                        math.ceil(info.max_crit_if_hit1),
-                        special_crit_mod_str,
-                        oh),
+                    { live_spec.min_crit_floor, " " .. L["to"] .. " ", live_spec.max_crit_ceil, special_crit_mod_str, oh },
                     effect_color("crit")
                 );
             elseif info.min_crit_if_hit1 ~= 0 then
                 if info.oh_info then
                     oh = string.format(" | %.1f", info.oh_info.min_crit_if_hit1);
                 end
-                add_line(
+                add_live_line(
                     tooltip,
                     string.format("%s%s:", L["Critical"], crit_chance_info_str, oh),
-                    string.format("%.1f%s%s",
-                        info.min_crit_if_hit1,
-                        special_crit_mod_str,
-                        oh),
+                    { live_spec.min_crit, special_crit_mod_str, oh },
                     effect_color("crit")
                 );
             end
@@ -1302,10 +1506,10 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         if extra_info_st ~= "" then
             extra_info_st = "(" .. extra_info_st .. ")";
         end
-        add_line(
+        add_live_line(
             tooltip,
             L["Expected"]..":",
-            string.format("%.1f %s", info.expected_st, extra_info_st),
+            { live_spec.expected_st, " " .. extra_info_st },
             effect_color("expectation")
         );
 
@@ -1316,10 +1520,10 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             else
                 extra_info_multi = "(" .. extra_info_multi .. " | " .. aoe_ratio .. ")";
             end
-            add_line(
+            add_live_line(
                 tooltip,
                 L["Optimistic"]..":",
-                string.format("%.1f %s", info.expected, extra_info_multi),
+                { live_spec.expected, " " .. extra_info_multi },
                 effect_color("expectation")
             );
         end
@@ -1332,28 +1536,28 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 L["periodic for"], info.longest_ot_duration);
         end
 
-        add_line(
+        add_live_line(
             tooltip,
             string.format("%s:", effect_per_sec),
-            string.format("%.1f %s %s", info.effect_per_sec, L["by execution time"], periodic_part),
+            { live_spec.effect_per_sec, " " .. L["by execution time"] .. " " .. periodic_part },
             effect_color("effect_per_sec")
         );
     end
     if config.settings.tooltip_display_threat and info.threat ~= 0 then
-        add_line(
+        add_live_line(
             tooltip,
             L["Expected threat"]..":",
-            string.format("%.1f", info.threat),
+            { live_spec.threat },
             effect_color("threat")
         );
     end
     if config.settings.tooltip_display_threat_per_sec and
         stats.cast_time ~= 0 and
         info.threat_per_sec ~= 0 then
-        add_line(
+        add_live_line(
             tooltip,
             L["Threat per sec"]..":",
-            string.format("%.1f", info.threat_per_sec),
+            { live_spec.threat_per_sec },
             effect_color("threat")
         );
     end
@@ -1387,26 +1591,42 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         (not tooltip_cost or
             (spell.power_type == sc.powers.mana and math.abs(tooltip_cost - stats.cost) > 1.0) or
             (spell.power_type ~= sc.powers.mana and math.abs(tooltip_cost - stats.cost) > 0.1)) then
-        add_line(
+        local parts = { live_spec.cost };
+        local open = " (";
+        if stats.extra_power and spell.power_type ~= powers.combopoints and cost_str ~= "" then
+            parts[#parts + 1] = open;
+            parts[#parts + 1] = live_spec.extra_power;
+            parts[#parts + 1] = " " .. L["extra"] .. " " .. cost_str;
+            open = ", ";
+        end
+        if (stats.cost_refund or 0) > 0 and (stats.cost_before_refund or 0) > 0 then
+            parts[#parts + 1] = open .. string.format("%.1f%% %s",
+                100 * stats.cost_refund / stats.cost_before_refund, L["refunded"]);
+            open = ", ";
+        end
+        if open == ", " then
+            parts[#parts + 1] = ")";
+        end
+        add_live_line(
             tooltip,
             L["Expected cost"]..":",
-            string.format("%.1f", stats.cost),
+            parts,
             effect_color("cost")
         );
     end
     if config.settings.tooltip_display_effect_per_cost and stats.cost ~= 0 then
-        add_line(
+        add_live_line(
             tooltip,
             string.format("%s:", effect_per_cost),
-            string.format("%.2f", info.effect_per_cost),
+            { live_spec.effect_per_cost },
             effect_color("effect_per_cost")
         );
     end
     if config.settings.tooltip_display_threat_per_cost and stats.cost ~= 0 and info.threat_per_cost ~= 0 then
-        add_line(
+        add_live_line(
             tooltip,
             string.format("%s %s:", L["Threat per"], cost_str),
-            string.format("%.2f", info.threat_per_cost),
+            { live_spec.threat_per_cost },
             effect_color("effect_per_cost")
         );
     end
@@ -1425,24 +1645,18 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         spell.power_type == sc.powers.mana and
         (not config.settings.tooltip_hide_cd_coom or bit.band(spell.flags, spell_flags.cd) == 0)
     then
-        add_line(
+        add_live_line(
             tooltip,
             string.format("%s %s:", effect, L["until OOM"]),
-            string.format("%s (%.1f %s, %.1f %s)",
-                format_number(info.effect_until_oom, 1),
-                info.num_casts_until_oom,
-                L["casts"],
-                info.time_until_oom,
-                L["sec"]),
+            { live_spec.effect_until_oom, " (", live_spec.casts_until_oom, " " .. L["casts"] .. ", ",
+              live_spec.time_until_oom, " " .. L["sec"] .. ")" },
             effect_color("normal")
         );
         if effects_finalized.raw.mana ~= 0 then
-            add_line(
+            add_live_line(
                 tooltip,
                 "",
-                string.format("       %s %.0f %s",
-                    L["casting from"],
-                    loadout.resources[powers.mana] + effects_finalized.raw.mana, cost_str),
+                { "       " .. L["casting from"] .. " ", live_spec.mana, " " .. cost_str },
                 effect_color("normal")
             );
         end
@@ -1954,6 +2168,9 @@ local function write_tooltip_spell_info(tooltip, spell, spell_id, loadout, effec
 
         append_tooltip_header(tooltip);
         append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effects, effects_finalized, eval_flags);
+        if tooltip == GameTooltip then
+            live_written(tooltip_spell_id(tooltip));
+        end
     else
         if (bit.band(spell.flags, spell_flags.resource_regen) ~= 0) and
             config.settings.tooltip_display_resource_regen then
@@ -2999,6 +3216,9 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
 end
 
 local function on_clear_tooltip(tooltip)
+    if tooltip == GameTooltip then
+        drop_live_lines();
+    end
     local tt;
     if tooltip == GameTooltip then
         tt = game_tooltip_item_cmp;
@@ -3028,6 +3248,9 @@ local tooltip_update_cd = 1.0;
 local last_needs_update_time = 0;
 
 local function on_hide_tooltip(tooltip)
+    if tooltip == GameTooltip then
+        drop_live_lines();
+    end
     sc_stat_calc_tooltip:Hide();
     sc_calc_diff_tooltip:Hide();
 end
@@ -3064,6 +3287,7 @@ tooltip_export.on_clear_tooltip                 = on_clear_tooltip;
 tooltip_export.on_show_tooltip                  = on_show_tooltip;
 tooltip_export.on_show_tooltip_legacy           = on_show_tooltip_legacy;
 tooltip_export.on_hide_tooltip                  = on_hide_tooltip;
+tooltip_export.refresh_live_lines               = refresh_live_lines;
 tooltip_export.stat_diffs_included_effects_str  = stat_diffs_included_effects_str;
 tooltip_export.colored_diff_str                 = colored_diff_str;
 

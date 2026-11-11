@@ -61,6 +61,20 @@ local kept_labels = {
     oom_stats = {},
 };
 
+-- labels whose value follows a secret current power, shown through curves (power_curves.lua)
+local power_curves = {
+    ctx = sc.power_curves.new_context(),
+    -- curve per font string, refilled instead of created
+    slots = {},
+    -- font strings showing a curve now
+    on = {},
+    tick = 0,
+};
+
+local function drop_power_curve(fs)
+    power_curves.on[fs] = nil;
+end
+
 overlay.decimals_cap = 3;
 
 local anyspell_overlay, anyspell_cast_until_oom_overlay, mana_restoration_overlay, only_threat_overlay, effective_hp_overlay;
@@ -175,6 +189,7 @@ local function check_old_rank(frame_info, spell_id, clvl)
 
     for i = 1, 3 do
         frame_info.overlay_frames[i]:Hide();
+        drop_power_curve(frame_info.overlay_frames[i]);
     end
     frame_info.labels_update_id = nil;
 
@@ -254,6 +269,9 @@ end
 
 local function clear_overlays()
 
+    for fs in pairs(power_curves.on) do
+        power_curves.on[fs] = nil;
+    end
     for _, v in pairs(action_id_frames) do
         v.old_rank_marked = false;
         v.labels_update_id = nil;
@@ -835,11 +853,60 @@ local function update_action_bars()
 end
 
 local overlay_label_handler;
+
+local pc_begin                                      = sc.power_curves.begin;
+local pc_new_slot                                   = sc.power_curves.new_slot;
+local pc_fill                                       = sc.power_curves.fill;
+local pc_value                                      = sc.power_curves.value;
+
+-- a label through a curve while the spell's power is secret and the value follows it, plain otherwise
+local function write_label(fs, handler, info, stats)
+    local v = handler.value(info, stats);
+    fs.sc_empty = v == nil;
+    if v == nil then
+        fs:SetText("");
+        return;
+    end
+    local digits = math.min(handler.digits or 0, overlay.decimals_cap);
+    local c = power_curves;
+    local ctx = c.ctx;
+    -- a curve only for values that follow the power
+    if ctx.active and (handler.uses_until_oom and ctx.oom_frac or not handler.uses_until_oom and ctx.x0) then
+        local slot = c.slots[fs];
+        if not slot then
+            slot = pc_new_slot();
+            c.slots[fs] = slot;
+        end
+        local fmt = pc_fill(ctx, slot, handler, v, info, stats, digits);
+        if fmt then
+            slot.fmt, slot.tick = fmt, c.tick;
+            c.on[fs] = slot;
+            fs:SetFormattedText(fmt, pc_value(slot));
+            return;
+        end
+    end
+    if handler.dur then
+        fs:SetText(format_dur(v));
+    else
+        fs:SetText(format_number(v, digits, handler.round_down));
+    end
+end
+
+-- labels not rewritten this tick follow the power through their curves
+local function refresh_power_curves()
+    local c = power_curves;
+    for fs, slot in pairs(c.on) do
+        if slot.tick ~= c.tick and fs:IsVisible() then
+            fs:SetFormattedText(slot.fmt, pc_value(slot));
+        end
+    end
+end
+
 local function init_label_handler()
     -- delayed init to allow for config based localization
     overlay_label_handler = {
         overlay_display_normal = {
-            func = function(frame_overlay, info)
+            value = function(info)
                 local val = 0.0;
                 if info.num_direct_effects > 0 then
                     val = val + 0.5*(info.total_min_noncrit_if_hit + info.total_max_noncrit_if_hit);
@@ -847,14 +914,15 @@ local function init_label_handler()
                 if info.num_periodic_effects > 0 then
                     val = val + 0.5*(info.total_ot_min_noncrit_if_hit + info.total_ot_max_noncrit_if_hit);
                 end
-                frame_overlay:SetText(format_number(val, math.min(1, overlay.decimals_cap)));
+                return val;
             end,
+            digits = 1,
             desc = L["Normal effect aggregate"],
             color_tag = "normal",
             requires_spell_flags = spell_flags.eval,
         },
         overlay_display_crit = {
-            func = function(frame_overlay, info, stats)
+            value = function(info, stats)
                 local crit_sum = 0;
 
                 if info.num_direct_effects > 0 then
@@ -864,74 +932,70 @@ local function init_label_handler()
                     crit_sum = crit_sum + 0.5*(info.total_ot_min_crit_if_hit + info.total_ot_max_crit_if_hit);
                 end
                 if stats.crit > 0 and crit_sum > 0 then
-                    frame_overlay:SetText(format_number(crit_sum, math.min(1, overlay.decimals_cap)));
-                else
-                    frame_overlay:SetText("");
+                    return crit_sum;
                 end
             end,
+            digits = 1,
             desc = L["Critical effect aggregate"],
             color_tag = "crit",
             requires_spell_flags = spell_flags.eval,
         },
         overlay_display_expected = {
-            func = function(frame_overlay, info)
-                frame_overlay:SetText(format_number(info.expected, math.min(1, overlay.decimals_cap)));
-            end,
+            value = function(info) return info.expected; end,
+            digits = 1,
             desc = L["Effect expectation"],
             color_tag = "expectation",
             requires_spell_flags = spell_flags.eval,
             tooltip = L["Effect for a single cast considering all possible outcomes such as failed/diminished attacks, critical hits etc."],
         },
         overlay_display_effect_per_sec = {
-            func = function(frame_overlay, info)
-                frame_overlay:SetText(format_number(info.effect_per_sec, math.min(1, overlay.decimals_cap)));
-            end,
+            value = function(info) return info.effect_per_sec; end,
+            digits = 1,
             desc = L["Effect per sec"],
             color_tag = "effect_per_sec",
             requires_spell_flags = spell_flags.eval,
             tooltip = L["Expected effect divided by expected execution time"],
         },
         overlay_display_effect_per_cost = {
-            func = function(frame_overlay, info)
-                frame_overlay:SetText(format_number(info.effect_per_cost, math.min(2, overlay.decimals_cap)));
-            end,
+            value = function(info) return info.effect_per_cost; end,
+            num = function(info) return info.expected; end,
+            den = function(_, stats) return stats.cost; end,
+            digits = 2,
             desc = L["Effect per cost"],
             color_tag = "effect_per_cost",
             requires_spell_flags = spell_flags.eval,
             tooltip = L["Expected effect divided by expected cost"],
         },
         overlay_display_threat = {
-            func = function(frame_overlay, info)
-                frame_overlay:SetText(format_number(info.threat, math.min(1, overlay.decimals_cap)));
-            end,
+            value = function(info) return info.threat; end,
+            digits = 1,
             desc = L["Threat expectation"],
             color_tag = "threat",
             requires_spell_flags = bit.bor(spell_flags.eval, spell_flags.only_threat),
         },
         overlay_display_threat_per_sec = {
-            func = function(frame_overlay, info)
-                frame_overlay:SetText(format_number(info.threat_per_sec, math.min(1, overlay.decimals_cap)));
-            end,
+            value = function(info) return info.threat_per_sec; end,
+            digits = 1,
             desc = L["Threat per sec"],
             color_tag = "threat",
             requires_spell_flags = bit.bor(spell_flags.eval, spell_flags.only_threat),
         },
         overlay_display_threat_per_cost = {
-            func = function(frame_overlay, info)
-                frame_overlay:SetText(format_number(info.threat_per_cost, math.min(2, overlay.decimals_cap)));
-            end,
+            value = function(info) return info.threat_per_cost; end,
+            num = function(info) return info.threat; end,
+            den = function(_, stats) return stats.cost; end,
+            digits = 2,
             desc = L["Threat per cost"],
             color_tag = "effect_per_cost",
             requires_spell_flags = bit.bor(spell_flags.eval, spell_flags.only_threat),
         },
         overlay_display_avg_cost = {
-            func = function(frame_overlay, _, stats)
+            value = function(_, stats)
                 if stats.cost >= 0 then
-                    frame_overlay:SetText(format_number(stats.cost, math.min(1, overlay.decimals_cap)));
-                else
-                    frame_overlay:SetText("");
+                    return stats.cost;
                 end
             end,
+            digits = 1,
             desc = L["Cost expected"],
             color_tag = "cost",
             requires_spell_flags = spell_flags.eval,
@@ -1045,26 +1109,24 @@ local function init_label_handler()
             tooltip = L["Chance to miss, parry or dodge"]
         },
         overlay_display_effect_until_oom = {
-            func = function(frame_overlay, info)
-                frame_overlay:SetText(format_number(info.effect_until_oom, 0));
-            end,
+            value = function(info) return info.effect_until_oom; end,
+            digits = 0,
             uses_until_oom = true,
             desc = L["Effect until OOM"],
             color_tag = "effect_until_oom",
             requires_spell_flags = spell_flags.eval,
         },
         overlay_display_time_until_oom = {
-            func = function(frame_overlay, info)
-                frame_overlay:SetText(format_dur(info.time_until_oom));
-            end,
+            value = function(info) return info.time_until_oom; end,
+            dur = true,
             uses_until_oom = true,
             desc = L["Time until OOM"],
             color_tag = "time_until_oom",
         },
         overlay_display_casts_until_oom = {
-            func = function(frame_overlay, info)
-                frame_overlay:SetText(format_number(info.num_casts_until_oom, math.min(1, overlay.decimals_cap), true));
-            end,
+            value = function(info) return info.num_casts_until_oom; end,
+            digits = 1,
+            round_down = true,
             uses_until_oom = true,
             desc = L["Casts until OOM"],
             color_tag = "casts_until_oom",
@@ -1210,6 +1272,13 @@ local function init_label_handler()
             tooltip = L["Puts effective health calculation into passive spell "]..C_Spell.GetSpellName(spids.dodge),
         },
     };
+    for _, handler in pairs(overlay_label_handler) do
+        if handler.value then
+            handler.func = function(frame_overlay, info, stats)
+                write_label(frame_overlay, handler, info, stats);
+            end
+        end
+    end
     sc.overlay.label_handler = overlay_label_handler;
 end
 
@@ -1237,6 +1306,7 @@ local function refresh_kept_labels(frame_infos, num_frames, spell, spell_id, loa
             if handler.queries_game then
                 handler.func(frame_info.overlay_frames[i], nil, nil, spell, spell_id);
             elseif handler.uses_until_oom and mana_changed then
+                drop_power_curve(frame_info.overlay_frames[i]);
                 if not computed then
                     info.cost_per_sec = frame_info.oom_cost_per_sec;
                     info.expected = frame_info.oom_expected;
@@ -1265,6 +1335,7 @@ local function update_spell_icon_frames(frame_infos, num_frames, spell, spell_id
         local resource_restore_disp_index = config.settings.overlay_resource_regen_display_idx;
         for j = 1, num_frames do
             local frame_info = frame_infos[j];
+            drop_power_curve(frame_info.overlay_frames[resource_restore_disp_index]);
             handler.func(frame_info.overlay_frames[resource_restore_disp_index], spell_effect);
 
             frame_info.overlay_frames[resource_restore_disp_index]:SetTextColor(effect_color(handler.color_tag));
@@ -1281,6 +1352,7 @@ local function update_spell_icon_frames(frame_infos, num_frames, spell, spell_id
         local ehp_disp_index = config.settings.overlay_ehp_display_idx;
         for j = 1, num_frames do
             local frame_info = frame_infos[j];
+            drop_power_curve(frame_info.overlay_frames[ehp_disp_index]);
             handler.func(frame_info.overlay_frames[ehp_disp_index], spell_effect);
 
             frame_info.overlay_frames[ehp_disp_index]:SetTextColor(effect_color(handler.color_tag));
@@ -1301,6 +1373,7 @@ local function update_spell_icon_frames(frame_infos, num_frames, spell, spell_id
                 end
                 return;
             end
+            pc_begin(power_curves.ctx, spell, spell_id, loadout, effects, eval_flags, true);
             spell_effect, stats = calc_spell_eval(spell, loadout, effects, eval_flags, spell_id);
             cast_until_oom(spell_effect, spell, stats, loadout, effects, false, 0);
             -- labels of the diffed effects or the spellbook are never kept
@@ -1319,6 +1392,7 @@ local function update_spell_icon_frames(frame_infos, num_frames, spell, spell_id
             spell_effect, stats = calc_spell_threat(spell, loadout, effects, eval_flags);
 
         elseif anyspell_cast_until_oom_overlay then
+            pc_begin(power_curves.ctx, spell, spell_id, loadout, effects, eval_flags, false);
             spell_effect, stats = calc_spell_dummy_cast_until_oom(spell_id, loadout, effects);
         end
 
@@ -1326,6 +1400,7 @@ local function update_spell_icon_frames(frame_infos, num_frames, spell, spell_id
             local frame_info = frame_infos[j];
             for i, v in pairs(active_overlay_indices) do
                 local handler = overlay_label_handler[v];
+                drop_power_curve(frame_info.overlay_frames[i]);
                 if not handler.requires_spell_flags or
                     bit.band(spell.flags, handler.requires_spell_flags) ~= 0 then
 
@@ -1343,6 +1418,7 @@ local function update_spell_icon_frames(frame_infos, num_frames, spell, spell_id
                 end
             end
         end
+        power_curves.ctx.active = false;
     end
 end
 
@@ -1656,6 +1732,22 @@ ccf_hook_events(true);
 local active_ccf_labels = {};
 local ccfs;
 
+-- a curve label's text is secret and never empty, and the text of a label that showed one stays secret
+local function label_text(label)
+    if power_curves.on[label] then
+        return "#";
+    end
+    local text = label:GetText();
+    if is_secret(text) then
+        -- written since by write_label when it tracked it, plain text of other handlers counts as shown
+        if label.sc_empty then
+            return nil;
+        end
+        return "#";
+    end
+    return text;
+end
+
 local function update_ccf(frame, spell, info, stats, spell_id)
 
     if (config.settings.overlay_disable_cc_info or sc.core.mute_overlay) and
@@ -1670,6 +1762,8 @@ local function update_ccf(frame, spell, info, stats, spell_id)
 
     for _, v in pairs(active_ccf_labels) do
         local label = frame.labels[v];
+        drop_power_curve(label);
+        label.sc_empty = nil;
         frame.labels[v]:SetText("");
         local req_flag = overlay_label_handler[label.sel_id].requires_spell_flags;
         if not req_flag or bit.band(spell.flags, req_flag) ~= 0 then
@@ -1682,10 +1776,11 @@ local function update_ccf(frame, spell, info, stats, spell_id)
             local label_info = ccf_labels[v];
             local adjacent = label_info.adjacent_to;
             if adjacent then
-                local p = frame.labels[v]:GetPoint();
-                local should_move = frame.labels[v]:GetText() ~= "" and not frame.labels[adjacent[1]]:GetText();
+                -- tracked, GetPoint of a label with secret text is secret
+                local moved = frame.labels[v].moved_adjacent;
+                local should_move = label_text(frame.labels[v]) ~= "" and not label_text(frame.labels[adjacent[1]]);
 
-                if label_info.p == p and should_move then
+                if not moved and should_move then
                     local x_1 = config.settings["overlay_cc_"..v.."_x"];
                     local x_2 = config.settings["overlay_cc_"..adjacent[1].."_x"];
                     local y_1 = config.settings["overlay_cc_"..v.."_y"];
@@ -1706,8 +1801,10 @@ local function update_ccf(frame, spell, info, stats, spell_id)
                         x,
                         y
                     );
-                elseif label_info.p ~= p and not should_move then
+                    frame.labels[v].moved_adjacent = true;
+                elseif moved and not should_move then
 
+                    frame.labels[v].moved_adjacent = false;
                     frame.labels[v]:ClearAllPoints();
                     frame.labels[v]:SetPoint(
                         label_info.p,
@@ -1769,7 +1866,12 @@ local function update_cc()
                 else
                     info, stats = calc_spell_dummy_cast_until_oom(k, loadout, effects);
                 end
+                -- only the until oom labels follow the power, the cast spent it by the time they show
+                if not ccf_parent.config_mode then
+                    pc_begin(power_curves.ctx, spell, k, loadout, effects, eval_flags, false);
+                end
                 update_ccf(v, spell, info, stats, k);
+                power_curves.ctx.active = false;
             end
 
             for fn, cc in pairs(external_ccf_callbacks) do
@@ -1838,6 +1940,7 @@ local function ccf_label_reconfig(label_id)
             config.settings.overlay_cc_font[2]
         );
         label:ClearAllPoints();
+        label.moved_adjacent = false;
         label:SetPoint(
             ccf_labels[label_id].p,
             v.icon_frame,
@@ -1852,6 +1955,7 @@ local function ccf_label_reconfig(label_id)
             active_ccf_labels[label_id] = label_id;
         else
             active_ccf_labels[label_id] = nil;
+            drop_power_curve(label);
             label:SetText("");
         end
     end
@@ -2176,6 +2280,7 @@ local function update_overlay()
     local effects_before, update_id;
     local updated = false;
     kept_labels.in_icon_pass = false;
+    power_curves.tick = power_curves.tick + 1;
     local eval_flags = overlay_eval_flags();
 
     local catalogue_open = sc.ui.spell_catalogue_visible();
@@ -2226,6 +2331,10 @@ local function update_overlay()
                 end
             end
         end
+    end
+    -- action bar and currently casting labels
+    if not sc.core.mute_overlay then
+        refresh_power_curves();
     end
 
 

@@ -1036,6 +1036,10 @@ local function stats_avg_cost(cost, stats, bid, spell, loadout, effects)
         resource_refund = resource_refund + cost*stats.miss;
     end
 
+    -- for the tooltip's refund note
+    stats.cost_before_refund = cost;
+    stats.cost_refund = resource_refund;
+
     cost = cost - resource_refund;
     cost = math_max(cost, 0);
 
@@ -1548,8 +1552,10 @@ local function stats_for_spell(stats, spell, loadout, effects, eval_flags)
     stats.clearcast_on_crit_lookback_len = 0;
 
     if bit_band(anycomp.flags, comp_flags.jump_amp_as_per_extra_power) ~= 0 then
-        stats.effect_mod_flat = stats.effect_mod_flat +
-            anycomp.jump_amp*math_max(loadout.resources[spell.power_type] - stats.cost_actual, 0);
+        stats.extra_power = math_max(loadout.resources[spell.power_type] - stats.cost_actual, 0);
+        stats.effect_mod_flat = stats.effect_mod_flat + anycomp.jump_amp*stats.extra_power;
+    else
+        stats.extra_power = nil;
     end
 
     -- shared behavior
@@ -3213,6 +3219,11 @@ local function spell_changing_reads(spell, effects)
     return reads;
 end
 
+-- cost before refunds, the same at any current power
+local function spell_cost_actual(spell, loadout, effects)
+    return (stats_cost(spell.base_id, spell, loadout, effects));
+end
+
 local function calc_spell_eval(spell, loadout, effects, eval_flags, spell_id)
     spell_stats_info(info_buffer, stats_buffer, spell, loadout, effects, eval_flags, spell_id);
     return info_buffer, stats_buffer;
@@ -3364,6 +3375,7 @@ calc.ehp_diff                           = ehp_diff;
 calc.resource_regen_info                = resource_regen_info;
 calc.only_threat_info                   = only_threat_info;
 calc.calc_spell_eval                    = calc_spell_eval;
+calc.spell_cost_actual                  = spell_cost_actual;
 calc.spell_changing_reads               = spell_changing_reads;
 calc.source_alias_view                  = source_alias_view;
 calc.calc_spell_threat                  = calc_spell_threat;

@@ -248,6 +248,8 @@ local function refresh_tooltip()
         end
     end
 
+    sc.tooltip.refresh_live_lines();
+
     if refreshing_tooltip then
         tooltip_refresh_scheduled = true;
         C_Timer.After(dt, refresh_tooltip);
