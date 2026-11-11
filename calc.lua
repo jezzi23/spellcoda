@@ -20,6 +20,7 @@ local spell_cost                                    = sc.utils.spell_cost;
 local spell_cast_time                               = sc.utils.spell_cast_time;
 local best_rank_by_lvl                              = sc.utils.best_rank_by_lvl;
 local spell_lname                                   = sc.utils.spell_lname;
+local highest_learned_rank                          = sc.utils.highest_learned_rank;
 local dummy_value                                   = sc.utils.dummy_value;
 local combat_ratings                                = sc.utils.combat_ratings;
 local client_matches                                = sc.utils.client_matches;
@@ -870,6 +871,23 @@ local function stats_spell_mod(dr, attack_subclass, bid, comp, spell, effects, s
     return spell_mod;
 end
 
+local function mh_swing_time(loadout, effects)
+    if loadout.shapeshift_no_weapon ~= 0 then
+        -- based on game API attack speed query which already includes sheet rating
+        local haste_mul_from_rating = 1.0 +
+            0.01*effects.raw.melee_haste_rating_flat/(loadout.cr_scaling * cr_weights[CR_HASTE_MELEE]);
+        return loadout.attack_delay_mh / (effects.mul.raw.melee_haste_forced*haste_mul_from_rating);
+    else
+        -- not based on API attack delay; calculated from scratch
+        local haste_mul_from_rating = 1.0 +
+            0.01*(loadout.melee_haste_rating+effects.raw.melee_haste_rating_flat)/
+                (loadout.cr_scaling * cr_weights[CR_HASTE_MELEE]);
+        local _, _, mh_delay = mh_weapon(loadout, effects);
+        return mh_delay /
+            (effects.mul.raw.melee_haste*effects.mul.raw.melee_haste_forced*haste_mul_from_rating);
+    end
+end
+
 -- Execution time of spell
 local function stats_cast_time(stats, bid, comp, spell, loadout, effects, eval_flags)
 
@@ -891,21 +909,7 @@ local function stats_cast_time(stats, bid, comp, spell, loadout, effects, eval_f
             cast_time = effects.raw.wpn_delay_oh /
                 (effects.mul.raw.melee_haste*effects.mul.raw.melee_haste_forced*haste_mul_from_rating);
         elseif bit_band(comp.flags, comp_flags.applies_mh) ~= 0 then
-
-            if loadout.shapeshift_no_weapon ~= 0 then
-                -- based on game API attack speed query which already includes sheet rating
-                local haste_mul_from_rating = 1.0 +
-                    0.01*effects.raw.melee_haste_rating_flat/(loadout.cr_scaling * cr_weights[CR_HASTE_MELEE]);
-                cast_time = loadout.attack_delay_mh / (effects.mul.raw.melee_haste_forced*haste_mul_from_rating);
-            else
-                -- not based on API attack delay; calculated from scratch
-                local haste_mul_from_rating = 1.0 +
-                    0.01*(loadout.melee_haste_rating+effects.raw.melee_haste_rating_flat)/
-                        (loadout.cr_scaling * cr_weights[CR_HASTE_MELEE]);
-                local _, _, mh_delay = mh_weapon(loadout, effects);
-                cast_time = mh_delay /
-                    (effects.mul.raw.melee_haste*effects.mul.raw.melee_haste_forced*haste_mul_from_rating);
-            end
+            cast_time = mh_swing_time(loadout, effects);
         elseif bit_band(comp.flags, comp_flags.applies_ranged) ~= 0 then
             local haste_mul_from_rating = 1.0 +
                 0.01*(loadout.ranged_haste_rating+effects.raw.ranged_haste_rating_flat)/
@@ -1248,6 +1252,18 @@ local function spell_stats_periodic(stats, spell, loadout, effects, eval_flags)
         haste_mul = haste_mul * effects.mul.raw.cast_haste * (effects.mul.ability.cast_haste[bid] or 1);
         stats.dur_ot = stats.dur_ot/haste_mul;
         stats.tick_time_ot = stats.tick_time_ot/haste_mul;
+    end
+
+    if bit_band(periodic.flags, comp_flags.per_swing) ~= 0 then
+        stats.tick_time_ot = mh_swing_time(loadout, effects);
+        if periodic.ppm then
+            local _, _, delay = mh_weapon(loadout, effects);
+            stats.tick_time_ot = stats.tick_time_ot / math_min(1.0, periodic.ppm * delay / 60);
+        end
+        if periodic.coef_2h and sc.two_handed_wep_subclasses[effects.raw.wpn_subclass_mh] then
+            stats.coef_ot = stats.coef_ot * periodic.coef_2h / periodic.coef;
+            stats.coef_ot_max = stats.coef_ot_max * periodic.coef_2h / periodic.coef;
+        end
     end
 end
 
@@ -2063,7 +2079,12 @@ local function periodic_info(info, spell, loadout, stats, effects, eval_flags)
                 *
                 base_tick_max;
         else
-            local wpn_min, wpn_max = mh_weapon(loadout, effects);
+            local wpn_min, wpn_max, wpn_delay = mh_weapon(loadout, effects);
+            if bit_band(periodic.flags, comp_flags.per_swing) ~= 0 and periodic.school1 ~= schools.physical then
+                local ap_dmg = (loadout.ap + effects.raw.ap_flat) * dps_per_ap * wpn_delay;
+                wpn_min = wpn_min + ap_dmg;
+                wpn_max = wpn_max + ap_dmg;
+            end
             base_tick_min =
                 (base_mod_ot_mul*(periodic.base_min + base_mod_ot_flat) + wpn_min)
                 *
@@ -2093,6 +2114,12 @@ local function periodic_info(info, spell, loadout, stats, effects, eval_flags)
 
         base_mod_ot_mul = 1;
         base_mod_ot_flat = 0;
+    end
+
+    if bit_band(periodic.flags, comp_flags.per_swing) ~= 0 and not periodic.ppm then
+        local _, _, wpn_delay = mh_weapon(loadout, effects);
+        base_tick_min = base_tick_min * wpn_delay;
+        base_tick_max = base_tick_max * wpn_delay;
     end
 
     if bit_band(spell.flags, spell_flags.finishing_move_dmg) ~= 0 then
@@ -2279,6 +2306,10 @@ local function spell_info(info, spell, stats, loadout, effects, eval_flags, spel
         info.effect_per_sec = info.expected / stats.cast_time;
         info.threat_per_sec = info.threat / stats.cast_time;
         info.cost_per_sec = stats.cost / stats.cast_time;
+    end
+    if spell.periodic and bit_band(spell.periodic.flags, comp_flags.per_swing) ~= 0 and info.ot_dur1 > 0 then
+        info.effect_per_sec = info.expected / info.ot_dur1;
+        info.threat_per_sec = info.threat / info.ot_dur1;
     end
 
 
@@ -3074,15 +3105,72 @@ end
 
 local alias_info = {};
 
--- alias spells are only evaluated through their buff
--- TODO: swiftmend needs its own handler, it consumes the aliased hot instead of buffing it
+-- alias spells are evaluated through their buff or through the alias component of a source
 for spell_id, spell in pairs(spells) do
-    if bit_band(spell.flags, spell_flags.alias) ~= 0 and not class_buffs[spell_id] then
+    if bit_band(spell.flags, spell_flags.alias) ~= 0 and not class_buffs[spell_id] and not spell.alias_comps then
         spell.flags = bit_band(spell.flags, bit_bnot(spell_flags.eval));
     end
 end
 
+local source_alias_views = {};
+for _, spell in pairs(spells) do
+    if spell.alias_comps then
+        source_alias_views[spell] = {};
+    end
+end
+for source_id, source in pairs(spells) do
+    if source.alias_comp then
+        for spell, views in pairs(source_alias_views) do
+            for _, base_id in ipairs(spell.alias_comps) do
+                if base_id == source.base_id then
+                    local view = {};
+                    for k, v in pairs(spell) do
+                        view[k] = v;
+                    end
+                    view.alias_comps = nil;
+                    view.flags = bit_band(spell.flags, bit_bnot(spell_flags.alias));
+                    view.direct = source.alias_comp.direct;
+                    view.periodic = source.alias_comp.periodic;
+                    view.lvl_req = source.lvl_req;
+                    view.lvl_max = source.lvl_max;
+                    view.lvl_outdated = source.lvl_outdated;
+                    view.beneficiary_id = source.alias_comp.beneficiary_id;
+                    views[source_id] = view;
+                    if not views.default or view.lvl_req < views.default.lvl_req then
+                        views.default = view;
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function source_alias_view(spell, loadout)
+    local views = source_alias_views[spell];
+    if not views then
+        return spell;
+    end
+    local unit = "player";
+    if bit_band(spell.flags, spell_flags.heal) ~= 0 then
+        unit = loadout.friendly_towards;
+    end
+    for _, base_id in ipairs(spell.alias_comps) do
+        local view = views[get_buff_by_lname(loadout, unit, spell_lname(base_id), unit == "player", true)];
+        if view then
+            return view;
+        end
+    end
+    for _, base_id in ipairs(spell.alias_comps) do
+        local view = views[highest_learned_rank(base_id)];
+        if view then
+            return view;
+        end
+    end
+    return views.default;
+end
+
 spell_stats_info = function(info, stats, spell, loadout, effects, eval_flags, spell_id)
+    spell = source_alias_view(spell, loadout);
     if bit_band(spell.flags, spell_flags.alias) == 0 then
         stats_for_spell(stats, spell, loadout, effects, eval_flags);
         spell_info(info, spell, stats, loadout, effects, eval_flags, spell_id);
@@ -3277,6 +3365,7 @@ calc.resource_regen_info                = resource_regen_info;
 calc.only_threat_info                   = only_threat_info;
 calc.calc_spell_eval                    = calc_spell_eval;
 calc.spell_changing_reads               = spell_changing_reads;
+calc.source_alias_view                  = source_alias_view;
 calc.calc_spell_threat                  = calc_spell_threat;
 calc.calc_spell_resource_regen          = calc_spell_resource_regen;
 calc.calc_effective_hp                  = calc_effective_hp;

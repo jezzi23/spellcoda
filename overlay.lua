@@ -23,6 +23,7 @@ local active_loadout                                = sc.loadouts.active_loadout
 
 local cast_until_oom                                = sc.calc.cast_until_oom;
 local calc_spell_eval                               = sc.calc.calc_spell_eval;
+local source_alias_view                             = sc.calc.source_alias_view;
 local calc_spell_threat                             = sc.calc.calc_spell_threat;
 local calc_spell_resource_regen                     = sc.calc.calc_spell_resource_regen;
 local calc_effective_hp                             = sc.calc.calc_effective_hp;
@@ -1252,6 +1253,7 @@ end
 -- frames showing the same spell share one evaluation, the label handlers only read it
 local function update_spell_icon_frames(frame_infos, num_frames, spell, spell_id, loadout, effects, eval_flags, changes)
 
+    spell = source_alias_view(spell, loadout);
     local spell_effect, stats;
     if bit.band(spell.flags, spell_flags.resource_regen) ~= 0 and
         config.settings.overlay_resource_regen then
@@ -1757,6 +1759,7 @@ local function update_cc()
                     if spells[k].healing_version and config.settings.general_prio_heal then
                         spell = spells[k].healing_version;
                     end
+                    spell = source_alias_view(spell, loadout);
 
                     info, stats = calc_spell_eval(spell, loadout, effects, eval_flags, k);
                     cast_until_oom(info, spell, stats, loadout, effects, false, 0);

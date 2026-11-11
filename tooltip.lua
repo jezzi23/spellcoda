@@ -46,6 +46,7 @@ local ehp_diff                                  = sc.calc.ehp_diff;
 local evaluation_flags                          = sc.calc.evaluation_flags;
 local effect_flags                              = sc.calc.effect_flags;
 local calc_spell_eval                           = sc.calc.calc_spell_eval;
+local source_alias_view                         = sc.calc.source_alias_view;
 local calc_spell_threat                         = sc.calc.calc_spell_threat;
 local calc_spell_resource_regen                 = sc.calc.calc_spell_resource_regen;
 local calc_effective_hp                         = sc.calc.calc_effective_hp;
@@ -325,6 +326,7 @@ local function append_to_txt_delimitered(str, append_str)
 end
 
 local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effects_base, effects_finalized, eval_flags)
+    spell = source_alias_view(spell, loadout);
     local anycomp = spell.direct or spell.periodic;
 
     local num_eval_mode_comps = 0;

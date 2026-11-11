@@ -12,6 +12,7 @@ local update_loadout_and_effects            = sc.loadouts.update_loadout_and_eff
 
 local cast_until_oom                        = sc.calc.cast_until_oom;
 local calc_spell_eval                       = sc.calc.calc_spell_eval;
+local source_alias_view                     = sc.calc.source_alias_view;
 local calc_spell_threat                     = sc.calc.calc_spell_threat;
 
 local config                                = sc.config;
@@ -36,6 +37,7 @@ local function external_feed_calc_spells(feed, feed_data, spells_feed, spells_fe
             if spell.healing_version and feed_data.prio_heal then
                 spell = spell.healing_version;
             end
+            spell = source_alias_view(spell, loadout);
             if bit.band(spell.flags, spell_flags.eval) ~= 0 then
                 info, stats = calc_spell_eval(spell, loadout, effects, feed_data.eval_flags, data.spell_id);
                 cast_until_oom(info, spell, stats, loadout, effects, false, feed_data.eval_flags);

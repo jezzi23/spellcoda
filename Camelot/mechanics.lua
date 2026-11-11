@@ -53,7 +53,14 @@ local class_stats_spell = (function()
         return function(anycomp, bid, stats, spell, loadout, effects)
         end
     elseif class == classes.rogue then
-        return function(stats, spell, loadout, effects)
+        return function(anycomp, bid, stats, spell, loadout, effects)
+            if effects.raw.wpn_subclass_mh == 15 then
+                if bid == spids.ghostly_strike then
+                    stats.base_mod = stats.base_mod * dummy_value(bid, 3) / dummy_value(bid, 0);
+                elseif bid == spids.hemorrhage then
+                    stats.base_mod = stats.base_mod * dummy_value(bid, 4) / dummy_value(bid, 3);
+                end
+            end
         end
     elseif class == classes.priest then
         return function(anycomp, bid, stats, spell, loadout, effects)
