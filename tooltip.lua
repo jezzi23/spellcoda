@@ -1098,7 +1098,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 );
             end
         end
-        if stats.crit_excess > 0 then
+        if spell.direct and stats.crit_excess > 0 then
             add_line(
                 tooltip,
                 L["Critical pushed off attack table:"],

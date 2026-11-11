@@ -161,8 +161,20 @@ local class_stats_spell = (function()
                     stats.resource_refund_mul_hit = stats.resource_refund + 0.5 * stats.cost_actual;
                 end
 
+                -- assumes the hot runs its full duration and the heal crits like the spell
+                if talent_pts(effects, talent_idx.bloom) ~= 0 and
+                    (bid == spids.rejuvenation or bid == spids.rejuvenation_2 or bid == spids.regrowth or bid == spids.regrowth_2) then
+                    local spirit = loadout.stats[attr.spirit] + effects.by_attr.stat_flat[attr.spirit];
+                    add_extra_effect(
+                        stats,
+                        bit.bor(effect_flags.use_flat, effect_flags.flat_crits),
+                        1.0,
+                        spell_lname(lookups.bloom),
+                        0.01*dummy_value(lookups.bloom, 0)*spirit);
+                end
+
                 if num_set_pieces(effects, 1835) >= 4 and
-                    (bid == spids.healing_touch or bid == spids.nourish and bid == spids.regrowth or bid == spids.regrowth_2) then
+                    (bid == spids.healing_touch or bid == spids.nourish or bid == spids.regrowth or bid == spids.regrowth_2) then
                         add_extra_effect(
                             stats,
                             bit.bor(effect_flags.triggers_on_crit, effect_flags.should_track_crit_mod),

@@ -1642,26 +1642,30 @@ local function resolve_extra_spell_effects(info, stats)
             info[indexed_keys.ot_flags[i]] = flags;
 
             if bit_band(flags, effect_flags.base_on_periodic_effect) ~= 0 then
+                info[indexed_keys.ot_hit_normal[i]] = math_max(hit_min, hit_normal_ot);
+            else
+                info[indexed_keys.ot_hit_normal[i]] = math_max(hit_min, hit_normal);
+            end
+            -- flat values never read the base component, which may not exist
+            if bit_band(flags, effect_flags.use_flat) ~= 0 then
+                local flat_crit = flat;
+                if bit_band(flags, effect_flags.flat_crits) ~= 0 then
+                    flat_crit = flat * stats.crit_mod;
+                end
+                info[indexed_keys.ot_min_noncrit_if_hit[i]] = flat;
+                info[indexed_keys.ot_max_noncrit_if_hit[i]] = flat;
+                info[indexed_keys.ot_min_crit_if_hit[i]] = flat_crit;
+                info[indexed_keys.ot_max_crit_if_hit[i]] = flat_crit;
+            elseif bit_band(flags, effect_flags.base_on_periodic_effect) ~= 0 then
                 info[indexed_keys.ot_min_noncrit_if_hit[i]] = val * info.ot_min_noncrit_if_hit1;
                 info[indexed_keys.ot_max_noncrit_if_hit[i]] = val * info.ot_max_noncrit_if_hit1;
                 info[indexed_keys.ot_min_crit_if_hit[i]] = val * info.ot_min_crit_if_hit1;
                 info[indexed_keys.ot_max_crit_if_hit[i]] = val * info.ot_max_crit_if_hit1;
-
-                info[indexed_keys.ot_hit_normal[i]] = math_max(hit_min, hit_normal_ot);
-
             else
                 info[indexed_keys.ot_min_noncrit_if_hit[i]] = val * info.min_noncrit_if_hit1;
                 info[indexed_keys.ot_max_noncrit_if_hit[i]] = val * info.max_noncrit_if_hit1;
                 info[indexed_keys.ot_min_crit_if_hit[i]] = val * info.min_crit_if_hit1;
                 info[indexed_keys.ot_max_crit_if_hit[i]] = val * info.max_crit_if_hit1;
-
-                info[indexed_keys.ot_hit_normal[i]] = math_max(hit_min, hit_normal);
-            end
-            if bit_band(flags, effect_flags.use_flat) ~= 0 then
-                info[indexed_keys.ot_min_noncrit_if_hit[i]] = flat;
-                info[indexed_keys.ot_max_noncrit_if_hit[i]] = flat;
-                info[indexed_keys.ot_min_crit_if_hit[i]] = flat;
-                info[indexed_keys.ot_max_crit_if_hit[i]] = flat;
             end
             if bit_band(flags, effect_flags.shares_periodic_type) ~= 0 then
                 info[indexed_keys.ot_ticks[i]] = info.ot_ticks1;
@@ -1694,23 +1698,29 @@ local function resolve_extra_spell_effects(info, stats)
             info[indexed_keys.crit[i]] = math_min(stats.crit, crit_cap);
 
             if bit_band(flags, effect_flags.base_on_periodic_effect) ~= 0 then
+                info[indexed_keys.hit_normal[i]] = math_max(hit_min, hit_normal_ot);
+            else
+                info[indexed_keys.hit_normal[i]] = math_max(hit_min, hit_normal);
+            end
+            if bit_band(flags, effect_flags.use_flat) ~= 0 then
+                local flat_crit = flat;
+                if bit_band(flags, effect_flags.flat_crits) ~= 0 then
+                    flat_crit = flat * stats.crit_mod;
+                end
+                info[indexed_keys.min_noncrit_if_hit[i]] = flat;
+                info[indexed_keys.max_noncrit_if_hit[i]] = flat;
+                info[indexed_keys.min_crit_if_hit[i]] = flat_crit;
+                info[indexed_keys.max_crit_if_hit[i]] = flat_crit;
+            elseif bit_band(flags, effect_flags.base_on_periodic_effect) ~= 0 then
                 info[indexed_keys.min_noncrit_if_hit[i]] = val * info.ot_min_noncrit_if_hit1;
                 info[indexed_keys.max_noncrit_if_hit[i]] = val * info.ot_max_noncrit_if_hit1;
                 info[indexed_keys.min_crit_if_hit[i]] = val * info.ot_min_crit_if_hit1;
                 info[indexed_keys.max_crit_if_hit[i]] = val * info.ot_max_crit_if_hit1;
-                info[indexed_keys.hit_normal[i]] = math_max(hit_min, hit_normal_ot);
             else
                 info[indexed_keys.min_noncrit_if_hit[i]] = math_max(0, val * info.min_noncrit_if_hit1 + flat);
                 info[indexed_keys.max_noncrit_if_hit[i]] = math_max(0, val * info.max_noncrit_if_hit1 + flat);
                 info[indexed_keys.min_crit_if_hit[i]] = math_max(0, val * info.min_crit_if_hit1 + flat);
                 info[indexed_keys.max_crit_if_hit[i]] = math_max(0, val * info.max_crit_if_hit1 + flat);
-                info[indexed_keys.hit_normal[i]] = math_max(hit_min, hit_normal);
-            end
-            if bit_band(flags, effect_flags.use_flat) ~= 0 then
-                info[indexed_keys.min_noncrit_if_hit[i]] = flat;
-                info[indexed_keys.max_noncrit_if_hit[i]] = flat;
-                info[indexed_keys.min_crit_if_hit[i]] = flat;
-                info[indexed_keys.max_crit_if_hit[i]] = flat;
             end
             if bit_band(flags, effect_flags.triggers_on_crit) ~= 0 then
                 info[indexed_keys.min_noncrit_if_hit[i]] = 0;

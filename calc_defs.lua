@@ -16,6 +16,8 @@ local effect_flags = {
     can_be_blocked          = bit.lshift(1, 8),
     always_hits             = bit.lshift(1, 9),
     shares_periodic_type    = bit.lshift(1, 10),
+    -- with use_flat, a crit multiplies the flat value by the spell's crit mod
+    flat_crits              = bit.lshift(1, 11),
 };
 
 -- indexed_keys.x[i] is "x"..i, built once
