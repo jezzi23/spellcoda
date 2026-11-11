@@ -759,7 +759,7 @@ local function stats_coef(stats, bid, comp, spell, loadout, effects, eval_flags)
     else
         coef = (comp.coef + (effects.ability.coef_mod_flat[bid] or 0.0))
             * (1.0 + (effects.ability.coef_mod[bid] or 0.0));
-        coef = coef * caster_coef_multiplier(spell.lvl_req, spell.lvl_max, loadout.lvl);
+        coef = coef * caster_coef_multiplier(spell.lvl_req, spell.lvl_max, loadout.lvl, spell.flags);
     end
     return coef, coef_max or coef;
 end

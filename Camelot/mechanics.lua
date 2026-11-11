@@ -271,14 +271,17 @@ local function stats_glance(stats, bid, loadout)
     return math.max(0.0, math.min(1.0, glance_p)), glance_min, glance_max;
 end
 
-local function caster_coef_multiplier(slvl, mlvl, clvl)
+-- heal spell power share by levels past the rank's learn level + 5, the last entry holds beyond
+local heal_downrank_coef = sc.heal_downrank_coef;
+local heal_downrank_last = #heal_downrank_coef;
+-- damage spells keep their full spell power on low ranks
+local heal_downrank_flags = bit.bor(spell_flags.heal, spell_flags.absorb);
 
-    --return 1;
-
-    -- this formula is speculated, and likely subject to change
-    local mod = 1 - (((clvl - 17) - slvl) * 0.05);
-
-    return math.max(0, math.min(1, mod));
+local function caster_coef_multiplier(slvl, mlvl, clvl, flags)
+    if bit.band(flags, heal_downrank_flags) == 0 then
+        return 1;
+    end
+    return heal_downrank_coef[math.max(0, math.min(clvl - slvl - 5, heal_downrank_last))];
 end
 
 -- loadout_changes bits the mechanics in this file read for a spell

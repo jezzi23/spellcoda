@@ -457,8 +457,14 @@ if SpellBookFrame then
         end
     end;
 else
+    -- the paged frame's pooled buttons, hooked once each
+    local wheel_hooked = {};
     for_each_spell_book_spell = function(fn)
         PlayerSpellsFrame.SpellBookFrame:ForEachDisplayedSpell(function(entry)
+            if not wheel_hooked[entry.Button] then
+                wheel_hooked[entry.Button] = true;
+                entry.Button:HookScript("OnMouseWheel", sc.tooltip.eval_mode_scroll_fn);
+            end
             local info = entry.slotIndex and C_SpellBook.GetSpellBookItemInfo(entry.slotIndex, entry.spellBank);
             fn(entry, entry.Button, info and info.spellID);
         end);
