@@ -2578,10 +2578,13 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
         local intellect = loadout.stats[attr.intellect] + effects.by_attr.stat_flat[attr.intellect];
         -- Prevents combat casting regen % gained from this ability affecting this evaluation
         -- This becomes mana restored otherwise not gained from normal % regen while casting
+        -- spirit regen is per 2 s and mp5 per 5 s, scaled to the tick (1 s on forever, 2 s elsewhere)
+        -- without a periodic component info.tick_time is not set by this spell, nothing restored over time
+        local tick_time = periodic and info.tick_time or 0;
         info.tick_restored =
-            (1.0 - casting_regen + info.tick_restored) * spirit_mana_regen(spirit, intellect)
+            (1.0 - casting_regen + info.tick_restored) * spirit_mana_regen(spirit, intellect) * 0.5 * tick_time
             +
-            info.tick_restored * 0.4*effects.raw.mp5_flat; -- NOTE: mp5 does benefit from the modifier too
+            info.tick_restored * 0.2 * tick_time * effects.raw.mp5_flat; -- NOTE: mp5 does benefit from the modifier too
 
     elseif bit_band(spell.flags, spell_flags.regen_max_pct) ~= 0 then
         info.tick_restored = info.tick_restored * loadout.resources_max[powers.mana];
