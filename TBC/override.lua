@@ -74,12 +74,15 @@ if sc.class == sc.classes.mage then
 
     for _, v in pairs(rank_seqs[spids.ice_barrier]) do
         spells[v].direct.coef = spell_coef_lvl_adjusted(0.3, spells[v].lvl_req);
+        spells[v].direct.flags = bit.bor(spells[v].direct.flags, comp_flags.school_sp_scaling);
     end
     for _, v in pairs(rank_seqs[spids.frost_ward]) do
         spells[v].direct.coef = spell_coef_lvl_adjusted(0.3, spells[v].lvl_req);
+        spells[v].direct.flags = bit.bor(spells[v].direct.flags, comp_flags.school_sp_scaling);
     end
     for _, v in pairs(rank_seqs[spids.fire_ward]) do
         spells[v].direct.coef = spell_coef_lvl_adjusted(0.3, spells[v].lvl_req);
+        spells[v].direct.flags = bit.bor(spells[v].direct.flags, comp_flags.school_sp_scaling);
     end
 
     -- THREAT
@@ -233,6 +236,7 @@ elseif sc.class == sc.classes.warlock then
 
     for _, v in pairs(rank_seqs[spids.shadow_ward]) do
         spells[v].direct.coef = spell_coef_lvl_adjusted(0.3, spells[v].lvl_req);
+        spells[v].direct.flags = bit.bor(spells[v].direct.flags, comp_flags.school_sp_scaling);
     end
 
     -- THREAT

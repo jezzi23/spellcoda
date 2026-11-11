@@ -623,7 +623,8 @@ local function stats_sp(sp_extra, bid, comp, spell, loadout, effects)
         return loadout.stats[comp.coef_attr] + effects.by_attr.stat_flat[comp.coef_attr];
     end
 
-    if bit_band(spell.flags, heal_or_absorb_flags) ~= 0 then
+    if bit_band(spell.flags, heal_or_absorb_flags) ~= 0 and
+        bit_band(comp.flags, comp_flags.school_sp_scaling) == 0 then
         sp = loadout.healing_power + effects.raw.healing_power_flat;
     elseif comp.school1 == schools.physical or
         bit_band(comp.flags, comp_flags.magic_scaling_as_ap) ~= 0 then
