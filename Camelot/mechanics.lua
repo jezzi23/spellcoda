@@ -148,6 +148,14 @@ local class_stats_spell = (function()
                     stats.extra_spell_power = stats.extra_spell_power +
                         0.01*dummy_value(spids.arcane_wrath, 1) * (loadout.resources_max[powers.mana] + effects.raw.mana);
                 end
+
+                -- shatter against frozen targets, class_misc tracks freeze effects, crit per rank from a curve
+                if effects.raw.class_misc > 0 then
+                    local pts = talent_pts(effects, talent_idx.shatter);
+                    if pts > 0 then
+                        stats.extra_crit = 0.01*dummy_value(lookups.shatter, 0, pts);
+                    end
+                end
             end
         end
     elseif class == classes.warlock then

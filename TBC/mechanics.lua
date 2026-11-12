@@ -118,6 +118,12 @@ local class_stats_spell = (function()
                     stats.target_vuln_mod_mul = stats.target_vuln_mod_mul * vuln;
                 end
             end
+
+            -- shatter against frozen targets, class_misc tracks freeze effects
+            if bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb)) == 0 and
+                effects.raw.class_misc > 0 then
+                stats.extra_crit = talent_pts(effects, talent_idx.shatter) * 0.1;
+            end
         end
     elseif class == classes.warlock then
         return function(anycomp, bid, stats, spell, loadout, effects)

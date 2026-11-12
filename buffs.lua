@@ -2,6 +2,7 @@ local _, sc               = ...;
 
 local apply_effect        = sc.loadouts.apply_effect;
 local is_secret           = sc.utils.is_secret;
+local any_secret          = sc.utils.any_secret;
 local client_matches      = sc.utils.client_matches;
 local client_flags        = sc.client_flags;
 
@@ -161,6 +162,185 @@ local function restricted_form_buffs(loadout)
     end
 end
 
+-- buffs tracked in blizzard's cooldown manager stay known while restricted: its viewers read our own auras on
+-- player and target untainted and leave plain isActive / auraDataUnit on their item frames
+local cdm_viewers = { "BuffIconCooldownViewer", "BuffBarCooldownViewer" };
+-- cooldown id -> { player = ids, hostile = ids, friendly = ids } of our buffs, false when it has none
+local cdm_candidates = {};
+-- spell id -> time of our last cast, picks the rank of an item linking several
+local cdm_last_cast = {};
+local cdm_buff_infos = {};
+local cdm_lnames = {};
+local cdm_present = { player = {}, target = {} };
+local cdm_absent = { player = {}, target = {} };
+
+if client_matches(client_flags.forever) and C_CooldownViewer then
+    local f = CreateFrame("Frame");
+    f:RegisterEvent("SPELLS_CHANGED");
+    f:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player");
+    f:SetScript("OnEvent", function(_, event, _, _, spell_id)
+        if event == "SPELLS_CHANGED" then
+            wipe(cdm_candidates);
+        elseif not is_secret(spell_id) and
+            (sc.class_buffs[spell_id] or sc.player_buffs[spell_id] or
+             sc.hostile_buffs[spell_id] or sc.friendly_buffs[spell_id]) then
+            cdm_last_cast[spell_id] = GetTime();
+        end
+    end);
+end
+
+local function cdm_candidates_of(cooldown_id)
+    local c = cdm_candidates[cooldown_id];
+    if c ~= nil then
+        return c;
+    end
+    c = false;
+    local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cooldown_id);
+    if info then
+        local ids = {};
+        for _, id in pairs({ info.spellID, info.overrideSpellID, info.overrideTooltipSpellID }) do
+            ids[#ids + 1] = id;
+        end
+        for _, id in ipairs(info.linkedSpellIDs or {}) do
+            ids[#ids + 1] = id;
+        end
+        local lists = { player = {}, hostile = {}, friendly = {} };
+        local seen = {};
+        for _, id in ipairs(ids) do
+            if not is_secret(id) and not seen[id] then
+                seen[id] = true;
+                if sc.class_buffs[id] or sc.player_buffs[id] then
+                    table.insert(lists.player, id);
+                end
+                if sc.hostile_buffs[id] then
+                    table.insert(lists.hostile, id);
+                end
+                if sc.friendly_buffs[id] then
+                    table.insert(lists.friendly, id);
+                end
+            end
+        end
+        if #lists.player + #lists.hostile + #lists.friendly > 0 then
+            c = lists;
+        end
+    end
+    cdm_candidates[cooldown_id] = c;
+    return c;
+end
+
+local function remove_buff(loadout, unit, id)
+    local buff_info = loadout.dynamic_buffs[unit][id];
+    loadout.dynamic_buffs[unit][id] = nil;
+    for lname, v in pairs(loadout.dynamic_buffs_lname[unit]) do
+        if v == buff_info then
+            loadout.dynamic_buffs_lname[unit][lname] = nil;
+        end
+    end
+end
+
+-- the rank of an active item: the one already known, else our last cast, else the only candidate we know
+local function cdm_rank(kept, ids)
+    local best, best_time;
+    local known, n_known = nil, 0;
+    for _, id in ipairs(ids) do
+        if kept[id] then
+            return nil;
+        end
+        local t = cdm_last_cast[id];
+        if t and (not best_time or t > best_time) then
+            best, best_time = id, t;
+        end
+        if IsPlayerSpell(id) then
+            known, n_known = id, n_known + 1;
+        end
+    end
+    if best then
+        return best;
+    end
+    if #ids == 1 then
+        return ids[1];
+    end
+    if n_known == 1 then
+        return known;
+    end
+    return nil;
+end
+
+local function cdm_apply(loadout, unit)
+    local kept = loadout.dynamic_buffs[unit];
+    for _, ids in ipairs(cdm_absent[unit]) do
+        for _, id in ipairs(ids) do
+            if kept[id] and kept[id].player_owned then
+                remove_buff(loadout, unit, id);
+            end
+        end
+    end
+    for _, ids in ipairs(cdm_present[unit]) do
+        local id = cdm_rank(kept, ids);
+        if id then
+            local buff_info = cdm_buff_infos[id];
+            if not buff_info then
+                buff_info = { count = 1, id = id, player_owned = true };
+                cdm_buff_infos[id] = buff_info;
+            end
+            kept[id] = buff_info;
+            local lname = cdm_lnames[id];
+            if lname == nil then
+                lname = C_Spell.GetSpellName(id) or false;
+                cdm_lnames[id] = lname;
+            end
+            if lname then
+                loadout.dynamic_buffs_lname[unit][lname] = buff_info;
+            end
+        end
+    end
+end
+
+-- player is scanned before target, an item active on the target has no aura on the player
+local function cdm_restricted_buffs(loadout)
+    local target_list;
+    if UnitExists("target") and loadout.dynamic_buffs["target"] ~= loadout.dynamic_buffs["player"] then
+        target_list = UnitIsFriend("player", "target") and "friendly" or "hostile";
+    end
+    for _, t in pairs(cdm_present) do
+        wipe(t);
+    end
+    for _, t in pairs(cdm_absent) do
+        wipe(t);
+    end
+    for _, name in ipairs(cdm_viewers) do
+        local viewer = _G[name];
+        if viewer and viewer.itemFramePool and viewer:IsVisible() then
+            for item in viewer.itemFramePool:EnumerateActive() do
+                local cooldown_id, active, unit = item.cooldownID, item.isActive, item.auraDataUnit;
+                if cooldown_id and not any_secret(cooldown_id, active, unit) then
+                    local c = cdm_candidates_of(cooldown_id);
+                    if c then
+                        local target_ids = target_list and c[target_list];
+                        if not active then
+                            table.insert(cdm_absent.player, c.player);
+                            if target_ids then
+                                table.insert(cdm_absent.target, target_ids);
+                            end
+                        elseif unit == "player" then
+                            table.insert(cdm_present.player, c.player);
+                        elseif unit == "target" then
+                            table.insert(cdm_absent.player, c.player);
+                            if target_ids then
+                                table.insert(cdm_present.target, target_ids);
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    cdm_apply(loadout, "player");
+    if target_list then
+        cdm_apply(loadout, "target");
+    end
+end
+
 local scanned_units = { "player", "target" };
 local scanned_units_mouseover = { "player", "target", "mouseover" };
 
@@ -191,11 +371,15 @@ local function detect_buffs(loadout, prev)
 
     wipe(loadout.aura_guids);
     if should_auras_be_secret and should_auras_be_secret() then
-        -- ignoring buffs leaves only the form, apply_snapshot_deltas takes the snapshot buffs out of the sheet stats
+        -- ignoring buffs leaves the cooldown manager's and the form, apply_snapshot_deltas takes the snapshot buffs
+        -- out of the sheet stats
         if not (sc.config.settings.loadout_combat_ignore_buffs and client_matches(client_flags.forever)) then
             for _, k in ipairs(units) do
                 keep_restricted_buffs(loadout, prev, k);
             end
+        end
+        if C_CooldownViewer then
+            cdm_restricted_buffs(loadout);
         end
         restricted_form_buffs(loadout);
         loadout.snapshot_buffs = prev.snapshot_buffs;

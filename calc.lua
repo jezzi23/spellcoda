@@ -1420,10 +1420,8 @@ local class_stats_spell = (function()
                     stats.becomes_instant_p = stats.becomes_instant_p + 0.1;
                 end
 
-                -- class_misc tracking freeze effects
+                -- class_misc tracking freeze effects, shatter is in the client mechanics
                 if effects.raw.class_misc > 0 then
-
-                    stats.extra_crit = talent_pts(effects, talent_idx.shatter) * 0.1;
 
                     if bid == spids.ice_lance then
                         stats.target_vuln_mod_mul = stats.target_vuln_mod_mul * 3;

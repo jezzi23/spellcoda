@@ -6454,16 +6454,17 @@ local function create_sw_ui_loadout_frame(pframe)
         f = CreateFrame("CheckButton", "__sc_frame_setting_loadout_combat_ignore_buffs", pframe, "ChatConfigCheckButtonTemplate");
         f._type = "CheckButton";
         f:SetPoint("TOPLEFT", pframe, x_pad, pframe.y_offset);
-        getglobal(f:GetName()..'Text'):SetText(L["Ignore buffs in combat"]);
+        getglobal(f:GetName()..'Text'):SetText(L["Ignore undetectable buffs in combat"]);
         getglobal(f:GetName()).tooltip =
-            L["Removes buffs from calculations while in combat, except shapeshift forms."];
+            L["Removes buffs from calculations while in combat, except shapeshift forms and buffs tracked by Blizzard's Cooldown Manager."];
         f:SetScript("OnClick", function(self)
             sc.loadouts.force_update = true;
             config.settings.loadout_combat_ignore_buffs = self:GetChecked();
         end)
 
         local help_icon = make_help_icon_tooltip(nil, pframe, L["Buffs can not be read in combat"],
-            L["Unchecked, buffs active when entering combat are assumed throughout combat."]);
+            L["Unchecked, buffs active when entering combat are assumed throughout combat."].."\n\n"..
+            L["Buffs you track in Blizzard's Cooldown Manager (Tracked Buffs or Tracked Bars) are followed in combat\nwhile the Cooldown Manager is enabled."]);
         help_icon:SetPoint("LEFT", getglobal(f:GetName()..'Text'), "RIGHT", 10, 0);
     end
 

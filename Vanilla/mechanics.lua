@@ -197,6 +197,11 @@ local class_stats_spell = (function()
                     stats.spell_dmg_mod_mul = stats.spell_dmg_mod_mul *
                         (1.0 + 100*spell.direct.per_resource * loadout.resources[powers.mana] / loadout.resources_max[powers.mana]);
                 end
+
+                -- shatter against frozen targets, class_misc tracks freeze effects
+                if effects.raw.class_misc > 0 then
+                    stats.extra_crit = talent_pts(effects, talent_idx.shatter) * 0.1;
+                end
             end
         end
     elseif class == classes.warlock then
