@@ -429,17 +429,21 @@ local spell_browser_sort_keys = {
     hpc = 5,
 };
 
--- config keys are a catalogue's filter_prefix followed by the id, the first three indices double as triggers
+-- the first four double as spell_filters triggers
 local spell_filter_ids = {
     "already_known",
     "available",
     "unavailable",
-    "learned_from_item",
+    "missing_requirement",
+    "innate",
+    "weapon_skills",
+    "trainer",
     "talent",
+    "learned_from_item",
     "pet",
-    "ignored_spells",
     "other_spells",
-    "only_highest_learned_ranks",
+    "ignored_spells",
+    "hide_replaced_ranks",
 };
 local spell_filters = {};
 for k, id in ipairs(spell_filter_ids) do
@@ -470,7 +474,16 @@ end
 local function spell_known(id)
     local known = spells_known_cache[id];
     if known == nil then
-        known = IsSpellKnownOrOverridesKnown(id) or IsSpellKnownOrOverridesKnown(id, true);
+        if bit.band(spells[id].flags, spell_flags.weapon_skill) ~= 0 then
+            known = IsPlayerSpell(id);
+        else
+            known = IsSpellKnownOrOverridesKnown(id) or IsSpellKnownOrOverridesKnown(id, true);
+        end
+        if not known and spells[id].train == -1 and spells[id].learned_with then
+            for _, summon in ipairs(spells[id].learned_with) do
+                known = known or IsPlayerSpell(summon);
+            end
+        end
         if not known then
             -- deal with spells that you unlearn when you have a higher rank
             local highest = cached_highest_learned_rank(spells[id].base_id);
@@ -521,6 +534,281 @@ local function spell_lower_name(id)
     return lname;
 end
 
+local function spell_source_included(filters, spell)
+    local flags = spell.flags;
+    if bit.band(flags, spell_flags.pet) ~= 0 then
+        return filters.pet;
+    elseif bit.band(flags, spell_flags.weapon_skill) ~= 0 then
+        return filters.weapon_skills;
+    elseif spell.learned_with and spells[spell.learned_with[1]] then
+        return spell_source_included(filters, spells[spell.learned_with[1]]);
+    elseif bit.band(flags, spell_flags.talent) ~= 0 then
+        return filters.talent;
+    elseif spell.train < -1 or bit.band(flags, spell_flags.quest) ~= 0 then
+        return filters.learned_from_item;
+    elseif spell.train > 0 then
+        return filters.trainer;
+    elseif spell.train == -1 then
+        return filters.innate;
+    end
+    return filters.other_spells;
+end
+
+-- true: a talent point, id: a talent or rank, list: one of these spells, false: nothing missing
+local function missing_requirement(spell)
+    if spell.learned_with then
+        for _, skill in ipairs(spell.learned_with) do
+            if IsPlayerSpell(skill) then
+                return false;
+            end
+        end
+        return spell.learned_with;
+    end
+    if spell.requires then
+        local known = false;
+        for _, id in ipairs(spell.requires) do
+            known = known or spell_known(id);
+        end
+        if not known then
+            return spell.requires;
+        end
+    end
+    if spell.rank < 2 then
+        return bit.band(spell.flags, spell_flags.talent) ~= 0;
+    end
+    local ranks = sc.rank_seqs[spell.base_id];
+    local needed;
+    if client_matches(client_flags.forever) then
+        needed = ranks[spell.rank - 1];
+    elseif bit.band(spell.flags, spell_flags.talent) ~= 0 then
+        needed = ranks[1];
+    end
+    if needed and not spell_known(needed) then
+        return needed;
+    end
+    return false;
+end
+
+local training = {
+    -- faction id -> percent off
+    pct = {},
+    -- spell id -> trainers of the player's side: {faction = id} or a weapon master
+    sources = {},
+    beast_training_id = 5149,
+    quest_texture = "Interface\\GossipFrame\\AvailableQuestIcon",
+};
+
+function training.show_quest_hint(owner, anchor)
+    GameTooltip:SetOwner(owner, anchor);
+    GameTooltip:SetText(L["Quest reward"]);
+    GameTooltip:Show();
+end
+
+function training.tamed(spell)
+    return sc.class == sc.classes.hunter and (spell.train == 0 or spell.train == -1) and
+        bit.band(spell.flags, spell_flags.pet) ~= 0;
+end
+
+function training.taming_hint(spell_id)
+    local spell = spells[spell_id];
+    if spell_known(spell_id) or missing_requirement(spell) then
+        return false;
+    end
+    local first = sc.rank_seqs[spell.base_id][1];
+    return first == spell_id or not spell_known(first);
+end
+
+function training.widest_cell_w(measure, icon_w)
+    local w, has_book = 0, false;
+    local function fit(str)
+        measure:SetText(str);
+        w = math.max(w, math.ceil(measure:GetUnboundedStringWidth()));
+    end
+    fit(L["Talent"]);
+    fit(L["Unknown"]);
+    local measured = {};
+    for _, spell in pairs(spells) do
+        if not spell.race_flags or bit.band(spell.race_flags, bit.lshift(1, sc.race-1)) ~= 0 then
+            has_book = has_book or spell.book_price ~= nil;
+            local base = training.base_price(spell);
+            if base > 0 then
+                for _, pct in pairs(sc.rep_discount_pct) do
+                    local cost = math.floor(base * (100 - pct) / 100 + 0.5);
+                    if not measured[cost] then
+                        measured[cost] = true;
+                        fit(C_CurrencyInfo.GetCoinTextureString(cost));
+                    end
+                end
+                if not measured[base] then
+                    measured[base] = true;
+                    fit(C_CurrencyInfo.GetCoinTextureString(base));
+                end
+            end
+        end
+    end
+    measure:SetText("! ");
+    w = w + math.ceil(measure:GetUnboundedStringWidth());
+    return has_book and w + icon_w or w;
+end
+
+function training.place_cell(text, icon, mark, at)
+    local left;
+    if text:IsShown() and text:GetText() ~= "" then
+        text:ClearAllPoints();
+        at(text);
+        left = text;
+    end
+    if icon:IsShown() then
+        icon:ClearAllPoints();
+        if left then
+            icon:SetPoint("RIGHT", left, "LEFT", -2, 0);
+        else
+            at(icon);
+        end
+        left = icon;
+    end
+    if mark:IsShown() then
+        mark:ClearAllPoints();
+        if left then
+            mark:SetPoint("RIGHT", left, "LEFT", -2, 0);
+        else
+            at(mark);
+        end
+    end
+end
+
+function training.show_taming_hint(owner, spell_id, anchor)
+    if training.taming_hint(spell_id) then
+        GameTooltip:SetOwner(owner, anchor);
+        GameTooltip:SetText(L["Unlocked by taming a beast that knows it"]);
+        GameTooltip:Show();
+    end
+end
+
+function training.faction_pct(id)
+    local pct = training.pct[id];
+    if not pct then
+        local _, standing = sc.utils.faction_standing(id);
+        pct = standing and sc.rep_discount_pct[standing] or 0;
+        training.pct[id] = pct;
+    end
+    return pct;
+end
+
+function training.trainers(spell_id)
+    local list = training.sources[spell_id];
+    if list then
+        return list;
+    end
+    list = {};
+    local spell = spells[spell_id];
+    if bit.band(spell.flags, spell_flags.weapon_skill) ~= 0 then
+        for _, m in ipairs(sc.weapon_masters) do
+            if m.side == sc.faction then
+                for _, skill in ipairs(m.skills) do
+                    if skill == spell_id then
+                        table.insert(list, m);
+                    end
+                end
+            end
+        end
+    elseif spell.trainer_faction then
+        table.insert(list, {faction = spell.trainer_faction});
+    else
+        local role = sc.class;
+        if bit.band(spell.flags, spell_flags.pet) ~= 0 and sc.class == sc.classes.hunter then
+            role = "PET";
+        end
+        for _, t in ipairs(sc.trainer_factions) do
+            if t.role == role and t.side == sc.faction then
+                for _, f in ipairs(t.factions) do
+                    table.insert(list, {faction = f});
+                end
+            end
+        end
+    end
+    training.sources[spell_id] = list;
+    return list;
+end
+
+function training.price_at(cost, faction)
+    return math.floor(cost * (100 - training.faction_pct(faction)) / 100 + 0.5);
+end
+
+function training.base_price(spell)
+    if spell.train > 0 then
+        return spell.train;
+    end
+    return spell.book_price or 0;
+end
+
+function training.cheapest(spell_id)
+    local cost = training.base_price(spells[spell_id]);
+    local best = cost;
+    for _, t in ipairs(training.trainers(spell_id)) do
+        best = math.min(best, training.price_at(cost, t.faction));
+    end
+    return best;
+end
+
+function training.price_str(spell_id, discount_code)
+    local cost = training.cheapest(spell_id);
+    local str = C_CurrencyInfo.GetCoinTextureString(cost);
+    if cost < training.base_price(spells[spell_id]) then
+        str = discount_code..str.."|r";
+    end
+    return str;
+end
+
+function training.row_cmp(lhs, rhs)
+    return lhs.price < rhs.price;
+end
+
+function training.spell_title(spell_id)
+    if spells[spell_id].rank ~= 0 then
+        return string.format("%s ("..L["Rank"].." %d)", C_Spell.GetSpellName(spell_id), spells[spell_id].rank);
+    end
+    return C_Spell.GetSpellName(spell_id);
+end
+
+function training.show_tooltip(owner, spell_id, anchor)
+    local spell = spells[spell_id];
+    GameTooltip:SetOwner(owner, anchor);
+    GameTooltip:SetText(training.spell_title(spell_id));
+    local needed = not spell_known(spell_id) and missing_requirement(spell);
+    if needed == true then
+        GameTooltip:AddLine(L["Requires a talent point"], 0.8, 0.6, 1);
+    elseif type(needed) == "table" then
+        local skills = {};
+        for i, skill in ipairs(needed) do
+            skills[i] = spells[skill] and training.spell_title(skill) or C_Spell.GetSpellName(skill);
+        end
+        GameTooltip:AddLine(L["Requires"].." "..table.concat(skills, " / "), 0.8, 0.6, 1);
+    elseif needed then
+        GameTooltip:AddLine(L["Requires"].." "..training.spell_title(needed), 0.8, 0.6, 1);
+    end
+    local base = training.base_price(spell);
+    if base > 0 then
+        local rows = {};
+        for _, t in ipairs(training.trainers(spell_id)) do
+            local faction, standing = sc.utils.faction_standing(t.faction);
+            if faction then
+                local where = faction.." (".._G["FACTION_STANDING_LABEL"..standing]..")";
+                if t.name then
+                    where = t.name..", "..(C_Map.GetAreaInfo(t.area) or "").." ("..faction..", ".._G["FACTION_STANDING_LABEL"..standing]..")";
+                end
+                table.insert(rows, {where = where, price = training.price_at(base, t.faction)});
+            end
+        end
+        table.sort(rows, training.row_cmp);
+        for _, r in ipairs(rows) do
+            GameTooltip:AddDoubleLine(r.where, C_CurrencyInfo.GetCoinTextureString(r.price), 1, 1, 1, 1, 1, 1);
+        end
+        GameTooltip:AddDoubleLine(L["Base price"], C_CurrencyInfo.GetCoinTextureString(base), 0.6, 0.6, 0.6, 1, 1, 1);
+    end
+    GameTooltip:Show();
+end
+
 local function spell_view_trigger(filters, id, lvl, name_filter)
     local spell = spells[id];
 
@@ -529,34 +817,38 @@ local function spell_view_trigger(filters, id, lvl, name_filter)
     end
     local known = spell_known(id);
     local trigger;
-    if filters.already_known and known then
+    if known then
+        if not filters.already_known then
+            return nil;
+        end
         trigger = spell_filters.already_known;
-    elseif filters.available and lvl >= spell.lvl_req and not known then
-        trigger = spell_filters.available;
-    elseif filters.unavailable and lvl < spell.lvl_req then
+    elseif lvl < (spell.lvl_learn or spell.lvl_req) then
+        if not filters.unavailable then
+            return nil;
+        end
         trigger = spell_filters.unavailable;
+    elseif missing_requirement(spell) then
+        if not filters.missing_requirement then
+            return nil;
+        end
+        trigger = spell_filters.missing_requirement;
+    elseif filters.available then
+        trigger = spell_filters.available;
     else
         return nil;
     end
 
-    if not filters.learned_from_item and spell.train < -1 then
-        return nil;
-    end
-    if not filters.pet and bit.band(spell.flags, spell_flags.pet) ~= 0 then
-        return nil;
-    end
-    if not filters.talent and bit.band(spell.flags, spell_flags.talent) ~= 0 then
+    if not spell_source_included(filters, spell) then
         return nil;
     end
     if not filters.ignored_spells and config.settings.spells_ignore_list[id] then
         return nil;
     end
-    if not filters.other_spells and spell.train == 0 then
-        return nil;
-    end
-    if filters.only_highest_learned_ranks and
-        cached_highest_learned_rank(spell.base_id) ~= id then
-        return nil;
+    if filters.hide_replaced_ranks and known then
+        local highest = cached_highest_learned_rank(spell.base_id);
+        if highest and spells[highest] and spells[highest].rank > spell.rank then
+            return nil;
+        end
     end
     if spell.race_flags and bit.band(spell.race_flags, bit.lshift(1, sc.race-1)) == 0 then
         return nil;
@@ -649,6 +941,7 @@ local function filtered_spell_view(cat, spell_ids)
     for _, id in ipairs(spell_filter_ids) do
         filters[id] = settings[cat.filter_prefix..id];
     end
+    clear_table(training.pct);
 
     local lvl = active_loadout().lvl;
     local next_lvl = lvl + 1;
@@ -668,21 +961,23 @@ local function filtered_spell_view(cat, spell_ids)
         local trigger = spell_view_trigger(filters, id, lvl, name_filter);
         if trigger then
             local spell = spells[id];
-            if spell.train > 0 then
-                if spell.lvl_req == next_lvl then
-                    next_cost = next_cost + spell.train;
+            if training.base_price(spell) > 0 then
+                local price = training.cheapest(id);
+                if (spell.lvl_learn or spell.lvl_req) == next_lvl then
+                    next_cost = next_cost + price;
                 end
                 if trigger == spell_filters.available then
-                    avail_cost = avail_cost + spell.train;
+                    avail_cost = avail_cost + price;
                 end
                 if trigger ~= spell_filters.already_known then
-                    total_cost = total_cost + spell.train;
+                    total_cost = total_cost + price;
                 end
             end
-            if by_lvl and spell.lvl_req ~= prev_lvl then
+            local spell_lvl = spell.lvl_learn or spell.lvl_req;
+            if by_lvl and spell_lvl ~= prev_lvl then
                 n = n + 1;
-                spell_view_entry(cat, n).lvl_barrier = spell.lvl_req;
-                prev_lvl = spell.lvl_req;
+                spell_view_entry(cat, n).lvl_barrier = spell_lvl;
+                prev_lvl = spell_lvl;
             end
             n = n + 1;
             local v = spell_view_entry(cat, n);
@@ -796,19 +1091,37 @@ local function populate_scrollable_spell_view(cat, starting_idx)
                 line.spell_name:SetTextColor(0 / 255, 255 / 255,   0 / 255);
             elseif v.trigger == spell_filters.unavailable then
                 line.spell_name:SetTextColor(252 / 255,  69 / 255,   3 / 255);
+            elseif v.trigger == spell_filters.missing_requirement then
+                line.spell_name:SetTextColor(0.8, 0.6, 1);
             end
             line.spell_name:Show();
             -- do level per line if not sorting by lvl
             if not by_lvl then
-                line.lvl_str:SetText(color_by_lvl_diff(lvl, spells[v.spell_id].lvl_req)..spells[v.spell_id].lvl_req);
+                local spell_lvl = spells[v.spell_id].lvl_learn or spells[v.spell_id].lvl_req;
+                line.lvl_str:SetText(color_by_lvl_diff(lvl, spell_lvl)..spell_lvl);
                 line.lvl_str:Show();
             end
             -- write in currency/book cost column
+            local unlearned = v.trigger ~= spell_filters.already_known and not v.is_dual;
+            local mark = "";
+            if v.trigger == spell_filters.unavailable and missing_requirement(spells[v.spell_id]) then
+                mark = "|cFFCC99FF!|r";
+            end
+            local book_price = spells[v.spell_id].train < -1 and spells[v.spell_id].book_price;
+            if unlearned and (book_price or spells[v.spell_id].train >= -1 and
+                (spells[v.spell_id].train > 0 or missing_requirement(spells[v.spell_id]))) then
+                line.cost_area.__id = v.spell_id;
+                line.cost_area:Show();
+            end
+            line.book_icon.__id = nil;
+            line.book_icon.__taming = nil;
+            line.book_icon.__req = nil;
+            line.book_icon.__quest = nil;
             if spells[v.spell_id].train > 0 then
-                if v.trigger == spell_filters.already_known or v.is_dual then
-                    line.cost_str:SetText("");
+                if unlearned then
+                    line.cost_str:SetText(training.price_str(v.spell_id, "|cFF66FF66"));
                 else
-                    line.cost_str:SetText(C_CurrencyInfo.GetCoinTextureString(spells[v.spell_id].train));
+                    line.cost_str:SetText("");
                 end
                 line.cost_str:Show();
             elseif spells[v.spell_id].train < -1 then
@@ -818,17 +1131,41 @@ local function populate_scrollable_spell_view(cat, starting_idx)
                     line.book_tex:SetTexture(C_Item.GetItemIconByID(-spells[v.spell_id].train));
                     line.book_tex:Show();
                     line.book_icon:Show();
+                    if book_price then
+                        line.cost_str:SetText(training.price_str(v.spell_id, "|cFF66FF66"));
+                        line.cost_str:Show();
+                    end
                 end
             else
                 if v.trigger == spell_filters.already_known or v.is_dual then
                 elseif bit.band(spells[v.spell_id].flags, spell_flags.talent) ~= 0 then
                     line.cost_str:SetText(L["Talent"]);
                     line.cost_str:Show();
+                elseif training.tamed(spells[v.spell_id]) then
+                    line.book_icon.__taming = v.spell_id;
+                    line.book_tex:SetTexture((C_Spell.GetSpellTexture(training.beast_training_id)));
+                    line.book_tex:Show();
+                    line.book_icon:Show();
+                elseif bit.band(spells[v.spell_id].flags, spell_flags.quest) ~= 0 then
+                    line.book_icon.__quest = true;
+                    line.book_tex:SetTexture(training.quest_texture);
+                    line.book_tex:Show();
+                    line.book_icon:Show();
+                elseif spells[v.spell_id].learned_with then
+                    line.book_icon.__req = v.spell_id;
+                    line.book_tex:SetTexture((C_Spell.GetSpellTexture(spells[v.spell_id].learned_with[1])));
+                    line.book_tex:Show();
+                    line.book_icon:Show();
                 else
                     line.cost_str:SetText(L["Unknown"]);
                     line.cost_str:Show();
                 end
             end
+            if mark ~= "" then
+                line.mark_str:SetText(mark);
+                line.mark_str:Show();
+            end
+            training.place_cell(line.cost_str, line.book_icon, line.mark_str, line.cost_str.acquisition_at);
             if bit.band(spells[v.spell_id].flags, spell_flags.eval) ~= 0 then
                 if v.eval_id ~= cat.eval_id then
                     eval_spell_view_entry(cat, v);
@@ -890,7 +1227,7 @@ local function render_spells_frame(cat)
         local suitable_idx = 1;
         local lvl = active_loadout().lvl;
         for k, v in pairs(view) do
-            if v.spell_id and lvl <= spells[v.spell_id].lvl_req then
+            if v.spell_id and lvl <= (spells[v.spell_id].lvl_learn or spells[v.spell_id].lvl_req) then
                 suitable_idx = k;
                 break;
             end
@@ -950,6 +1287,22 @@ local function update_spell_catalogues(loadout, effects, eval_flags, force_refre
             update_spell_catalogue(cat, loadout, effects, eval_flags, force_refresh);
         end
     end
+end
+
+local function spell_ignore_text(id)
+    if config.settings.spells_ignore_list[id] then
+        return "|cFFFF4040"..L["Unignore spell"].."|r";
+    end
+    return "|cFFFF4040"..L["Ignore spell"].."|r";
+end
+
+local function toggle_spell_ignored(id)
+    if config.settings.spells_ignore_list[id] then
+        config.settings.spells_ignore_list[id] = nil;
+    else
+        config.settings.spells_ignore_list[id] = 1;
+    end
+    update_spell_catalogues(nil, nil, nil, true);
 end
 
 local spells_catalogue = new_spell_catalogue(
@@ -1446,6 +1799,7 @@ local function create_sw_ui_spells_frame(pframe)
 
     spell_filter_listing = {
         {
+            header = L["Show"],
             id = "already_known",
             disp = L["Already known"],
         },
@@ -1454,24 +1808,37 @@ local function create_sw_ui_spells_frame(pframe)
             disp = L["Available"],
         },
         {
+            id = "missing_requirement",
+            disp = L["Available, missing requirement"],
+        },
+        {
             id = "unavailable",
             disp = L["Unavailable"],
         },
         {
-            id = "learned_from_item",
-            disp = L["Learned from item"],
+            header = L["Sources"],
+            id = "innate",
+            disp = L["Innate abilities"],
+        },
+        {
+            id = "weapon_skills",
+            disp = L["Weapon skills"],
+        },
+        {
+            id = "trainer",
+            disp = L["Class trainer"],
         },
         {
             id = "talent",
             disp = L["Talent spells"],
         },
         {
-            id = "pet",
-            disp = L["Pet spells"],
+            id = "learned_from_item",
+            disp = L["Quests and items"],
         },
         {
-            id = "ignored_spells",
-            disp = L["Ignored spells"],
+            id = "pet",
+            disp = L["Pet spells"],
         },
         {
             id = "other_spells",
@@ -1479,8 +1846,14 @@ local function create_sw_ui_spells_frame(pframe)
             tooltip = L["Uncategorized spells. Contains seasonal spells and junk."]
         },
         {
-            id = "only_highest_learned_ranks",
-            disp = L["Only highest, learned spell ranks"],
+            header = L["Options"],
+            id = "ignored_spells",
+            disp = L["Ignored spells"],
+        },
+        {
+            id = "hide_replaced_ranks",
+            disp = L["Hide replaced ranks"],
+            tooltip = L["Hides learned ranks that a higher learned rank replaces."]
         },
     };
 
@@ -1553,12 +1926,15 @@ local function create_sw_ui_spells_frame(pframe)
     pframe.filter:SetPoint("TOPLEFT", 340, pframe.y_offset+6);
     pframe.filter.init_func = function()
 
-        libDD:UIDropDownMenu_SetText(pframe.filter, L["Includes"]);
+        libDD:UIDropDownMenu_SetText(pframe.filter, L["Filters"]);
         libDD:UIDropDownMenu_Initialize(pframe.filter, function()
 
             libDD:UIDropDownMenu_SetWidth(pframe.filter, 80);
 
-            for _, v in pairs(spell_filter_listing) do
+            for _, v in ipairs(spell_filter_listing) do
+                if v.header then
+                    libDD:UIDropDownMenu_AddButton({text = v.header, isTitle = true, notCheckable = true});
+                end
                 local txt = v.disp;
                 if v.id == "already_known" then
                     txt = "|cFF8a867d"..txt;
@@ -1566,6 +1942,8 @@ local function create_sw_ui_spells_frame(pframe)
                     txt = "|cFF00FF00"..txt;
                 elseif v.id == "unavailable" then
                     txt = "|cFFFF0000"..txt;
+                elseif v.id == "missing_requirement" then
+                    txt = "|cFFCC99FF"..txt;
                 end
                 local key = spells_catalogue.filter_prefix..v.id;
                 local is_checked = config.settings[key];
@@ -1595,10 +1973,10 @@ local function create_sw_ui_spells_frame(pframe)
     local name_x_offset = 20;
     local lvl_x_offset = 200;
     local effect_x_offset = 230;
-    local per_sec_x_offset = 260;
-    local per_cost_x_offset = 325;
-    local acquisition_x_offset = 380;
+    local per_sec_x_offset = 255;
+    local per_cost_x_offset;
     local dropdown_x_offset = 440;
+    local acquisition_r = dropdown_x_offset - 4;
 
     local f = pframe:CreateFontString(nil, "OVERLAY");
     f:SetFontObject(font);
@@ -1617,16 +1995,23 @@ local function create_sw_ui_spells_frame(pframe)
     f:SetPoint("TOPLEFT", per_sec_x_offset, pframe.y_offset);
     register_text_frame_color(f, "effect_per_sec");
 
+    local per_sec_header = f;
+
     local f = pframe:CreateFontString(nil, "OVERLAY");
     f:SetFontObject(font);
     f:SetText(L["Per cost"]);
-    f:SetPoint("TOPLEFT", per_cost_x_offset, pframe.y_offset);
     register_text_frame_color(f, "effect_per_cost");
+    local per_cost_header = f;
 
     local f = pframe:CreateFontString(nil, "OVERLAY");
     f:SetFontObject(font);
     f:SetText(L["Acquisition"]);
-    f:SetPoint("TOPLEFT", acquisition_x_offset, pframe.y_offset);
+    f:SetPoint("TOPRIGHT", pframe, "TOPLEFT", acquisition_r, pframe.y_offset);
+
+    local free_l = per_sec_x_offset + per_sec_header:GetStringWidth();
+    local free_r = acquisition_r - f:GetStringWidth();
+    per_cost_x_offset = math.floor(free_l + (free_r - free_l - per_cost_header:GetStringWidth()) / 2);
+    per_cost_header:SetPoint("TOPLEFT", per_cost_x_offset, pframe.y_offset);
 
     pframe.y_offset = pframe.y_offset - 23;
     local num_view_list_entries = 29;
@@ -1709,13 +2094,27 @@ local function create_sw_ui_spells_frame(pframe)
 
         local book = CreateFrame("Frame", nil, pframe);
         book:SetSize(15, 15);
-        book:SetPoint("TOPLEFT", acquisition_x_offset, pframe.y_offset+2);
+        book:SetPoint("TOPRIGHT", pframe, "TOPLEFT", acquisition_r, pframe.y_offset+2);
         local book_texture = book:CreateTexture(nil);
         book_texture:SetAllPoints(book);
         book:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT");
-            GameTooltip:SetItemByID(self.__id);
-            GameTooltip:Show();
+            if self.__taming then
+                training.show_taming_hint(self, self.__taming, "ANCHOR_BOTTOMRIGHT");
+                return;
+            end
+            if self.__req then
+                training.show_tooltip(self, self.__req, "ANCHOR_BOTTOMRIGHT");
+                return;
+            end
+            if self.__quest then
+                training.show_quest_hint(self, "ANCHOR_BOTTOMRIGHT");
+                return;
+            end
+            if self.__id then
+                GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT");
+                GameTooltip:SetItemByID(self.__id);
+                GameTooltip:Show();
+            end
         end);
         book:SetScript("OnLeave", function(self)
             GameTooltip:Hide();
@@ -1758,7 +2157,29 @@ local function create_sw_ui_spells_frame(pframe)
         local cost = pframe:CreateFontString(nil, "OVERLAY");
         cost:SetFontObject(font);
         cost:SetText("");
-        cost:SetPoint("TOPLEFT", acquisition_x_offset, pframe.y_offset+1);
+        cost:SetWordWrap(false);
+
+        local mark_str = pframe:CreateFontString(nil, "OVERLAY");
+        mark_str:SetFontObject(font);
+
+        local acquisition_y = pframe.y_offset - 5;
+        local function acquisition_at(region)
+            region:SetPoint("RIGHT", pframe, "TOPLEFT", acquisition_r, acquisition_y);
+        end
+        acquisition_at(cost);
+        cost.acquisition_at = acquisition_at;
+
+        local cost_area = CreateFrame("Frame", nil, pframe);
+        cost_area:SetSize(acquisition_r - per_cost_x_offset - 30, 15);
+        cost_area:SetPoint("TOPRIGHT", pframe, "TOPLEFT", acquisition_r, pframe.y_offset+2);
+        book:SetFrameLevel(cost_area:GetFrameLevel() + 1);
+        cost_area:EnableMouse(true);
+        cost_area:SetScript("OnEnter", function(self)
+            training.show_tooltip(self, self.__id, "ANCHOR_BOTTOMRIGHT");
+        end);
+        cost_area:SetScript("OnLeave", function()
+            GameTooltip:Hide();
+        end);
 
         -- spell option dropdown
         local spell_options =
@@ -1771,29 +2192,28 @@ local function create_sw_ui_spells_frame(pframe)
 
                 libDD:UIDropDownMenu_SetWidth(spell_options, 15);
 
-                libDD:UIDropDownMenu_AddButton({
-                        text = L["Add to calculator list"],
-                        func = function()
-
-                            local id = spell_options.__spid;
-                            if spells[id] and bit.band(spells[id].flags, bit.bor(spell_flags.eval, spell_flags.ehp)) ~= 0 then
-
-                                config.settings.spell_calc_list[spell_options.__spid] = 1;
+                local id = spell_options.__spid;
+                if not id then
+                    return;
+                end
+                libDD:UIDropDownMenu_AddButton({text = training.spell_title(id), isTitle = true, notCheckable = true});
+                if bit.band(spells[id].flags, bit.bor(spell_flags.eval, spell_flags.ehp)) ~= 0 then
+                    libDD:UIDropDownMenu_AddButton({
+                            text = L["Add to calculator list"],
+                            notCheckable = true,
+                            func = function()
+                                config.settings.spell_calc_list[id] = 1;
                                 update_calc_list(true);
-                            end
-
-                        end,
-                    }
-                );
+                            end,
+                        }
+                    );
+                    libDD:UIDropDownMenu_AddSpace();
+                end
                 libDD:UIDropDownMenu_AddButton({
-                        text = L["Add/remove to spell ignore list"],
-                        func = function(self)
-                            if config.settings.spells_ignore_list[spell_options.__spid] then
-                                config.settings.spells_ignore_list[spell_options.__spid] = nil;
-                            else
-                                config.settings.spells_ignore_list[spell_options.__spid] = 1;
-                            end
-                            update_spell_catalogues(nil, nil, nil, true);
+                        text = spell_ignore_text(id),
+                        notCheckable = true,
+                        func = function()
+                            toggle_spell_ignored(id);
                         end,
                     }
                 );
@@ -1820,11 +2240,11 @@ local function create_sw_ui_spells_frame(pframe)
         hover_f.update = function()
             local focus = mouse_focus();
             hover_tex:SetShown(hover_f:IsShown() and focus ~= nil and
-                (focus == hover_f or focus == tooltip_area_f or focus == book or focus == f));
+                (focus == hover_f or focus == tooltip_area_f or focus == book or focus == cost_area or focus == f));
         end;
         hover_f:SetScript("OnEnter", hover_f.update);
         hover_f:SetScript("OnLeave", hover_f.update);
-        for _, frame in ipairs({tooltip_area_f, book, f}) do
+        for _, frame in ipairs({tooltip_area_f, book, cost_area, f}) do
             frame:HookScript("OnEnter", hover_f.update);
             frame:HookScript("OnLeave", hover_f.update);
         end
@@ -1851,7 +2271,9 @@ local function create_sw_ui_spells_frame(pframe)
             per_cost_str = effect_per_cost_str,
             book_icon = book,
             book_tex = book_texture,
+            mark_str = mark_str,
             cost_str = cost,
+            cost_area = cost_area,
             dropdown_menu = spell_options,
             dropdown_button = f,
             ignore_line = ignore_line_f,
@@ -7840,7 +8262,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
     local paging_rows_bottom = 523;
     local full_rows_bottom = 585;
     -- the row menu button is right of it
-    local content_r = page_w - 20;
+    local content_r = page_w - 24;
     local bottom_bar_y = 56;
 
 
@@ -7858,8 +8280,10 @@ local function create_book_catalogue(sb, container, open_sc_tab)
     local ink = {
         available = {0.0, 0.42, 0.0},
         unavailable = {0.62, 0.1, 0.02},
+        missing_requirement = {0.42, 0.12, 0.62},
         available_code = "|cFF006B00",
         unavailable_code = "|cFF9E1A05",
+        missing_requirement_code = "|cFF6B1F9E",
         shadow = {0.25, 0.12, 0.0},
         row_hl = {0.35, 0.2, 0.05, 0.12},
         button_hl = {0.35, 0.2, 0.05, 0.15},
@@ -7881,8 +8305,10 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         wipe(lvl_diff_colors);
         ink.available = {0.65, 1, 0.4};
         ink.unavailable = {1, 0.55, 0.45};
+        ink.missing_requirement = {0.8, 0.6, 1};
         ink.available_code = "|cFFA6FF66";
         ink.unavailable_code = "|cFFFF8C73";
+        ink.missing_requirement_code = "|cFFCC99FF";
         ink.shadow = {0, 0, 0};
         ink.row_hl = {1, 1, 1, 0.06};
         ink.button_hl = {1, 1, 1, 0.08};
@@ -7979,20 +8405,16 @@ local function create_book_catalogue(sb, container, open_sc_tab)
 
     local function spell_menu(owner, spell_id)
         MenuUtil.CreateContextMenu(owner, function(_, root)
-            root:CreateTitle(C_Spell.GetSpellName(spell_id));
-            if spells[spell_id] and bit.band(spells[spell_id].flags, bit.bor(spell_flags.eval, spell_flags.ehp)) ~= 0 then
+            root:CreateTitle(training.spell_title(spell_id));
+            if bit.band(spells[spell_id].flags, bit.bor(spell_flags.eval, spell_flags.ehp)) ~= 0 then
                 root:CreateButton(L["Add to calculator list"], function()
                     config.settings.spell_calc_list[spell_id] = 1;
                     update_calc_list(true);
                 end);
+                root:CreateSpacer();
             end
-            root:CreateButton(L["Add/remove to spell ignore list"], function()
-                if config.settings.spells_ignore_list[spell_id] then
-                    config.settings.spells_ignore_list[spell_id] = nil;
-                else
-                    config.settings.spells_ignore_list[spell_id] = 1;
-                end
-                update_spell_catalogues(nil, nil, nil, true);
+            root:CreateButton(spell_ignore_text(spell_id), function()
+                toggle_spell_ignored(spell_id);
             end);
         end);
     end
@@ -8004,7 +8426,8 @@ local function create_book_catalogue(sb, container, open_sc_tab)
 
     local function update_hover(row)
         local over = row.spell_id ~= nil and
-            (has_mouse(row) or has_mouse(row.area) or has_mouse(row.item) or has_mouse(row.menu_button));
+            (has_mouse(row) or has_mouse(row.area) or has_mouse(row.item) or has_mouse(row.cost_area) or
+            has_mouse(row.menu_button));
         row.hl:SetShown(over);
         row.menu_button:SetShown(row.spell_id ~= nil);
         if row.icon_hl then
@@ -8027,7 +8450,9 @@ local function create_book_catalogue(sb, container, open_sc_tab)
             cols[key] = {x = x, w = w};
             x = x - gap;
         end
-        col("cost", L["Acquisition"], 64, 10);
+        local measure_cell = container:CreateFontString(nil, "ARTWORK", "GameFontBlackMedium");
+        measure_cell:Hide();
+        col("cost", L["Acquisition"], math.max(64, training.widest_cell_w(measure_cell, 18)), 10);
         col("per_cost", L["Per cost"], 48, 10, 16);
         -- the damage / heal icon is in the empty left part of this column
         col("per_sec", L["Per second"], 56, 10, 16);
@@ -8165,9 +8590,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         row.per_cost:SetJustifyH("RIGHT");
 
         row.cost = row:CreateFontString(nil, "ARTWORK", mode.value_font);
-        row.cost:SetPoint("LEFT", cols.cost.x, 0);
-        row.cost:SetWidth(cols.cost.w);
-        row.cost:SetJustifyH("RIGHT");
+        row.cost:SetWordWrap(false);
         row.cost:SetTextColor(unpack(base_color));
 
         local item = CreateFrame("Frame", nil, row);
@@ -8176,9 +8599,23 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         item:SetPoint("RIGHT", row, "LEFT", content_r, 0);
         item:SetScript("OnEnter", function(self)
             hover();
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-            GameTooltip:SetItemByID(self.item_id);
-            GameTooltip:Show();
+            if self.taming then
+                training.show_taming_hint(self, self.taming, "ANCHOR_RIGHT");
+                return;
+            end
+            if self.req then
+                training.show_tooltip(self, self.req, "ANCHOR_RIGHT");
+                return;
+            end
+            if self.quest then
+                training.show_quest_hint(self, "ANCHOR_RIGHT");
+                return;
+            end
+            if self.item_id then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+                GameTooltip:SetItemByID(self.item_id);
+                GameTooltip:Show();
+            end
         end);
         item:SetScript("OnLeave", function()
             hover();
@@ -8186,10 +8623,33 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         end);
         item.tex = item:CreateTexture(nil, "ARTWORK");
         item.tex:SetAllPoints();
+        item.backing = item:CreateTexture(nil, "BACKGROUND");
+        item.backing:SetAllPoints();
+        item.backing:SetColorTexture(0, 0, 0, 0.6);
+        item.backing:Hide();
         row.item = item;
+        row.mark = row:CreateFontString(nil, "ARTWORK", mode.value_font);
+        function row.acquisition_at(region)
+            region:SetPoint("RIGHT", row, "LEFT", content_r, 0);
+        end
+
+        local cost_area = CreateFrame("Frame", nil, row);
+        cost_area:SetSize(cols.cost.w, 16);
+        cost_area:SetPoint("LEFT", cols.cost.x, 0);
+        item:SetFrameLevel(cost_area:GetFrameLevel() + 1);
+        cost_area:EnableMouseMotion(true);
+        cost_area:SetScript("OnEnter", function(self)
+            hover();
+            training.show_tooltip(self, self.spell_id, "ANCHOR_RIGHT");
+        end);
+        cost_area:SetScript("OnLeave", function()
+            hover();
+            GameTooltip:Hide();
+        end);
+        row.cost_area = cost_area;
 
         local menu_button = create_arrow_button(row, 16);
-        menu_button:SetPoint("LEFT", row, "LEFT", content_r + 4, 0);
+        menu_button:SetPoint("LEFT", row, "LEFT", content_r + 8, 0);
         menu_button:RegisterForClicks("LeftButtonUp", "RightButtonUp");
         -- the row owns the menu, it closes with the row
         menu_button:SetScript("OnClick", function()
@@ -8442,7 +8902,9 @@ local function create_book_catalogue(sb, container, open_sc_tab)
             row.per_sec:Hide();
             row.per_cost:Hide();
             row.cost:Hide();
+            row.cost_area:Hide();
             row.item:Hide();
+            row.mark:Hide();
             row.ignore_line:Hide();
             set_lvl_text(row.barrier_lvl, lvl, v.lvl_barrier);
             row.barrier:Show();
@@ -8496,6 +8958,8 @@ local function create_book_catalogue(sb, container, open_sc_tab)
             row.name:SetTextColor(unpack(ink.available));
         elseif v.trigger == spell_filters.unavailable then
             row.name:SetTextColor(unpack(ink.unavailable));
+        elseif v.trigger == spell_filters.missing_requirement then
+            row.name:SetTextColor(unpack(ink.missing_requirement));
         else
             row.name:SetTextColor(unpack(base_color));
         end
@@ -8503,15 +8967,31 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         if by_lvl then
             row.lvl:Hide();
         else
-            set_lvl_text(row.lvl, lvl, spell.lvl_req);
+            set_lvl_text(row.lvl, lvl, spell.lvl_learn or spell.lvl_req);
             row.lvl:Show();
         end
 
         row.item:Hide();
+        row.mark:Hide();
         row.cost:Hide();
+        row.cost_area:Hide();
+        local mark = "";
+        if v.trigger == spell_filters.unavailable and missing_requirement(spell) then
+            mark = ink.missing_requirement_code.."!|r";
+        end
+        local book_price = spell.train < -1 and spell.book_price;
+        if not known and (book_price or spell.train >= -1 and (spell.train > 0 or missing_requirement(spell))) then
+            row.cost_area.spell_id = id;
+            row.cost_area:Show();
+        end
+        row.item.item_id = nil;
+        row.item.taming = nil;
+        row.item.req = nil;
+        row.item.quest = nil;
+        row.item.backing:Hide();
         if spell.train > 0 then
             if not known then
-                row.cost:SetText(C_CurrencyInfo.GetCoinTextureString(spell.train));
+                row.cost:SetText(training.price_str(id, ink.available_code));
                 row.cost:Show();
             end
         elseif spell.train < -1 then
@@ -8519,15 +8999,38 @@ local function create_book_catalogue(sb, container, open_sc_tab)
                 row.item.item_id = -spell.train;
                 row.item.tex:SetTexture(C_Item.GetItemIconByID(-spell.train));
                 row.item:Show();
+                if book_price then
+                    row.cost:SetText(training.price_str(id, ink.available_code));
+                    row.cost:Show();
+                end
             end
         elseif not known then
             if bit.band(spell.flags, spell_flags.talent) ~= 0 then
                 row.cost:SetText(L["Talent"]);
+                row.cost:Show();
+            elseif training.tamed(spell) then
+                row.item.taming = id;
+                row.item.tex:SetTexture((C_Spell.GetSpellTexture(training.beast_training_id)));
+                row.item:Show();
+            elseif bit.band(spell.flags, spell_flags.quest) ~= 0 then
+                row.item.quest = true;
+                row.item.tex:SetTexture(training.quest_texture);
+                row.item.backing:Show();
+                row.item:Show();
+            elseif spell.learned_with then
+                row.item.req = id;
+                row.item.tex:SetTexture((C_Spell.GetSpellTexture(spell.learned_with[1])));
+                row.item:Show();
             else
                 row.cost:SetText(L["Unknown"]);
+                row.cost:Show();
             end
-            row.cost:Show();
         end
+        if mark ~= "" then
+            row.mark:SetText(mark);
+            row.mark:Show();
+        end
+        training.place_cell(row.cost, row.item, row.mark, row.acquisition_at);
 
         row.type_icon:Hide();
         row.per_sec:Hide();
@@ -8709,7 +9212,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
             jump_to_lvl = false;
             local lvl = active_loadout().lvl;
             for k, v in ipairs(cat.view) do
-                if v.spell_id and lvl <= spells[v.spell_id].lvl_req then
+                if v.spell_id and lvl <= (spells[v.spell_id].lvl_learn or spells[v.spell_id].lvl_req) then
                     top_entry = k;
                     break;
                 end
@@ -8777,15 +9280,30 @@ local function create_book_catalogue(sb, container, open_sc_tab)
 
         local settings = CreateFrame("DropdownButton", nil, container, "UIPanelArrowDropdownButtonTemplate");
         settings:SetPoint("TOPRIGHT", sb.SettingsDropdown, "TOPRIGHT", 0, 0);
+        -- the template's frame is smaller than its arrow art
+        do
+            local w, h = settings:GetSize();
+            local icon_w, icon_h = settings.Icon:GetSize();
+            local dx = math.max(0, (icon_w - w) / 2) + 2;
+            local dy = math.max(0, (icon_h - h) / 2) + 2;
+            settings:SetHitRectInsets(-dx, -dx, -dy, -dy);
+        end
         settings:SetupMenu(function(_, root)
-            root:CreateTitle(L["Includes"]);
-            for _, f in ipairs(spell_filter_listing) do
+            for i, f in ipairs(spell_filter_listing) do
+                if f.header then
+                    if i > 1 then
+                        root:CreateDivider();
+                    end
+                    root:CreateTitle(f.header);
+                end
                 local key = cat.filter_prefix..f.id;
                 local txt = f.disp;
                 if f.id == "available" then
                     txt = "|cFF00FF00"..txt.."|r";
                 elseif f.id == "unavailable" then
                     txt = "|cFFFF0000"..txt.."|r";
+                elseif f.id == "missing_requirement" then
+                    txt = "|cFFCC99FF"..txt.."|r";
                 end
                 local checkbox = root:CreateCheckbox(txt,
                     function()

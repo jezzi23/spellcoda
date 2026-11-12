@@ -101,6 +101,19 @@ local function best_rank_by_lvl(spell, lvl)
     return nil;
 end
 
+local get_faction_data = C_Reputation and C_Reputation.GetFactionDataByID;
+local function faction_standing(id)
+    if get_faction_data then
+        local data = get_faction_data(id);
+        if not data then
+            return nil;
+        end
+        return data.name, data.reaction;
+    end
+    local name, _, standing = GetFactionInfoByID(id);
+    return name, standing;
+end
+
 local function highest_learned_rank(base_id)
     local n = #sc.rank_seqs[base_id];
     local i = n;
@@ -434,6 +447,7 @@ end
 
 --------------------------------------------------------------------------------
 utils.client_matches                = client_matches;
+utils.faction_standing              = faction_standing;
 utils.spell_book_shown              = spell_book_shown;
 utils.is_secret                     = is_secret;
 utils.any_secret                    = any_secret;

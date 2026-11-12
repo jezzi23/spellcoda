@@ -44,17 +44,6 @@ elseif class == classes.rogue then
 
     alias_all_ranks(spids.slice_and_dice, sc.auto_attack_spell_id);
 
-elseif sc.class == sc.classes.hunter then
-
-    if spids.shoot_bow then
-        spells[spids.shoot_bow].flags = bit.band(spells[spids.shoot_bow].flags, bit.bnot(spell_flags.eval));
-    end
-    if spids.shoot_gun then
-        spells[spids.shoot_bow].flags = bit.band(spells[spids.shoot_bow].flags, bit.bnot(spell_flags.eval));
-    end
-    if spids.shoot_crossbow then
-        spells[spids.shoot_bow].flags = bit.band(spells[spids.shoot_bow].flags, bit.bnot(spell_flags.eval));
-    end
 end
 
 for k, v in pairs({"shoot", "throw", "shoot_bow", "shoot_gun", "shoot_crossbow"}) do

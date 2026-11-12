@@ -305,6 +305,36 @@ local function format_bounce_spell(min_hit, max_hit, bounces, falloff)
     return bounce_str;
 end
 
+local starshards_ramps = sc.utils.client_matches(bit.bnot(sc.client_flags.tbc));
+
+local function format_ramped_ticks(spell, total, base, ticks, tick_time)
+    local sp_part = total - base;
+    if spell.base_id == spids.curse_of_agony then
+        local per_step = ticks / 3;
+        return string.format("%.1f x %.0f -> %.1f x %.0f -> %.1f x %.0f %s %.1fs",
+            (0.5 * base + sp_part) / ticks, per_step,
+            total / ticks, per_step,
+            (1.5 * base + sp_part) / ticks, per_step,
+            L["every"],
+            tick_time);
+    end
+    local first, last;
+    if spell.base_id == spids.starshards and starshards_ramps then
+        first, last = 2 / 3, 4 / 3;
+    elseif spell.base_id == spids.wild_growth then
+        local spread = 0.1425 * (ticks - 1) / 2;
+        first, last = 1 + spread, 1 - spread;
+    else
+        return nil;
+    end
+    return string.format("%.1f -> %.1f %s %.1fs x %.0f",
+        (first * base + sp_part) / ticks,
+        (last * base + sp_part) / ticks,
+        L["every"],
+        tick_time,
+        ticks);
+end
+
 local function stat_weights_tooltip(tooltip, weights_list, key, weight_normalize_to, effect_type_str)
     if config.settings["tooltip_display_stat_weights_" .. key] and
         weight_normalize_to[key .. "_delta"] and
@@ -351,8 +381,9 @@ local function append_tooltip_spell_rank(tooltip, spell, lvl)
     local next_r = next_rank(spell);
     local best = best_rank_by_lvl(spell, lvl);
 
-    if spell.lvl_req > lvl then
-        add_line(tooltip, L["Trained at level:"], string.format("%d", spell.lvl_req), effect_color("spell_rank"));
+    local learn_lvl = spell.lvl_learn or spell.lvl_req;
+    if learn_lvl > lvl then
+        add_line(tooltip, L["Trained at level:"], string.format("%d", learn_lvl), effect_color("spell_rank"));
     elseif best and best.rank ~= spell.rank then
         add_line(tooltip, L["Downranked. Best available rank:"], string.format("%d", best.rank), effect_color("spell_rank"));
     elseif next_r then
@@ -1229,63 +1260,17 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             else
                 hit_str = "";
             end
-            if spell.base_id == spids.curse_of_agony then
-                local dmg_from_sp = info.ot_min_noncrit_if_hit1 - info.ot_min_noncrit_if_hit_base1;
-                local dmg_wo_sp = info.ot_min_noncrit_if_hit_base1;
+            local ramped = format_ramped_ticks(spell, info.ot_min_noncrit_if_hit1,
+                info.ot_min_noncrit_if_hit_base1, info.ot_ticks1, info.ot_tick_time1);
+            if ramped then
                 add_line(
                     tooltip,
                     string.format("%s%s:", effect, hit_str),
-                    string.format("%.1f %s %.1fs (%.1f;%.1f;%.1f %s %.1fs x %.0f)",
+                    string.format("%.1f %s %.1fs (%s)",
                         info.ot_min_noncrit_if_hit1,
                         L["over"],
                         info.ot_dur1,
-                        (0.5 * dmg_wo_sp + dmg_from_sp) / info.ot_ticks1,
-                        info.ot_min_noncrit_if_hit1 / info.ot_ticks1,
-                        (1.5 * dmg_wo_sp + dmg_from_sp) / info.ot_ticks1,
-                        L["every"],
-                        info.ot_tick_time1,
-                        info.ot_ticks1),
-
-                    effect_color("normal")
-                );
-            elseif spell.base_id == spids.starshards then
-                local dmg_from_sp = info.ot_min_noncrit_if_hit1 - info.ot_min_noncrit_if_hit_base1;
-                local dmg_wo_sp = info.ot_min_noncrit_if_hit_base1;
-                add_line(
-                    tooltip,
-                    string.format("%s%s:", effect, hit_str),
-                    string.format("%.1f %s %.1fs (%.1f;%.1f;%.1f %s %.1fs x %.0f)",
-                        info.ot_min_noncrit_if_hit1,
-                        L["over"],
-                        info.ot_dur1,
-                        ((2 / 3) * dmg_wo_sp + dmg_from_sp) / info.ot_ticks1,
-                        info.ot_min_noncrit_if_hit1 / info.ot_ticks1,
-                        ((4 / 3) * dmg_wo_sp + dmg_from_sp) / info.ot_ticks1,
-                        L["every"],
-                        info.ot_tick_time1,
-                        info.ot_ticks1),
-                    effect_color("normal")
-                );
-            elseif spell.base_id == spids.wild_growth then
-                local heal_from_sp = info.ot_min_noncrit_if_hit1 - info.ot_min_noncrit_if_hit_base1;
-                local heal_wo_sp = info.ot_min_noncrit_if_hit_base1;
-                add_line(
-                    tooltip,
-                    string.format("%s:", effect),
-                    string.format("%.1f %s %.0fs (%.1f;%.1f;%.1f;%.1f;%.1f;%.1f;%.1f %s %.1fs x %.0f)",
-                        info.ot_min_noncrit_if_hit1,
-                        L["over"],
-                        info.ot_dur1,
-                        ((3 * 0.1425 + 1.0) * heal_wo_sp + heal_from_sp) / info.ot_ticks1,
-                        ((2 * 0.1425 + 1.0) * heal_wo_sp + heal_from_sp) / info.ot_ticks1,
-                        ((1 * 0.1425 + 1.0) * heal_wo_sp + heal_from_sp) / info.ot_ticks1,
-                        ((0 * 0.1425 + 1.0) * heal_wo_sp + heal_from_sp) / info.ot_ticks1,
-                        ((-1 * 0.1425 + 1.0) * heal_wo_sp + heal_from_sp) / info.ot_ticks1,
-                        ((-2 * 0.1425 + 1.0) * heal_wo_sp + heal_from_sp) / info.ot_ticks1,
-                        ((-3 * 0.1425 + 1.0) * heal_wo_sp + heal_from_sp) / info.ot_ticks1,
-                        L["every"],
-                        info.ot_tick_time1,
-                        info.ot_ticks1),
+                        ramped),
                     effect_color("normal")
                 );
             elseif info.ot_min_noncrit_if_hit1 ~= info.ot_max_noncrit_if_hit1 then
@@ -1385,7 +1370,24 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 end
                 local crit_chance_info_str = string.format(" (%.2f%%||%.2fx)", info.ot_crit1 * 100, crit_mod_ot);
 
-                if info.ot_min_crit_if_hit1 ~= info.ot_max_crit_if_hit1 then
+                local ramped;
+                if info.ot_min_noncrit_if_hit1 ~= 0 then
+                    ramped = format_ramped_ticks(spell, info.ot_min_crit_if_hit1,
+                        info.ot_min_noncrit_if_hit_base1 * info.ot_min_crit_if_hit1 / info.ot_min_noncrit_if_hit1,
+                        info.ot_ticks1, info.ot_tick_time1);
+                end
+                if ramped then
+                    add_line(
+                        tooltip,
+                        string.format("Critical%s:", crit_chance_info_str),
+                        string.format("%.1f %s %.1fs (%s)",
+                            info.ot_min_crit_if_hit1,
+                            L["over"],
+                            info.ot_dur1,
+                            ramped),
+                        effect_color("crit")
+                    );
+                elseif info.ot_min_crit_if_hit1 ~= info.ot_max_crit_if_hit1 then
                     add_line(
                         tooltip,
                         string.format("Critical%s:", crit_chance_info_str),
