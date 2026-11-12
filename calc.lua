@@ -888,6 +888,20 @@ local function mh_swing_time(loadout, effects)
     end
 end
 
+-- chance that a main hand swing lands and procs a per swing component
+local function per_swing_chance(periodic, loadout, effects, eval_flags)
+    local attack = spells[auto_attack_spell_id];
+    local skill, _, subclass = stats_attack_skill(attack.direct, attack, loadout, effects, eval_flags);
+    local miss = stats_hit(0, skill, subclass, auto_attack_spell_id, attack.direct, attack, loadout, effects);
+    local dodge, parry = stats_avoidances(skill, attack.direct, attack, loadout, effects);
+    local chance = math_max(0.0, 1.0 - miss - dodge - parry);
+    if periodic.ppm then
+        local _, _, delay = mh_weapon(loadout, effects);
+        chance = chance * math_min(1.0, periodic.ppm * delay / 60);
+    end
+    return chance;
+end
+
 -- Execution time of spell
 local function stats_cast_time(stats, bid, comp, spell, loadout, effects, eval_flags)
 
@@ -1213,6 +1227,9 @@ local function spell_stats_periodic(stats, spell, loadout, effects, eval_flags)
     write_attack_table(stats, false);
     -- hit used as probability to do any kind of damage, allowing procs of attack
     stats.hit_ot = 1.0 - stats.miss_ot - stats.dodge_ot - stats.parry_ot;
+    if bit_band(periodic.flags, comp_flags.per_swing) ~= 0 then
+        stats.hit_ot = stats.hit_ot * per_swing_chance(periodic, loadout, effects, eval_flags);
+    end
     if bid ~= auto_attack_spell_id then
         -- adjust to become a two roll table: if we roll a "hit",
         local crit = stats.crit_ot + stats.crit_excess_ot;
@@ -1260,10 +1277,6 @@ local function spell_stats_periodic(stats, spell, loadout, effects, eval_flags)
 
     if bit_band(periodic.flags, comp_flags.per_swing) ~= 0 then
         stats.tick_time_ot = mh_swing_time(loadout, effects);
-        if periodic.ppm then
-            local _, _, delay = mh_weapon(loadout, effects);
-            stats.tick_time_ot = stats.tick_time_ot / math_min(1.0, periodic.ppm * delay / 60);
-        end
         if periodic.coef_2h and sc.two_handed_wep_subclasses[effects.raw.wpn_subclass_mh] then
             stats.coef_ot = stats.coef_ot * periodic.coef_2h / periodic.coef;
             stats.coef_ot_max = stats.coef_ot_max * periodic.coef_2h / periodic.coef;
@@ -2322,10 +2335,6 @@ local function spell_info(info, spell, stats, loadout, effects, eval_flags, spel
         info.effect_per_sec = info.expected / stats.cast_time;
         info.threat_per_sec = info.threat / stats.cast_time;
         info.cost_per_sec = stats.cost / stats.cast_time;
-    end
-    if spell.periodic and bit_band(spell.periodic.flags, comp_flags.per_swing) ~= 0 and info.ot_dur1 > 0 then
-        info.effect_per_sec = info.expected / info.ot_dur1;
-        info.threat_per_sec = info.threat / info.ot_dur1;
     end
 
 
