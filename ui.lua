@@ -2170,7 +2170,7 @@ local function create_sw_ui_spells_frame(pframe)
         cost.acquisition_at = acquisition_at;
 
         local cost_area = CreateFrame("Frame", nil, pframe);
-        cost_area:SetSize(acquisition_r - per_cost_x_offset - 30, 15);
+        cost_area:SetSize(acquisition_r - tooltip_area_f:GetWidth(), 15);
         cost_area:SetPoint("TOPRIGHT", pframe, "TOPLEFT", acquisition_r, pframe.y_offset+2);
         book:SetFrameLevel(cost_area:GetFrameLevel() + 1);
         cost_area:EnableMouse(true);
@@ -8634,8 +8634,9 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         end
 
         local cost_area = CreateFrame("Frame", nil, row);
-        cost_area:SetSize(cols.cost.w, 16);
-        cost_area:SetPoint("LEFT", cols.cost.x, 0);
+        cost_area:SetHeight(16);
+        cost_area:SetPoint("LEFT", area, "RIGHT");
+        cost_area:SetPoint("RIGHT", row, "LEFT", cols.cost.x + cols.cost.w, 0);
         item:SetFrameLevel(cost_area:GetFrameLevel() + 1);
         cost_area:EnableMouseMotion(true);
         cost_area:SetScript("OnEnter", function(self)
