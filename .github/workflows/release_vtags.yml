@@ -12,6 +12,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ github.ref }}
+          fetch-depth: 0
 
       # the build server tags the data of a release in spellcoda-generated with the same tag
       - name: Checkout generated data of this release
@@ -20,6 +21,15 @@ jobs:
           repository: ${{ github.repository_owner }}/spellcoda-generated
           ref: ${{ github.ref_name }}
           path: generated
+          fetch-depth: 0
+
+      # outside the working directory, everything in it goes into the zip
+      - name: Write release notes
+        run: |
+          bash .github/release_notes.sh "${{ github.ref_name }}" . generated \
+            "${{ github.repository }}" "${{ github.repository_owner }}/spellcoda-generated" \
+            > "$RUNNER_TEMP/release_notes.md"
+          cat "$RUNNER_TEMP/release_notes.md"
 
       - name: Prepare SpellCoda directory
         run: |
@@ -51,7 +61,7 @@ jobs:
         with:
           tag_name: ${{ steps.get_tag.outputs.TAG_NAME }}
           name: Release ${{ steps.get_tag.outputs.TAG_NAME }}
-          generate_release_notes: true
+          body_path: ${{ runner.temp }}/release_notes.md
           draft: false
           files: |
             ${{ steps.get_tag.outputs.TAG_NAME }}.zip
