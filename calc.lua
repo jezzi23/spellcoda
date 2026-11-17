@@ -2559,7 +2559,7 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, eval
         end
         local added = 0;
         if direct.coef_attr then
-            min = min + loadout.stats[direct.coef_attr] + effects.by_attr.stat_flat[direct.coef_attr];
+            min = min + direct.coef * (loadout.stats[direct.coef_attr] + effects.by_attr.stat_flat[direct.coef_attr]);
         elseif direct.coef ~= 0 then
             added = stats_sp(0, bid, direct, spell, loadout, effects);
         end
@@ -2593,7 +2593,7 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, eval
         end
         local added = 0;
         if periodic.coef_attr then
-            min = min + loadout.stats[periodic.coef_attr] + effects.by_attr.stat_flat[periodic.coef_attr];
+            min = min + periodic.coef * (loadout.stats[periodic.coef_attr] + effects.by_attr.stat_flat[periodic.coef_attr]);
         elseif periodic.coef ~= 0 then
             added = stats_sp(0, bid, periodic, spell, loadout, effects);
         end
