@@ -168,7 +168,7 @@ local function loadout_zero()
     -- kept while the sheet stats are secret, a reload in combat starts from these
     empty.attack_min_mh, empty.attack_max_mh = 1, 1;
     empty.attack_pos, empty.attack_neg, empty.attack_mod = 0, 0, 1;
-    empty.attack_delay_mh = 2;
+    empty.swing_time_mh = 2;
     empty.base_armor, empty.armor = 0, 0;
     empty.defense = 0;
 
@@ -1402,15 +1402,15 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     if bit.band(stat_flags, bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)) ~= 0 then
         add_field_line(info, effects.raw.wpn_min_mh, L["Main hand minimum damage"], is_diff);
         add_field_line(info, effects.raw.wpn_max_mh, L["Main hand maximum damage"], is_diff);
-        add_field_line(info, effects.raw.wpn_delay_mh, L["Main hand delay"], is_diff);
+        add_field_line(info, effects.raw.wpn_delay_mh, L["Main hand weapon speed"], is_diff);
         add_field_line(info, effects.raw.wpn_min_oh, L["Offhand minimum damage"], is_diff);
         add_field_line(info, effects.raw.wpn_max_oh, L["Offhand maximum damage"], is_diff);
-        add_field_line(info, effects.raw.wpn_delay_oh, L["Offhand attack delay"], is_diff);
+        add_field_line(info, effects.raw.wpn_delay_oh, L["Offhand weapon speed"], is_diff);
     end
     if bit.band(stat_flags, stat_diff_flags.ranged) ~= 0 then
         add_field_line(info, effects.raw.wpn_min_ranged, L["Ranged minimum damage"], is_diff);
         add_field_line(info, effects.raw.wpn_max_ranged, L["Ranged maximum damage"], is_diff);
-        add_field_line(info, effects.raw.wpn_delay_ranged, L["Ranged attack delay"], is_diff);
+        add_field_line(info, effects.raw.wpn_delay_ranged, L["Ranged weapon speed"], is_diff);
     end
     ---------------------------------
     --- Physical damage
@@ -1948,7 +1948,7 @@ local should_auras_be_secret = C_Secrets and C_Secrets.ShouldAurasBeSecret;
 -- the sheet stats, secret all together while restricted
 local sheet_stats_values = {
     "healing_power", "spell_power", "ap", "rap", "melee_crit", "ranged_crit", "block", "dodge", "parry", "defense",
-    "attack_min_mh", "attack_max_mh", "attack_pos", "attack_neg", "attack_mod", "attack_delay_mh", "attack_delay_oh",
+    "attack_min_mh", "attack_max_mh", "attack_pos", "attack_neg", "attack_mod", "swing_time_mh", "swing_time_oh",
     "base_armor", "armor",
 };
 for _, v in ipairs(ratings) do
@@ -2032,7 +2032,7 @@ local function read_sheet_stats(loadout)
     local _;
     loadout.attack_min_mh, loadout.attack_max_mh, _, _, loadout.attack_pos, loadout.attack_neg, loadout.attack_mod =
         UnitDamage("player");
-    loadout.attack_delay_mh, loadout.attack_delay_oh = UnitAttackSpeed("player");
+    loadout.swing_time_mh, loadout.swing_time_oh = UnitAttackSpeed("player");
 
     loadout.dodge = 0.01*(GetDodgeChance() or 0);
     loadout.parry = 0.01*(GetParryChance() or 0);

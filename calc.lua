@@ -715,7 +715,7 @@ local function stats_coef(stats, bid, comp, spell, loadout, effects, eval_flags)
             local speed;
             if loadout.shapeshift_no_weapon ~= 0 then
                 -- shapeshifts with no weapon, base on sheet speed
-                speed = loadout.attack_delay_mh/effects.mul.raw.melee_haste;
+                speed = loadout.swing_time_mh/effects.mul.raw.melee_haste;
             else
                 if bit_band(comp.flags, comp_flags.normalized_weapon) ~= 0 then
                     speed = sc.wep_subclass_to_normalized_speed[effects.raw.wpn_subclass_mh] or 2.4;
@@ -887,12 +887,12 @@ end
 
 local function mh_swing_time(loadout, effects)
     if loadout.shapeshift_no_weapon ~= 0 then
-        -- based on game API attack speed query which already includes sheet rating
+        -- swing time from the game API, which already includes sheet rating
         local haste_mul_from_rating = 1.0 +
             0.01*effects.raw.melee_haste_rating_flat/(loadout.cr_scaling * cr_weights[CR_HASTE_MELEE]);
-        return loadout.attack_delay_mh / (effects.mul.raw.melee_haste_forced*haste_mul_from_rating);
+        return loadout.swing_time_mh / (effects.mul.raw.melee_haste_forced*haste_mul_from_rating);
     else
-        -- not based on API attack delay; calculated from scratch
+        -- not the API swing time; calculated from weapon speed
         local haste_mul_from_rating = 1.0 +
             0.01*(loadout.melee_haste_rating+effects.raw.melee_haste_rating_flat)/
                 (loadout.cr_scaling * cr_weights[CR_HASTE_MELEE]);
