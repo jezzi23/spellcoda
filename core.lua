@@ -53,6 +53,7 @@ core.sw_addon_loaded            = false;
 core.addon_running_time         = 0;
 core.active_spec                = 1;
 core.doing_raid                 = false;
+core.in_raid_instance           = false;
 core.mute_overlay               = false;
 core.in_combat                  = false;
 
@@ -141,6 +142,11 @@ function core.overlay_refresh_config(overlay_disable_changed)
 
     local in_instance, instance_type = IsInInstance();
     sc.core.doing_raid = in_instance and (instance_type == "pvp" or (IsInRaid() and instance_type == "raid"));
+    local in_raid_instance = in_instance and instance_type == "raid";
+    if in_raid_instance ~= core.in_raid_instance then
+        core.in_raid_instance = in_raid_instance;
+        sc.loadouts.force_update = true;
+    end
     local should_mute_overlay =
         (config.settings.overlay_disable_in_raid and sc.core.doing_raid) or
         (config.settings.overlay_disable_in_combat and core.in_combat);

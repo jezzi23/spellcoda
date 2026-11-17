@@ -87,6 +87,20 @@ local aura_getters = {
 };
 local should_auras_be_secret = C_Secrets and C_Secrets.ShouldAurasBeSecret;
 
+local function suppressed_in_raid(spell_id)
+    local flag = sc.aura_flags.not_in_raid;
+    local auras = sc.player_buffs[spell_id];
+    if not flag or not auras or not sc.core.in_raid_instance then
+        return false;
+    end
+    for _, aura in pairs(auras) do
+        if bit.band(aura[sc.aura_idx_flags], flag) ~= 0 then
+            return true;
+        end
+    end
+    return false;
+end
+
 local is_player_owned;
 if client_matches(client_flags.forever) then
     -- AuraData has no sourceUnit on Forever
@@ -419,7 +433,7 @@ local function detect_buffs(loadout, prev)
                     end
                     local spell_id = aura.spellId;
                     -- skips auras of spells flagged always secret
-                    if not is_secret(spell_id) then
+                    if not is_secret(spell_id) and not suppressed_in_raid(spell_id) then
                         -- player owned takes priority
                         local player_owned = is_player_owned(aura);
                         if not v[spell_id] or player_owned then

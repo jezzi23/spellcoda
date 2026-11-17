@@ -315,7 +315,10 @@ local effects_additive = {
         "skill_flat",
     },
     creature = {
-        "crit_mod"
+        "crit_mod",
+        "ap_flat",
+        "rap_flat",
+        "sp_dmg_flat",
     },
     raw = {
         "mana_mod",

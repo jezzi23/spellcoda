@@ -714,7 +714,7 @@ function training.trainers(spell_id)
         end
     elseif spell.trainer_faction then
         table.insert(list, {faction = spell.trainer_faction});
-    else
+    elseif not (spell.book_price and client_matches(client_flags.forever)) then
         local role = sc.class;
         if bit.band(spell.flags, spell_flags.pet) ~= 0 and sc.class == sc.classes.hunter then
             role = "PET";
@@ -723,6 +723,9 @@ function training.trainers(spell_id)
             if t.role == role and t.side == sc.faction then
                 for _, f in ipairs(t.factions) do
                     table.insert(list, {faction = f});
+                end
+                for _, p in ipairs(t.places) do
+                    table.insert(list, p);
                 end
             end
         end
@@ -761,7 +764,10 @@ function training.price_str(spell_id, discount_code)
 end
 
 function training.row_cmp(lhs, rhs)
-    return lhs.price < rhs.price;
+    if lhs.price ~= rhs.price then
+        return lhs.price < rhs.price;
+    end
+    return lhs.where < rhs.where;
 end
 
 function training.spell_title(spell_id)
@@ -794,8 +800,11 @@ function training.show_tooltip(owner, spell_id, anchor)
             local faction, standing = sc.utils.faction_standing(t.faction);
             if faction then
                 local where = faction.." (".._G["FACTION_STANDING_LABEL"..standing]..")";
-                if t.name then
-                    where = t.name..", "..(C_Map.GetAreaInfo(t.area) or "").." ("..faction..", ".._G["FACTION_STANDING_LABEL"..standing]..")";
+                if t.area then
+                    where = (C_Map.GetAreaInfo(t.area) or "").." ("..faction..", ".._G["FACTION_STANDING_LABEL"..standing]..")";
+                    if t.name then
+                        where = t.name..", "..where;
+                    end
                 end
                 table.insert(rows, {where = where, price = training.price_at(base, t.faction)});
             end

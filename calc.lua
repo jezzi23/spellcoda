@@ -25,6 +25,7 @@ local dummy_value                                   = sc.utils.dummy_value;
 local combat_ratings                                = sc.utils.combat_ratings;
 local client_matches                                = sc.utils.client_matches;
 local client_flags                                  = sc.client_flags;
+local min_spell_miss                                = client_matches(client_flags.forever) and 0.0 or 0.01;
 
 local bit_band                                      = bit.band;
 local bit_bor                                       = bit.bor;
@@ -149,20 +150,20 @@ local function mandatory_flags_by_spell(comp)
     return flags;
 end
 
-local function spell_hit(lvl, lvl_target, hit, pvp)
-    local base_hit = 0;
+local function spell_miss(lvl, lvl_target, hit, pvp)
+    local base_miss = 0;
     local each_lvl_miss = 0.11;
     if pvp then
         each_lvl_miss = 0.07;
     end
 
     if lvl_target - lvl > 2 then
-        base_hit = 0.94 - each_lvl_miss * (lvl_target - lvl - 2);
+        base_miss = 0.06 + each_lvl_miss * (lvl_target - lvl - 2);
     else
-        base_hit = 0.96 - 0.01 * (lvl_target - lvl);
+        base_miss = 0.04 + 0.01 * (lvl_target - lvl);
     end
 
-    return math_max(0.01, math_min(0.99, base_hit + hit));
+    return math_min(0.99, math_max(min_spell_miss, base_miss - hit));
 end
 
 local function npc_lvl_resi_base(self_lvl, target_lvl)
@@ -192,26 +193,24 @@ local function est_coef_from_rank(spell)
     return coef_est;
 end
 
-local function spell_hit_calc(extra_hit, avg_resi, loadout, spell)
-    local final_hit = 0;
+local function spell_miss_calc(extra_hit, avg_resi, loadout, spell)
+    local final_miss = 0;
     local final_avg_resi = avg_resi;
 
     local target_is_pvp = bit_band(loadout.flags, loadout_flags.target_pvp) ~= 0;
-    final_hit = spell_hit(loadout.lvl, loadout.target_lvl, extra_hit, target_is_pvp);
+    final_miss = spell_miss(loadout.lvl, loadout.target_lvl, extra_hit, target_is_pvp);
     if bit_band(spell.flags, heal_or_absorb_flags) ~= 0 then
-        final_hit = 1.0;
+        final_miss = 0.0;
     elseif bit_band(spell.flags, spell_flags.binary) ~= 0 then
         -- @src: https://royalgiraffe.github.io/resist-guide
         -- binary spells will have lower hit chance against higher resistances
         -- rather than partial resists
-        local base_hit = spell_hit(loadout.lvl, loadout.target_lvl, 0.0, target_is_pvp);
-        final_hit = math_min(0.99, base_hit * (1.0 - avg_resi) + extra_hit);
+        local base_miss = spell_miss(loadout.lvl, loadout.target_lvl, 0.0, target_is_pvp);
+        final_miss = math_max(min_spell_miss, base_miss + (1.0 - base_miss) * avg_resi - extra_hit);
         final_avg_resi = 0.0;
-    else
-        final_hit = math_min(0.99, final_hit);
     end
 
-    return final_hit, final_avg_resi;
+    return final_miss, final_avg_resi;
 end
 
 local special_abilities;
@@ -546,15 +545,15 @@ local function stats_hit(res_mitigation, attack_skill, attack_subclass, bid, com
             i = i + 1;
         end
 
-        local hit, new_res_mitigation = spell_hit_calc(hit_extra, res_mitigation, loadout, spell);
-        hit = math_min(math_max(hit, 0.0), 0.99);
+        local miss, new_res_mitigation = spell_miss_calc(hit_extra, res_mitigation, loadout, spell);
+        miss = math_max(math_min(miss, 1.0), min_spell_miss);
         if bit_band(comp.flags, comp_flags.always_hit) ~= 0 then
-            hit = 1.0;
+            miss = 0.0;
         end
         if bit_band(comp.flags, unmitigated_comp_flags) ~= 0 then
             new_res_mitigation = 0.0;
         end
-        return 1.0 - hit, hit_extra, new_res_mitigation;
+        return miss, hit_extra, new_res_mitigation;
     end
 end
 
@@ -616,6 +615,18 @@ local function stats_avoidances(attack_skill, comp, spell, loadout, effects)
     return math_max(0.0, dodge),math_max(0.0, parry), math_max(0.0, block), block_amount;
 end
 
+local function creature_flat(effects, loadout, effect)
+    local sum = 0;
+    if loadout.target_creature_mask ~= 0 then
+        for mask, v in pairs(effects.creature[effect]) do
+            if bit_band(mask, loadout.target_creature_mask) ~= 0 then
+                sum = sum + v;
+            end
+        end
+    end
+    return sum;
+end
+
 local function stats_sp(sp_extra, bid, comp, spell, loadout, effects)
 
     local sp;
@@ -631,9 +642,9 @@ local function stats_sp(sp_extra, bid, comp, spell, loadout, effects)
         bit_band(comp.flags, comp_flags.magic_scaling_as_ap) ~= 0 then
 
         if bit_band(spell.flags, spell_flags.requires_ranged_slot) ~= 0 then
-            sp = loadout.rap + effects.raw.rap_flat;
+            sp = loadout.rap + effects.raw.rap_flat + creature_flat(effects, loadout, "rap_flat");
         else
-            sp = loadout.ap + effects.raw.ap_flat;
+            sp = loadout.ap + effects.raw.ap_flat + creature_flat(effects, loadout, "ap_flat");
         end
     else
         if bid == auto_wand_spell_id then
@@ -650,6 +661,9 @@ local function stats_sp(sp_extra, bid, comp, spell, loadout, effects)
             i = i + 1;
         end
         sp = sp_school;
+        if bit_band(spell.flags, heal_or_absorb_flags) == 0 then
+            sp = sp + creature_flat(effects, loadout, "sp_dmg_flat");
+        end
     end
 
     sp = sp + sp_extra + (effects.ability.sp_flat[bid] or 0);
@@ -2108,7 +2122,8 @@ local function periodic_info(info, spell, loadout, stats, effects, eval_flags)
         else
             local wpn_min, wpn_max, wpn_delay = mh_weapon(loadout, effects);
             if bit_band(periodic.flags, comp_flags.per_swing) ~= 0 and periodic.school1 ~= schools.physical then
-                local ap_dmg = (loadout.ap + effects.raw.ap_flat) * dps_per_ap * wpn_delay;
+                local ap_dmg = (loadout.ap + effects.raw.ap_flat + creature_flat(effects, loadout, "ap_flat")) *
+                    dps_per_ap * wpn_delay;
                 wpn_min = wpn_min + ap_dmg;
                 wpn_max = wpn_max + ap_dmg;
             end
