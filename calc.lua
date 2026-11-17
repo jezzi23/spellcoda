@@ -1507,9 +1507,39 @@ local function post_process_stats(comp, spell, stats, loadout, effects)
     end
 end
 
+-- healing received on a unit from its friendly buffs, as apply_buffs applies them
+local function heal_received(loadout, unit)
+    local mul, flat = 1.0, 0.0;
+    for id, buff in pairs(loadout.dynamic_buffs[unit]) do
+        for _, aura in ipairs(sc.friendly_buffs[id] or {}) do
+            if aura[sc.aura_idx_effect] == "vuln_heal" then
+                mul = mul * (1.0 + aura[sc.aura_idx_value] * buff.count);
+            elseif aura[sc.aura_idx_effect] == "healing_power_flat" then
+                flat = flat + aura[sc.aura_idx_value] * buff.count;
+            end
+        end
+    end
+    return mul, flat;
+end
+
 local function stats_for_spell(stats, spell, loadout, effects, eval_flags)
     if not effects.finalized and __spellcoda_debug__ then
         print("CALLING STATS FOR SPELL WITHOUT FINALIZED EFFECTS");
+    end
+
+    if spell.damage_share_of then
+        -- a share of the damage dealt: the damage spell's stats, scaled, with its own threat
+        stats_for_spell(stats, spells[spell.damage_share_of], loadout, effects, eval_flags);
+        if spell.direct then
+            stats.spell_mod = stats.spell_mod * spell.damage_share;
+            stats.threat_mod_flat, stats.threat_mod = stats_threat_mod(spell.base_id, spell.direct, spell, effects);
+        end
+        if spell.periodic then
+            stats.spell_mod_ot = stats.spell_mod_ot * spell.damage_share;
+            stats.threat_mod_flat_ot, stats.threat_mod_ot =
+                stats_threat_mod(spell.base_id, spell.periodic, spell, effects);
+        end
+        return;
     end
 
     local anycomp = spell.direct or spell.periodic;
@@ -1552,6 +1582,13 @@ local function stats_for_spell(stats, spell, loadout, effects, eval_flags)
 
     stats.extra_crit = 0.0;
     stats.extra_spell_power = 0.0;
+    if bit_band(spell.flags, spell_flags.heals_caster) ~= 0 and loadout.friendly_towards ~= "player" then
+        -- lands on the caster: the caster's healing received instead of the friendly unit's in effects
+        local own_mul, own_flat = heal_received(loadout, "player");
+        local _, friendly_flat = heal_received(loadout, loadout.friendly_towards);
+        stats.target_vuln_mod_mul = stats.target_vuln_mod_mul * own_mul / effects.mul.raw.vuln_heal;
+        stats.extra_spell_power = own_flat - friendly_flat;
+    end
 
     stats.target_armor = math_max(0, (loadout.target_armor + effects.by_school.target_res_flat[schools.physical]) * (1.0 + effects.by_school.target_res[schools.physical]));
 
@@ -2158,7 +2195,7 @@ local function periodic_info(info, spell, loadout, stats, effects, eval_flags)
         base_mod_ot_flat = 0;
     end
 
-    if bit_band(periodic.flags, comp_flags.per_swing) ~= 0 and not periodic.ppm then
+    if bit_band(periodic.flags, comp_flags.per_wpn_speed) ~= 0 then
         local _, _, wpn_delay = mh_weapon(loadout, effects);
         base_tick_min = base_tick_min * wpn_delay;
         base_tick_max = base_tick_max * wpn_delay;
@@ -2493,7 +2530,7 @@ else
     special_abilities = {};
 end
 
-local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
+local function resource_regen_info(info, spell, spell_id, loadout, effects, eval_flags)
 
     if not effects.finalized and __spellcoda_debug__ then
         print("CALLING SPELL INFO FOR SPELL WITHOUT FINALIZED EFFECTS");
@@ -2506,6 +2543,7 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
     local clvl = loadout.lvl;
 
     info.tick_restored = 0;
+    info.tick_chance = 1.0;
     info.restored = 0;
     info.ticks = 0;
 
@@ -2591,6 +2629,11 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
             info.tick_time = info.tick_time/haste_mul;
         end
 
+        if bit_band(periodic.flags, comp_flags.per_swing) ~= 0 then
+            info.tick_time = mh_swing_time(loadout, effects);
+            info.tick_chance = per_swing_chance(periodic, loadout, effects, eval_flags or 0);
+        end
+
         info.ticks = info.dur / info.tick_time;
 
         info.tick_restored = min;
@@ -2623,7 +2666,7 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, _)
         info.restored = info.restored * loadout.resources_max[powers.mana];
     end
 
-    info.total_restored = info.restored + info.tick_restored * info.ticks;
+    info.total_restored = info.restored + info.tick_restored * info.tick_chance * info.ticks;
 end
 
 local function only_threat_info(info, stats, spell, loadout, effects, eval_flags)
@@ -2982,10 +3025,17 @@ local function stat_weights(normal_info, spell, loadout, effects, eval_flags, sp
     last.weights = nil;
 
     local weights;
-    local anycomp = spell.direct or spell.periodic;
-    if bit_band(spell.flags, heal_or_absorb_flags) ~= 0 then
+    -- a buff alias is weighed as the attack it changes, a damage share as its damage spell
+    local weighed = spell;
+    if bit_band(spell.flags, spell_flags.alias) ~= 0 and spells[spell.alias] then
+        weighed = spells[spell.alias];
+    elseif spell.damage_share_of then
+        weighed = spells[spell.damage_share_of];
+    end
+    local anycomp = weighed.direct or weighed.periodic;
+    if bit_band(weighed.flags, heal_or_absorb_flags) ~= 0 then
         weights = heal_stat_weights;
-    elseif bit_band(spell.flags, spell_flags.requires_ranged_slot) ~= 0 then
+    elseif bit_band(weighed.flags, spell_flags.requires_ranged_slot) ~= 0 then
     --elseif bit_band(anycomp.flags, comp_flags.applies_ranged) ~= 0 then
         weights = ranged_stat_weights;
     elseif anycomp.school1 ~= schools.physical then
@@ -3112,7 +3162,9 @@ local function eval_buff_alias(alias_info, info, stats, spell, loadout, effects,
         info.effect_per_sec = alias_info.effect_per_sec - effect_per_sec;
         info.threat_per_sec = alias_info.threat_per_sec - threat_per_sec;
     end
+    info.effect_per_dur = info.effect_per_sec;
     stats_for_spell(stats, spell, loadout, effects, eval_flags);
+    info.longest_ot_duration = stats.dur_ot;
 
     info.expected_ot_st = info.effect_per_sec*stats.dur_ot;
     info.expected_ot = info.expected_ot_st;
@@ -3185,6 +3237,33 @@ for source_id, source in pairs(spells) do
         end
     end
 end
+-- zero view for a source aura without alias component, e.g. a seal without Judgement damage
+for _, views in pairs(source_alias_views) do
+    if views.default then
+        local none = {};
+        for k, v in pairs(views.default) do
+            none[k] = v;
+        end
+        for _, kind in ipairs({"direct", "periodic"}) do
+            local comp = views.default[kind];
+            if comp then
+                local zero = {};
+                for k, v in pairs(comp) do
+                    zero[k] = v;
+                end
+                for _, k in ipairs({"min", "max", "base_min", "base_max", "coef", "per_lvl", "per_lvl_sq",
+                                    "coef_ap_min", "coef_ap_max"}) do
+                    if zero[k] then
+                        zero[k] = 0;
+                    end
+                end
+                zero.coef_2h = nil;
+                none[kind] = zero;
+            end
+        end
+        views.none = none;
+    end
+end
 
 local function source_alias_view(spell, loadout)
     local views = source_alias_views[spell];
@@ -3196,9 +3275,11 @@ local function source_alias_view(spell, loadout)
         unit = loadout.friendly_towards;
     end
     for _, base_id in ipairs(spell.alias_comps) do
-        local view = views[get_buff_by_lname(loadout, unit, spell_lname(base_id), unit == "player", true)];
-        if view then
-            return view;
+        local aura_id = get_buff_by_lname(loadout, unit, spell_lname(base_id), unit == "player", true);
+        if views[aura_id] then
+            return views[aura_id];
+        elseif spells[aura_id] then
+            return views.none;
         end
     end
     for _, base_id in ipairs(spell.alias_comps) do

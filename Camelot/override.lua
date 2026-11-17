@@ -203,6 +203,10 @@ elseif sc.class == sc.classes.shaman then
         {spids.earth_shock, 1.0}
     });
 
+    for _, v in pairs(rank_seqs[spids.frostbrand_weapon]) do
+        spells[v].periodic.ppm = 9; -- unconfirmed
+    end
+
 elseif sc.class == sc.classes.warlock then
 
     -- THREAT
@@ -240,6 +244,41 @@ elseif sc.class == sc.classes.paladin then
         { spids.holy_shield, {20, 30, 40} },
         { spids.cleanse, {40} },
     });
+
+    for _, v in pairs(rank_seqs[spids.seal_of_command]) do
+        spells[v].periodic.ppm = 7; -- unconfirmed
+    end
+    for _, seal in ipairs({spids.seal_of_light, spids.seal_of_wisdom}) do
+        for _, v in pairs(rank_seqs[seal]) do
+            spells[v].periodic.ppm = 15; -- unconfirmed
+        end
+    end
+    -- per hit penalty of Seal of the Crusader is not in client data, assumed to cancel its attack speed
+    for _, v in pairs(rank_seqs[spids.seal_of_the_crusader]) do
+        for _, aura in ipairs(sc.class_buffs[v]) do
+            if aura[sc.aura_idx_effect] == "melee_haste" then
+                table.insert(sc.class_buffs[v], {
+                    "ability", "effect_mod", 1/(1 + aura[sc.aura_idx_value]) - 1, {sc.auto_attack_spell_id}, 0, -1
+                }); -- unconfirmed
+                break;
+            end
+        end
+    end
+
+    -- Seal of Fury absorb as healing version, a share of the Holy damage dealt
+    local fury_absorb_share = 0.01*sc.utils.dummy_value(spids.seal_of_fury, 1);
+    for _, v in pairs(rank_seqs[spids.seal_of_fury]) do
+        local spell = spells[v];
+        local absorb = {};
+        for k, x in pairs(spell) do
+            absorb[k] = x;
+        end
+        absorb.alias_comp = nil;
+        absorb.flags = bit.bor(spell.flags, spell_flags.absorb);
+        absorb.damage_share_of = v;
+        absorb.damage_share = fury_absorb_share;
+        spell.healing_version = absorb;
+    end
 
 elseif sc.class == sc.classes.warrior then
 

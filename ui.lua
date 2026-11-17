@@ -1072,7 +1072,7 @@ local function populate_scrollable_spell_view(cat, starting_idx)
             --line.spell_icon.__id = v.spell_id;
             line.tooltip_area.__id = v.spell_id;
             line.spell_tex:SetTexture((C_Spell.GetSpellTexture(v.spell_id)));
-            local known = v.trigger == spell_filters.already_known or v.is_dual;
+            local known = v.trigger == spell_filters.already_known;
             line.spell_tex:SetDesaturated(not known);
             if not known and SPELLBOOK_UNLEARNED_TINT_COLOR then
                 line.spell_tex:SetVertexColor(SPELLBOOK_UNLEARNED_TINT_COLOR:GetRGB());
@@ -8934,7 +8934,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         row.area:Show();
         set_name_width(row, mode, by_lvl);
 
-        local known = v.trigger == spell_filters.already_known or v.is_dual;
+        local known = v.trigger == spell_filters.already_known;
         row.icon:SetTexture((C_Spell.GetSpellTexture(id)));
         row.icon:SetDesaturated(not known);
         if not known and SPELLBOOK_UNLEARNED_TINT_COLOR then

@@ -16,6 +16,9 @@ local flags_idx                         = sc.aura_idx_flags;
 local iid_idx                           = sc.aura_idx_iid; -- internal index within this spell id
 local scale_idx                         = sc.aura_idx_scale;
 local curve_idx                         = sc.aura_idx_curve;
+local per_lvl_idx                       = sc.aura_idx_per_lvl;
+local lvl_min_idx                       = sc.aura_idx_lvl_min;
+local lvl_max_idx                       = sc.aura_idx_lvl_max;
 
 local mana_per_int                      = sc.scaling.mana_per_int;
 local hp_per_stam                       = sc.scaling.hp_per_stam;
@@ -2226,6 +2229,9 @@ local function dynamic_loadout(loadout, prev)
     loadout.calculator_mode = false;
 end
 
+-- level the effects are built for, the caster level of per level aura points
+local effects_lvl = 0;
+
 local function apply_effect(effects, spid, auras, forced, stacks, undo, player_owned, shapeshift, rank)
     if not auras then
         --if __spellcoda_debug__ then
@@ -2278,6 +2284,10 @@ local function apply_effect(effects, spid, auras, forced, stacks, undo, player_o
                 base = sc.curves[aura[curve_idx]][rank] * aura[scale_idx];
             else
                 base = aura[value_idx];
+                if aura[per_lvl_idx] then
+                    base = base + aura[per_lvl_idx] * math.max(0, math.min(effects_lvl - aura[lvl_min_idx],
+                                                                           aura[lvl_max_idx] - aura[lvl_min_idx]));
+                end
             end
             local val;
             if stacks > 1 and bit.band(aura[flags_idx], sc.aura_flags.stacks_as_charges) == 0 then
@@ -2582,6 +2592,13 @@ local function update_loadout_and_effects(relaxed_update_dt)
 
     loadouts.force_update = false;
     loadout_front = other;
+
+    -- talents and equipment hold per level aura points too
+    if loadout_front.lvl ~= effects_lvl then
+        effects_lvl = loadout_front.lvl;
+        sc.core.talents_update_needed = true;
+        sc.core.equipment_update_needed = true;
+    end
 
     if sc.core.talents_update_needed then
 

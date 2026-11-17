@@ -327,6 +327,23 @@ elseif sc.class == sc.classes.rogue then
 
 elseif sc.class == sc.classes.paladin then
 
+    for _, seal in ipairs({spids.seal_of_light, spids.seal_of_wisdom}) do
+        for _, v in pairs(rank_seqs[seal]) do
+            spells[v].periodic.ppm = 15; -- unconfirmed
+        end
+    end
+    -- per hit penalty of Seal of the Crusader is not in client data, assumed to cancel its attack speed
+    for _, v in pairs(rank_seqs[spids.seal_of_the_crusader]) do
+        for _, aura in ipairs(sc.class_buffs[v]) do
+            if aura[sc.aura_idx_effect] == "melee_haste" then
+                table.insert(sc.class_buffs[v], {
+                    "ability", "effect_mod", 1/(1 + aura[sc.aura_idx_value]) - 1, {sc.auto_attack_spell_id}, 0, -1
+                }); -- unconfirmed
+                break;
+            end
+        end
+    end
+
     -- Blessing of light needs special handling. Added here and 
     -- adjusted later for downranked holy lights
     lookups.greater_bol_lname = C_Spell.GetSpellName(spids.greater_blessing_of_light);

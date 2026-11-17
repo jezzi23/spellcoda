@@ -707,6 +707,15 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
     end
 
     local pwr;
+    if anycomp and anycomp.school1 == schools.physical then
+        if bit.band(anycomp.flags, comp_flags.applies_ranged) ~= 0 then
+            pwr = L["RAP"];
+        else
+            pwr = L["AP"];
+        end
+    else
+        pwr = L["SP"];
+    end
     if bit.band(spell.flags, spell_flags.heal) ~= 0 then
         effect = L["Heal"];
         pwr = L["HP"];
@@ -715,7 +724,9 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         cost_per_sec = cost_str_cap .. " " .. L["per sec"];
     elseif bit.band(spell.flags, spell_flags.absorb) ~= 0 then
         effect = L["Absorb"];
-        pwr = L["HP"];
+        if not spell.damage_share_of then
+            pwr = L["HP"];
+        end
         effect_per_sec = L["HPS"];
         effect_per_cost = L["Absorb per"] .. " " .. cost_str;
         cost_per_sec = cost_str_cap .. " " .. L["per sec"];
@@ -724,16 +735,6 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         effect_per_sec = L["DPS"];
         effect_per_cost = L["Damage per"] .. " " .. cost_str;
         cost_per_sec = cost_str_cap .. " " .. L["per sec"];
-
-        if anycomp.school1 == schools.physical then
-            if bit.band(anycomp.flags, comp_flags.applies_ranged) ~= 0 then
-                pwr = L["RAP"];
-            else
-                pwr = L["AP"];
-            end
-        else
-            pwr = L["SP"];
-        end
     end
 
     local snapshot = calc_tooltip_snapshots[tooltip];
@@ -1533,7 +1534,8 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
 
     if config.settings.tooltip_display_effect_per_sec and stats.cast_time ~= 0 then
         local periodic_part = "";
-        if info.num_periodic_effects > 0 and info.effect_per_dur ~= 0 and info.effect_per_dur ~= info.effect_per_sec then
+        if (info.num_periodic_effects > 0 or bit.band(spell.flags, spell_flags.alias) ~= 0) and
+            info.effect_per_dur ~= 0 and info.effect_per_dur ~= info.effect_per_sec then
             periodic_part = string.format("| %.1f %s %.0f sec", info.effect_per_dur,
                 L["periodic for"], info.longest_ot_duration);
         end
@@ -1862,33 +1864,40 @@ local function append_tooltip_header(tooltip)
 end
 local function append_tooltip_resource_regen(tooltip, info, spell)
 
-    add_line(
-        tooltip,
-        L["Restored for player"]..":",
-        string.format("%.0f", math.floor(info.total_restored)),
-        effect_color("cost")
-    );
     if spell.direct then
         add_line(
             tooltip,
-            L["Direct"]..":",
-            string.format("%.0f", math.floor(info.restored)),
-            effect_color("cost")
+            L["Mana"]..":",
+            string.format("%.1f", info.restored),
+            effect_color("normal")
         );
     end
     if spell.periodic then
+        local chance_str = "";
+        if info.tick_chance ~= 1.0 then
+            chance_str = string.format(" (%.2f%%)", 100 * info.tick_chance);
+        end
         add_line(
             tooltip,
-            L["Periodically"]..":",
-            string.format("%.0f %s %.1fs x %.0f",
-                math.floor(info.tick_restored),
+            L["Mana"]..chance_str..":",
+            string.format("%.1f %s %.1fs (%.1f %s %.1fs x %.0f)",
+                info.tick_restored * info.ticks,
+                L["over"],
+                info.dur,
+                info.tick_restored,
                 L["every"],
                 info.tick_time,
-                math.floor(info.ticks)
+                info.ticks
             ),
-            effect_color("cost")
+            effect_color("normal")
         );
     end
+    add_line(
+        tooltip,
+        L["Expected"]..":",
+        string.format("%.1f", info.total_restored),
+        effect_color("expectation")
+    );
 end
 
 local function append_tooltip_only_threat(tooltip, info, stats, spell, spell_id, loadout)
