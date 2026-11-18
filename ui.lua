@@ -6850,7 +6850,7 @@ local function create_sw_ui_loadout_frame(pframe)
     f:SetHitRectInsets(0, 0, 0, 0);
     getglobal(f:GetName()..'Text'):SetText(L["Custom player level"]);
     getglobal(f:GetName()).tooltip =
-        L["Displays ability information as if character is a custom level (attributes from levels are not accounted for)."];
+        L["Displays ability information as if the character were this level."];
 
     f:SetScript("OnClick", function(self)
 

@@ -2259,6 +2259,35 @@ end
 
 -- level the effects are built for, the caster level of per level aura points
 local effects_lvl = 0;
+local effects_real_lvl = 0;
+
+-- a custom level gains the base attributes of that level, and the sheet's attributes convert at its rates
+local function apply_level_stats(loadout, effects)
+    local real_lvl = UnitLevel("player");
+    local by_lvl = sc.level_stats and sc.level_stats[sc.race];
+    if loadout.lvl == real_lvl or not by_lvl or not by_lvl[real_lvl] or not by_lvl[loadout.lvl] then
+        return;
+    end
+    local from, to = by_lvl[real_lvl], by_lvl[loadout.lvl];
+    for i = 1, 5 do
+        effects.by_attr.stat_flat[i] = effects.by_attr.stat_flat[i] + to[i] - from[i];
+    end
+    if sc.base_mana_by_lvl then
+        effects.raw.mana = effects.raw.mana +
+            (sc.base_mana_by_lvl[loadout.lvl] or 0) - (sc.base_mana_by_lvl[real_lvl] or 0);
+    end
+
+    local int, agi = loadout.stats[attr.intellect], loadout.stats[attr.agility];
+    local function rate_diff(t)
+        return 0.01 * ((t[loadout.lvl] or 0) - (t[real_lvl] or 0));
+    end
+    local spell_crit = rate_diff(sc.spell_crit_to_int) * int;
+    for i = 1, 7 do
+        effects.by_school.crit_forced[i] = effects.by_school.crit_forced[i] + spell_crit;
+    end
+    effects.raw.phys_crit_forced = effects.raw.phys_crit_forced + rate_diff(sc.physical_crit_to_agi) * agi;
+    effects.raw.dodge = effects.raw.dodge + rate_diff(sc.dodge_to_agi) * agi;
+end
 
 local function apply_effect(effects, spid, auras, forced, stacks, undo, player_owned, shapeshift, rank)
     if not auras then
@@ -2621,9 +2650,11 @@ local function update_loadout_and_effects(relaxed_update_dt)
     loadouts.force_update = false;
     loadout_front = other;
 
-    -- talents and equipment hold per level aura points too
-    if loadout_front.lvl ~= effects_lvl then
+    -- talents and equipment hold per level aura points too, equipment the custom level's attributes
+    local real_lvl = UnitLevel("player");
+    if loadout_front.lvl ~= effects_lvl or real_lvl ~= effects_real_lvl then
         effects_lvl = loadout_front.lvl;
+        effects_real_lvl = real_lvl;
         sc.core.talents_update_needed = true;
         sc.core.equipment_update_needed = true;
     end
@@ -2655,6 +2686,7 @@ local function update_loadout_and_effects(relaxed_update_dt)
         zero_effects(equipped);
         effects_add(equipped, talented);
         local success = sc.equipment.apply_equipment(loadout_front, equipped);
+        apply_level_stats(loadout_front, equipped);
         -- need eq update again next because api failed
         sc.core.equipment_update_needed = not success;
     end
