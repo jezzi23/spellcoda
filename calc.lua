@@ -604,10 +604,16 @@ local function stats_avoidances(attack_skill, comp, spell, loadout, effects)
         parry = 0.0;
     end
 
-    local expertise_reduction =
-        0.0025
-        *
-        (math_max(0, loadout.expertise_rating + effects.raw.expertise_rating_flat))/(loadout.cr_scaling * cr_weights[CR_EXPERTISE]);
+    local expertise = loadout.expertise_mh;
+    if bit_band(comp.flags, comp_flags.applies_mh) == 0 and bit_band(comp.flags, comp_flags.applies_oh) ~= 0 then
+        expertise = loadout.expertise_oh;
+    end
+    local expertise_reduction = math_max(0,
+        expertise
+        +
+        effects.raw.expertise
+        +
+        0.0025*effects.raw.expertise_rating_flat/(loadout.cr_scaling * cr_weights[CR_EXPERTISE]));
 
     dodge = dodge - expertise_reduction;
     parry = parry - expertise_reduction;
@@ -782,6 +788,18 @@ local function armor_dr_calc(armor, attacker_lvl)
     return math_max(0, math_min(0.75,
         armor/(armor + 400 + 85 * (attacker_lvl + 4.5*(math_max(0, attacker_lvl-59))))
     ));
+end
+
+local function stats_target_armor(attack_subclass, loadout, effects)
+    local ignored = effects.by_school.target_res[schools.physical];
+    if attack_subclass then
+        for mask, v in pairs(effects.wpn_subclass.target_res) do
+            if bit_band(mask, bit_lshift(1, attack_subclass)) ~= 0 then
+                ignored = ignored + v;
+            end
+        end
+    end
+    return math_max(0, (loadout.target_armor + effects.by_school.target_res_flat[schools.physical]) * (1.0 + ignored));
 end
 
 local function stats_dr(armor, comp, loadout)
@@ -1150,6 +1168,7 @@ local function spell_stats_direct(stats, spell, loadout, effects, eval_flags)
     stats.dodge, stats.parry, stats.block, stats.block_amount = stats_avoidances(stats.attack_skill, direct, spell, loadout, effects);
     stats.spell_power = stats_sp(stats.extra_spell_power, benefit_id, direct, spell, loadout, effects);
     stats.coef, stats.coef_max = stats_coef(stats, benefit_id, direct, spell, loadout, effects, eval_flags);
+    stats.target_armor = stats_target_armor(stats.attack_subclass, loadout, effects);
     stats.target_dr = stats_dr(stats.target_armor, direct, loadout);
     stats.spell_mod = stats_spell_mod(stats.target_dr, stats.attack_subclass, bid, direct, spell, effects, stats);
 
@@ -1235,7 +1254,11 @@ local function spell_stats_periodic(stats, spell, loadout, effects, eval_flags)
     stats.dodge_ot, stats.parry_ot, stats.block_ot, stats.block_amount_ot = stats_avoidances(stats.attack_skill_ot, periodic, spell, loadout, effects);
     stats.spell_power_ot = stats_sp(stats.extra_spell_power, benefit_id, periodic, spell, loadout, effects);
     stats.coef_ot, stats.coef_ot_max = stats_coef(stats, benefit_id, periodic, spell, loadout, effects, eval_flags);
-    stats.target_dr_ot = stats_dr(stats.target_armor, periodic, loadout);
+    local target_armor_ot = stats_target_armor(stats.attack_subclass_ot, loadout, effects);
+    if not spell.direct then
+        stats.target_armor = target_armor_ot;
+    end
+    stats.target_dr_ot = stats_dr(target_armor_ot, periodic, loadout);
     stats.spell_mod_ot = stats_spell_mod(stats.target_dr_ot, stats.attack_subclass_ot, bid, periodic, spell, effects, stats);
 
     write_attack_table(stats, false);
@@ -1590,7 +1613,7 @@ local function stats_for_spell(stats, spell, loadout, effects, eval_flags)
         stats.extra_spell_power = own_flat - friendly_flat;
     end
 
-    stats.target_armor = math_max(0, (loadout.target_armor + effects.by_school.target_res_flat[schools.physical]) * (1.0 + effects.by_school.target_res[schools.physical]));
+    stats.target_armor = stats_target_armor(nil, loadout, effects);
 
     stats.cost_actual, stats.original_base_cost = stats_cost(bid, spell, loadout, effects);
 

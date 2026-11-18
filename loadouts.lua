@@ -76,6 +76,8 @@ local loadout_numbers = {
     "block",
     "dodge",
     "parry",
+    "expertise_mh",
+    "expertise_oh",
     "r_speed",
     "r_min",
     "r_max",
@@ -316,6 +318,7 @@ local effects_additive = {
         "phys_dmg",
         "phys_dmg_flat",
         "skill_flat",
+        "target_res",
     },
     creature = {
         "crit_mod",
@@ -363,6 +366,7 @@ local effects_additive = {
         "parry",
         "can_block",
         "attacker_melee_crit",
+        "expertise",
 
         "wpn_subclass_mh",
         "wpn_subclass_oh",
@@ -1252,7 +1256,14 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     if bit.band(stat_flags, bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)) ~= 0 then
         add_field_line(info, -effects.by_school.target_res_flat[schools.physical], L["Armor penetration"], is_diff);
-        add_field_line(info, effects.by_school.target_res[schools.physical], L["Armor penetration"], is_diff, true);
+        local ignored = effects.by_school.target_res[schools.physical];
+        local mh_subclass_bit = bit.lshift(1, effects_after.raw.wpn_subclass_mh);
+        for mask, v in pairs(effects.wpn_subclass.target_res) do
+            if bit.band(mask, mh_subclass_bit) ~= 0 then
+                ignored = ignored + v;
+            end
+        end
+        add_field_line(info, -ignored, L["Armor penetration"], is_diff, true);
     end
     ---------------------------------
     --- Spell peneteration
@@ -1952,7 +1963,7 @@ local should_auras_be_secret = C_Secrets and C_Secrets.ShouldAurasBeSecret;
 local sheet_stats_values = {
     "healing_power", "spell_power", "ap", "rap", "melee_crit", "ranged_crit", "block", "dodge", "parry", "defense",
     "attack_min_mh", "attack_max_mh", "attack_pos", "attack_neg", "attack_mod", "swing_time_mh", "swing_time_oh",
-    "base_armor", "armor",
+    "base_armor", "armor", "expertise_mh", "expertise_oh",
 };
 for _, v in ipairs(ratings) do
     table.insert(sheet_stats_values, v[2]);
@@ -2039,6 +2050,15 @@ local function read_sheet_stats(loadout)
 
     loadout.dodge = 0.01*(GetDodgeChance() or 0);
     loadout.parry = 0.01*(GetParryChance() or 0);
+
+    local expertise_mh, expertise_oh = 0, 0;
+    if client_matches(client_flags.forever) then
+        expertise_mh, expertise_oh = GetExpertise();
+    elseif not client_matches(client_flags.vanilla) then
+        expertise_mh, expertise_oh = GetExpertisePercent();
+    end
+    loadout.expertise_mh = 0.01*expertise_mh;
+    loadout.expertise_oh = 0.01*expertise_oh;
     local def_base, def_bonus;
     if client_matches(client_flags.forever) then
         def_base, def_bonus = UnitDefenseSkill("player");
