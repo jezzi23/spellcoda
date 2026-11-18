@@ -18,6 +18,8 @@ local spell_filter_options = {
     spells_filter_hide_replaced_ranks        = false,
 };
 
+local combat_unseen_buffs = { keep = 1, expire = 2, drop = 3 };
+
 -- Fairly flat settings structure to simplify transitions between versions
 local default_settings     = {
     -- tooltip
@@ -357,7 +359,11 @@ local default_settings     = {
     loadout_target_facing                                       = false,
     loadout_unbounded_aoe_targets                               = 1,
     loadout_always_max_resource                                 = false,
-    loadout_combat_ignore_buffs                                 = false,
+    loadout_combat_unseen_buffs                                 = combat_unseen_buffs.expire,
+    loadout_assume_buffs                                        = false,
+    loadout_assume_buffs_only_combat                            = false,
+    loadout_assume_buffs_only_raid                              = false,
+    loadout_assumed_buffs                                       = { player_buffs = {}, target_buffs = {} },
     loadout_behind_target                                       = false,
 
     libstub_icon_conf                                           = { hide = false },
@@ -486,6 +492,9 @@ local function load_config()
         load_persistent_data(v, default_profile());
     end
     for _, v in pairs(__sc_p_acc.profiles) do
+        if v.settings.loadout_combat_ignore_buffs and v.settings.loadout_combat_unseen_buffs == nil then
+            v.settings.loadout_combat_unseen_buffs = combat_unseen_buffs.drop;
+        end
         load_persistent_data(v.settings, default_settings);
         -- saved data can come from another client, keep values bound by client data in range
         v.settings.loadout_lvl = math.min(v.settings.loadout_lvl, sc.max_lvl);
@@ -642,5 +651,6 @@ config.activate_settings = activate_settings;
 config.spec_keys = spec_keys;
 config.spell_filter_options = spell_filter_options;
 config.default_settings = default_settings;
+config.combat_unseen_buffs = combat_unseen_buffs;
 
 sc.config = config;

@@ -180,9 +180,15 @@ local function loadout_zero()
     empty.dynamic_buffs = {};
     empty.aura_guids = {};
     empty.dynamic_buffs_lname = {};
+    empty.detected_buffs = {};
+    empty.detected_buffs_lname = {};
+    empty.aura_expires = {};
     for _, v in ipairs(loadout_units) do
+        empty.aura_expires[v] = {};
         empty.dynamic_buffs[v] = {};
         empty.dynamic_buffs_lname[v] = {};
+        empty.detected_buffs[v] = empty.dynamic_buffs[v];
+        empty.detected_buffs_lname[v] = empty.dynamic_buffs_lname[v];
     end
     empty.snapshot_buffs = empty.dynamic_buffs["player"];
 
@@ -2071,6 +2077,8 @@ local function read_sheet_stats(loadout)
 end
 
 -- prev is the current front loadout, the sheet stats are kept from it while they are secret
+local has_resilience = client_matches(bit.bnot(bit.bor(client_flags.vanilla, client_flags.forever)));
+
 local function dynamic_loadout(loadout, prev)
     local lvl;
     if not config.settings.loadout_use_custom_lvl then
@@ -2225,7 +2233,7 @@ local function dynamic_loadout(loadout, prev)
 
     loadout.target_defense = 5*loadout.target_lvl;
 
-    loadout.target_pvpres = config.settings.loadout_target_pvpres;
+    loadout.target_pvpres = has_resilience and config.settings.loadout_target_pvpres or 0;
 
     loadout.target_armor = config.settings.loadout_target_armor;
     if config.settings.loadout_target_automatic_armor then

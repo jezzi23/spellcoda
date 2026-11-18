@@ -86,6 +86,10 @@ local aura_getters = {
     { get = C_UnitAuras.GetDebuffDataByIndex, filter = "HARMFUL" },
 };
 local should_auras_be_secret = C_Secrets and C_Secrets.ShouldAurasBeSecret;
+local tracks_expiry = should_auras_be_secret ~= nil;
+local unseen_buffs = sc.config.combat_unseen_buffs;
+-- our own player auras: id -> duration as of the last unrestricted read
+local pull_durations = {};
 
 local function suppressed_in_raid(spell_id)
     local flag = sc.aura_flags.not_in_raid;
@@ -132,18 +136,27 @@ for unit, _ in pairs(aura_changed) do
     end
 end
 
--- keeps the unit's buffs of the last unrestricted read while it is the same unit
-local function keep_restricted_buffs(loadout, prev, unit)
+-- keeps the unit's buffs of the last unrestricted read while it is the same unit, with expire drops those whose time
+-- ran out: every one on us, only our own on others
+local function keep_restricted_buffs(loadout, prev, unit, expire)
     local guid = UnitGUID(unit);
     if is_secret(guid) or guid ~= prev.aura_guids[unit] then
         return;
     end
     loadout.aura_guids[unit] = guid;
     local kept = loadout.dynamic_buffs[unit];
-    for id, buff_info in pairs(prev.dynamic_buffs[unit]) do
-        kept[id] = buff_info;
+    local on_player = kept == loadout.dynamic_buffs["player"];
+    local expires = loadout.aura_expires[unit];
+    local prev_expires = prev.aura_expires[unit];
+    local now = GetTime();
+    for id, buff_info in pairs(prev.detected_buffs[unit]) do
+        local t = prev_expires[id];
+        if not (expire and t and t ~= 0 and now >= t and (on_player or buff_info.player_owned)) then
+            kept[id] = buff_info;
+            expires[id] = t;
+        end
     end
-    for lname, buff_info in pairs(prev.dynamic_buffs_lname[unit]) do
+    for lname, buff_info in pairs(prev.detected_buffs_lname[unit]) do
         if kept[buff_info.id] == buff_info then
             loadout.dynamic_buffs_lname[unit][lname] = buff_info;
         end
@@ -183,8 +196,9 @@ local cdm_viewers = { "BuffIconCooldownViewer", "BuffBarCooldownViewer" };
 local cdm_candidates = {};
 -- spell id -> time of our last cast, picks the rank of an item linking several
 local cdm_last_cast = {};
-local cdm_buff_infos = {};
-local cdm_lnames = {};
+-- entries of our own buffs at count 1, shared between reads and never changed
+local own_buff_infos = {};
+local own_lnames = {};
 local cdm_present = { player = {}, target = {} };
 local cdm_absent = { player = {}, target = {} };
 
@@ -252,6 +266,84 @@ local function remove_buff(loadout, unit, id)
     end
 end
 
+local function own_lname(id)
+    local lname = own_lnames[id];
+    if lname == nil then
+        lname = C_Spell.GetSpellName(id) or false;
+        own_lnames[id] = lname;
+    end
+    return lname;
+end
+
+local function add_own_buff(loadout, unit, id)
+    local buff_info = own_buff_infos[id];
+    if not buff_info then
+        buff_info = { count = 1, id = id, player_owned = true };
+        own_buff_infos[id] = buff_info;
+    end
+    loadout.dynamic_buffs[unit][id] = buff_info;
+    local lname = own_lname(id);
+    if lname then
+        loadout.dynamic_buffs_lname[unit][lname] = buff_info;
+    end
+end
+
+-- our casts of player buffs that landed on us, applied by the next restricted read: { id, expires (0 = never) }
+local own_casts = {};
+-- the cast sent last, until it succeeds: guid, id, duration
+local sent_guid, sent_id, sent_dur;
+
+if tracks_expiry then
+    local f = CreateFrame("Frame");
+    f:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player");
+    f:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player");
+    f:SetScript("OnEvent", function(_, event, _, a, b, c)
+        if event == "UNIT_SPELLCAST_SENT" then
+            local target, cast_guid, id = a, b, c;
+            sent_guid = nil;
+            -- no target or our name is a cast on us, a secret target is unknown
+            if any_secret(target, cast_guid, id) or (target and target ~= UnitName("player")) or
+                not (sc.class_buffs[id] or sc.player_buffs[id]) then
+                return;
+            end
+            local info = sc.aura_info[id];
+            local dur;
+            if info and info.dur_per_cp then
+                local cp = UnitPower("player", sc.powers.combopoints);
+                if is_secret(cp) then
+                    cp = 0;
+                end
+                dur = (info.dur or 0) + info.dur_per_cp * cp;
+            else
+                dur = pull_durations[id] or (info and info.dur) or 0;
+            end
+            sent_guid, sent_id, sent_dur = cast_guid, id, dur;
+        elseif sent_guid and not any_secret(a, b) and a == sent_guid and b == sent_id then
+            sent_guid = nil;
+            own_casts[#own_casts + 1] = { sent_id, sent_dur ~= 0 and GetTime() + sent_dur or 0 };
+        end
+    end);
+end
+
+-- a cast refreshes the entry of its rank chain (same name), another rank takes its place
+local function apply_own_casts(loadout)
+    local kept = loadout.dynamic_buffs["player"];
+    local expires = loadout.aura_expires["player"];
+    for _, cast in ipairs(own_casts) do
+        local id = cast[1];
+        local lname = own_lname(id);
+        local same = lname and loadout.dynamic_buffs_lname["player"][lname];
+        if same and same.id ~= id then
+            remove_buff(loadout, "player", same.id);
+            expires[same.id] = nil;
+        end
+        if not kept[id] then
+            add_own_buff(loadout, "player", id);
+        end
+        expires[id] = cast[2];
+    end
+end
+
 -- the rank of an active item: the one already known, else our last cast, else the only candidate we know
 local function cdm_rank(kept, ids)
     local best, best_time;
@@ -292,20 +384,7 @@ local function cdm_apply(loadout, unit)
     for _, ids in ipairs(cdm_present[unit]) do
         local id = cdm_rank(kept, ids);
         if id then
-            local buff_info = cdm_buff_infos[id];
-            if not buff_info then
-                buff_info = { count = 1, id = id, player_owned = true };
-                cdm_buff_infos[id] = buff_info;
-            end
-            kept[id] = buff_info;
-            local lname = cdm_lnames[id];
-            if lname == nil then
-                lname = C_Spell.GetSpellName(id) or false;
-                cdm_lnames[id] = lname;
-            end
-            if lname then
-                loadout.dynamic_buffs_lname[unit][lname] = buff_info;
-            end
+            add_own_buff(loadout, unit, id);
         end
     end
 end
@@ -358,6 +437,126 @@ end
 local scanned_units = { "player", "target" };
 local scanned_units_mouseover = { "player", "target", "mouseover" };
 
+-- buffs the user assumes always up, merged over the detected ones; the next read copies only detected ones
+local assumed_player_infos = {};
+local assumed_target_infos = {};
+local assumed_lnames = {};
+local assumed_target_owned = {};
+local assumed_was_active = false;
+local merged_copies = {};
+
+do
+    local f = CreateFrame("Frame");
+    f:RegisterEvent("SPELLS_CHANGED");
+    f:SetScript("OnEvent", function()
+        wipe(assumed_target_owned);
+    end);
+end
+
+local function assumed_buffs_active()
+    local settings = sc.config.settings;
+    return settings.loadout_assume_buffs and
+        (not settings.loadout_assume_buffs_only_combat or sc.core.in_combat) and
+        (not settings.loadout_assume_buffs_only_raid or sc.core.in_raid_instance);
+end
+
+-- a changed entry is a new table, prev loadouts and the effects inputs compare against the old one
+local function assumed_info(cache, id, count, player_owned)
+    local buff_info = cache[id];
+    if not buff_info or buff_info.count ~= count or buff_info.player_owned ~= player_owned then
+        buff_info = { count = count, id = id, player_owned = player_owned };
+        cache[id] = buff_info;
+    end
+    return buff_info;
+end
+
+local function assume_buff(loadout, unit, cache, id, count, player_owned)
+    local present = loadout.dynamic_buffs[unit][id];
+    if present and math.max(present.count or 0, 1) >= count then
+        return;
+    end
+    local buff_info = assumed_info(cache, id, count, present and present.player_owned or player_owned);
+    loadout.dynamic_buffs[unit][id] = buff_info;
+    local lname = assumed_lnames[id];
+    if lname == nil then
+        lname = C_Spell.GetSpellName(id) or false;
+        assumed_lnames[id] = lname;
+    end
+    if lname then
+        loadout.dynamic_buffs_lname[unit][lname] = buff_info;
+    end
+end
+
+local function target_owned(id)
+    local owned = assumed_target_owned[id];
+    if owned == nil then
+        owned = IsPlayerSpell and IsPlayerSpell(id) and true or false;
+        assumed_target_owned[id] = owned;
+    end
+    return owned;
+end
+
+local function merge_assumed_buffs(loadout)
+    for _, k in ipairs(scanned_units_mouseover) do
+        loadout.detected_buffs[k] = loadout.dynamic_buffs[k];
+        loadout.detected_buffs_lname[k] = loadout.dynamic_buffs_lname[k];
+    end
+    loadout.assumed_hostile = nil;
+
+    local active = assumed_buffs_active() and true or false;
+    if active ~= assumed_was_active then
+        assumed_was_active = active;
+        sc.loadouts.force_update = true;
+    end
+    if not active then
+        return;
+    end
+
+    -- one copy per detected table, units sharing one stay shared
+    for _, k in ipairs(scanned_units_mouseover) do
+        local detected = loadout.detected_buffs[k];
+        local copy = merged_copies[detected];
+        if not copy then
+            copy = { {}, {} };
+            for id, buff_info in pairs(detected) do
+                copy[1][id] = buff_info;
+            end
+            for lname, buff_info in pairs(loadout.detected_buffs_lname[k]) do
+                copy[2][lname] = buff_info;
+            end
+            merged_copies[detected] = copy;
+        end
+        loadout.dynamic_buffs[k] = copy[1];
+        loadout.dynamic_buffs_lname[k] = copy[2];
+    end
+    wipe(merged_copies);
+
+    local cfg = sc.config.settings.loadout_assumed_buffs;
+    for id, count in pairs(cfg.player_buffs) do
+        assume_buff(loadout, "player", assumed_player_infos, id, count, sc.class_buffs[id] ~= nil);
+    end
+
+    -- a friendly target gets no hostile ones, no target gets them on the default enemy
+    local hostile_unit;
+    if loadout.hostile_towards ~= "" and
+        bit.band(loadout.flags, sc.loadouts.loadout_flags.target_friendly) == 0 then
+        hostile_unit = loadout.hostile_towards;
+    end
+    for id, count in pairs(cfg.target_buffs) do
+        if sc.friendly_buffs[id] then
+            assume_buff(loadout, loadout.friendly_towards, assumed_target_infos, id, count, target_owned(id));
+        end
+        if sc.hostile_buffs[id] then
+            if hostile_unit then
+                assume_buff(loadout, hostile_unit, assumed_target_infos, id, count, target_owned(id));
+            elseif loadout.hostile_towards == "" then
+                loadout.assumed_hostile = loadout.assumed_hostile or {};
+                loadout.assumed_hostile[id] = assumed_info(assumed_target_infos, id, count, target_owned(id));
+            end
+        end
+    end
+end
+
 local function detect_buffs(loadout, prev)
     loadout.dynamic_buffs["player"] = {};
     loadout.dynamic_buffs["target"] = {};
@@ -384,20 +583,29 @@ local function detect_buffs(loadout, prev)
     end
 
     wipe(loadout.aura_guids);
+    for _, k in ipairs(scanned_units_mouseover) do
+        wipe(loadout.aura_expires[k]);
+    end
     if should_auras_be_secret and should_auras_be_secret() then
-        -- ignoring buffs leaves the cooldown manager's and the form, apply_snapshot_deltas takes the snapshot buffs
+        -- dropping buffs leaves the cooldown manager's and the form, apply_snapshot_deltas takes the snapshot buffs
         -- out of the sheet stats
-        if not (sc.config.settings.loadout_combat_ignore_buffs and client_matches(client_flags.forever)) then
+        local mode = sc.config.settings.loadout_combat_unseen_buffs;
+        if mode ~= unseen_buffs.drop then
             for _, k in ipairs(units) do
-                keep_restricted_buffs(loadout, prev, k);
+                keep_restricted_buffs(loadout, prev, k, mode == unseen_buffs.expire);
+            end
+            if mode == unseen_buffs.expire then
+                apply_own_casts(loadout);
             end
         end
+        wipe(own_casts);
         if C_CooldownViewer then
             cdm_restricted_buffs(loadout);
         end
         restricted_form_buffs(loadout);
         loadout.snapshot_buffs = prev.snapshot_buffs;
         last_read_scanned = false;
+        merge_assumed_buffs(loadout);
         return;
     end
 
@@ -414,11 +622,14 @@ local function detect_buffs(loadout, prev)
         if aura_changed[k] == false and last_read_scanned and not shared and
             guid and guid == prev.aura_guids[k] and not __spellcoda_test_all_data__ then
 
-            for id, buff_info in pairs(prev.dynamic_buffs[k]) do
+            for id, buff_info in pairs(prev.detected_buffs[k]) do
                 v[id] = buff_info;
             end
-            for lname, buff_info in pairs(prev.dynamic_buffs_lname[k]) do
+            for lname, buff_info in pairs(prev.detected_buffs_lname[k]) do
                 loadout.dynamic_buffs_lname[k][lname] = buff_info;
+            end
+            for id, t in pairs(prev.aura_expires[k]) do
+                loadout.aura_expires[k][id] = t;
             end
         else
             if aura_changed[k] then
@@ -440,6 +651,12 @@ local function detect_buffs(loadout, prev)
                             local buff_info = { count = aura.applications, id = spell_id, player_owned = player_owned };
                             v[spell_id] = buff_info;
                             loadout.dynamic_buffs_lname[k][aura.name] = buff_info;
+                            if tracks_expiry then
+                                loadout.aura_expires[k][spell_id] = aura.expirationTime;
+                                if k == "player" and player_owned then
+                                    pull_durations[spell_id] = aura.duration;
+                                end
+                            end
                         end
                     end
                     i = i + 1;
@@ -448,6 +665,7 @@ local function detect_buffs(loadout, prev)
         end
     end
     last_read_scanned = true;
+    wipe(own_casts);
 
     if __spellcoda_test_all_data__ then
         for k, v in pairs(loadout.dynamic_buffs) do
@@ -466,6 +684,7 @@ local function detect_buffs(loadout, prev)
     end
 
     loadout.snapshot_buffs = loadout.dynamic_buffs["player"];
+    merge_assumed_buffs(loadout);
 end
 
 -- the forced application minus the regular one, the part of a buff that is in the sheet stats
@@ -537,6 +756,10 @@ local function apply_buffs(loadout, effects, forced, undo)
                     apply_effect(effects, k, sc.hostile_buffs[k], forced, v.count, undo, v.player_owned);
                 end
             end
+        elseif loadout.assumed_hostile then
+            for k, v in pairs(loadout.assumed_hostile) do
+                apply_effect(effects, k, sc.hostile_buffs[k], forced, v.count, undo, v.player_owned);
+            end
         end
     end
 
@@ -571,7 +794,8 @@ local function apply_fake_buffs(loadout, effects, buffs_cfg)
         if not preserve or
             (not loadout.dynamic_buffs[loadout.friendly_towards][k]
             and
-            (loadout.hostile_towards == "" or not loadout.dynamic_buffs[loadout.hostile_towards][k])) then
+            (loadout.hostile_towards == "" and not (loadout.assumed_hostile and loadout.assumed_hostile[k]) or
+                loadout.hostile_towards ~= "" and not loadout.dynamic_buffs[loadout.hostile_towards][k])) then
             if sc.friendly_buffs[k] then
                 apply_effect(effects, k, sc.friendly_buffs[k], true, cnt, false, true);
             end
