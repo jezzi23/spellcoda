@@ -6,6 +6,7 @@ local config = sc.config;
 local ui = sc.ui;
 local create_subtabs         = ui.create_subtabs;
 local libDD                  = ui.libDD;
+local make_divider           = ui.make_divider;
 local make_frame_scrollable  = ui.make_frame_scrollable;
 local make_help_icon_tooltip = ui.make_help_icon_tooltip;
 local multi_row_checkbutton  = ui.multi_row_checkbutton;
@@ -19,14 +20,6 @@ local function create_tooltip_spells_frame(pframe)
     pframe.num_tooltip_toggled = 0;
 
     local tsfs = {};
-
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
-    f_txt:SetText(L["Tooltip spell settings"]);
-    f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
-
-    pframe.y_offset = pframe.y_offset - 15;
 
     multi_row_checkbutton({{
         id = "tooltip_disable",
@@ -42,6 +35,9 @@ local function create_tooltip_spells_frame(pframe)
         end
     }}, pframe, 1, nil, 0);
 
+    pframe.y_offset = pframe.y_offset - 10;
+    make_divider(pframe);
+    pframe.y_offset = pframe.y_offset - 10;
 
     for _, v in ipairs(multi_row_checkbutton({
         --{
@@ -86,8 +82,8 @@ local function create_tooltip_spells_frame(pframe)
         },
         {
             id = "tooltip_display_eval_options",
-            txt = L["Evaluation modes"],
-            tooltip = L["Some spells may have different evaluation modes. This shows the mode and how to dynamically switch between. Example: Switch between healing and damage component of Holy shock."];
+            txt = L["Mode and key hints"],
+            tooltip = L["Shows the current evaluation mode and how to switch it: CTRL for healing or damage on spells that do both, ALT for single target effect, scroll wheel for other modes."];
         },
         {
             id = "tooltip_display_target_info",
@@ -343,23 +339,6 @@ local function create_tooltip_items_frame(pframe)
 
     local tifs = {};
 
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
-    f_txt:SetText(L["Tooltip item comparison settings"]);
-    f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
-
-    local help_icon = make_help_icon_tooltip(
-        nil,
-        pframe,
-        L["Item comparison in tooltips"],
-            " * ".."Hold ALT key to switch between evaluation modes".."\n"..
-            " * ".."Evaluation is fully computed, not extrapolated from stat weights".."\n"..
-            " * ".."Item tooltips are never parsed for its text, making this localization agnostic"
-    );
-    help_icon:SetPoint("LEFT", f_txt, "RIGHT", 5, 0);
-
-    pframe.y_offset = pframe.y_offset - 15;
     multi_row_checkbutton({{
             id = "tooltip_disable_item",
             txt = L["Disable item upgrade evaluation in tooltip"],
@@ -373,8 +352,63 @@ local function create_tooltip_items_frame(pframe)
                 end
             end
         }}, pframe, 1, nil, 0);
+    local help_icon = make_help_icon_tooltip(
+        nil,
+        pframe,
+        L["Item comparison in tooltips"],
+            " * "..L["Hold SHIFT key to show stat changes"].."\n"..
+            " * "..L["Hold ALT key to switch between evaluation modes"].."\n"..
+            " * "..L["Evaluation is fully computed, not extrapolated from stat weights"].."\n"..
+            " * "..L["Item tooltips are never parsed for its text, making this localization agnostic"]
+    );
+    help_icon:SetPoint("LEFT", getglobal("__sc_frame_setting_tooltip_disable_itemText"), "RIGHT", 5, 0);
 
-    pframe.y_offset = pframe.y_offset - 3;
+    pframe.y_offset = pframe.y_offset - 10;
+    make_divider(pframe);
+    pframe.y_offset = pframe.y_offset - 2;
+
+    local function section(title)
+        pframe.y_offset = pframe.y_offset - 12;
+        local txt = pframe:CreateFontString(nil, "OVERLAY");
+        txt:SetFontObject(GameFontNormal);
+        txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
+        txt:SetText(title);
+        txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
+        pframe.y_offset = pframe.y_offset - 20;
+        tifs[#tifs + 1] = txt;
+    end
+
+    local function checks(list, num_columns)
+        local frames = multi_row_checkbutton(list, pframe, num_columns);
+        for _, v in ipairs(frames) do
+            tifs[#tifs + 1] = v;
+        end
+        if #list % num_columns ~= 0 then
+            pframe.y_offset = pframe.y_offset - 20;
+        end
+        return frames;
+    end
+
+    section(L["Tooltip display"]);
+    checks({
+        {
+            id = "tooltip_item_key_hints",
+            txt = L["Modifier key hints"],
+            tooltip = L["SHIFT: Stats | ALT: Switch mode"],
+        },
+    }, 1);
+    checks({
+        {
+            id = "tooltip_item_stat_diff",
+            txt = L["Always show stat changes"],
+        },
+        {
+            id = "tooltip_item_weapon_skill",
+            txt = L["Show skill levels for weapons"],
+        },
+    }, 2);
+
+    section(L["Compared spells"]);
     f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
     f:SetScript("OnClick", function()
 
@@ -386,95 +420,40 @@ local function create_tooltip_items_frame(pframe)
     f:SetWidth(200);
     f:SetText(L["Configure spell list"]);
     tifs[#tifs + 1] = f;
-
-    pframe.y_offset = pframe.y_offset - 27;
-
-    for _, v in ipairs(multi_row_checkbutton({
-        {
-            id = "tooltip_item_stat_diff",
-            txt = L["Always show stat changes"],
-        },
+    pframe.y_offset = pframe.y_offset - 26;
+    checks({
         {
             id = "tooltip_item_smart",
             txt = L["Smarter tooltip"],
             tooltip = L["Adds/removes some sensible aspects of the tooltip. Examples: Never showing Attack for caster classes or for cloth items; Show wand spell for wands; etc"],
         },
-
-    }, pframe, 2, nil)) do
-        tifs[#tifs + 1] = v;
-    end
-
-    for _, v in ipairs(multi_row_checkbutton({
         {
             id = "tooltip_item_leveling_skill_normalize",
             txt = L["Use skill as clvl*5 for weapon comparisons when not at maximum level"],
             tooltip = L["More intuitive weapon upgrade results when leveling since lower weapon skill type is not punished"],
         },
-    }, pframe, 1, nil)) do
-        tifs[#tifs + 1] = v;
-    end
+    }, 1);
 
-    for _, v in ipairs(multi_row_checkbutton({
-        {
-            id = "tooltip_item_weapon_skill",
-            txt = L["Show skill levels for weapons"],
-        },
-    }, pframe, 2, nil)) do
-        tifs[#tifs + 1] = v;
-    end
-
-    pframe.y_offset = pframe.y_offset - 25;
-
-
-    for _, v in ipairs(multi_row_checkbutton({
+    section(L["Included item changes"]);
+    checks({
         {
             id = "tooltip_item_apply_enchant",
             txt = L["Apply enchant changes"],
-            tooltip = "Includes enchant changes for tooltip comparison",
         },
         {
             id = "tooltip_item_apply_gems",
             txt = L["Apply gem changes"],
-            tooltip = "Includes gem changes for tooltip comparison",
         },
         {
             id = "tooltip_item_apply_set_bonuses",
             txt = L["Apply set bonus changes"],
-            tooltip = "Includes set bonus changes for tooltip comparison",
         },
-        {
-            id = "tooltip_item_show_evaluation_modes",
-            txt = L["Show evaluation mode switch"],
-        },
-        {
-            id = "tooltip_item_ignore_unequippable",
-            txt = L["Ignore unequippable by class"],
-        },
-        {
-            id = "tooltip_item_ignore_cloth",
-            txt = L["Ignore armor type: cloth"],
-        },
-        {
-            id = "tooltip_item_ignore_leather",
-            txt = L["Ignore armor type: leather"],
-        },
-        {
-            id = "tooltip_item_ignore_mail",
-            txt = L["Ignore armor type: mail"],
-        },
-        {
-            id = "tooltip_item_ignore_plate",
-            txt = L["Ignore armor type: plate"],
-        },
-    }, pframe, 2, nil)) do
-        tifs[#tifs + 1] = v;
-    end
+    }, 2);
 
-    pframe.y_offset = pframe.y_offset - 30;
-
+    section(L["Items to compare"]);
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset);
+    f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset - 5);
     f_txt:SetText(L["Quality threshold"]);
     f_txt:SetTextColor(1.0, 1.0, 1.0);
     tifs[#tifs + 1] = f_txt;
@@ -517,7 +496,50 @@ local function create_tooltip_items_frame(pframe)
     end);
     tifs[#tifs + 1] = pframe.quality_dd;
 
-    pframe.y_offset = pframe.y_offset - 30;
+    pframe.y_offset = pframe.y_offset - 28;
+
+    checks({
+        {
+            id = "tooltip_item_ignore_unequippable",
+            txt = L["Ignore unequippable by class"],
+        },
+    }, 1);
+
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(GameFontHighlight);
+    f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset - 5);
+    f_txt:SetText(L["Ignore armor type:"]);
+    tifs[#tifs + 1] = f_txt;
+    local armor_checks = checks({
+        {
+            id = "tooltip_item_ignore_cloth",
+            txt = L["Cloth"],
+        },
+        {
+            id = "tooltip_item_ignore_leather",
+            txt = L["Leather"],
+        },
+        {
+            id = "tooltip_item_ignore_mail",
+            txt = L["Mail"],
+        },
+        {
+            id = "tooltip_item_ignore_plate",
+            txt = L["Plate"],
+        },
+    }, 4);
+    -- one row after the label, each box right after the previous text, clickable on its own text only
+    local x = 30 + f_txt:GetStringWidth();
+    for _, v in ipairs(armor_checks) do
+        local w = getglobal(v:GetName() .. "Text"):GetStringWidth();
+        local _, _, _, _, y = v:GetPoint(1);
+        v:ClearAllPoints();
+        v:SetPoint("TOPLEFT", x, y);
+        v:SetHitRectInsets(0, -w, 0, 0);
+        x = x + w + 40;
+    end
+
+    pframe.y_offset = pframe.y_offset - 10;
 
     make_frame_scrollable(pframe);
 end

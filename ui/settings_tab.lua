@@ -11,6 +11,7 @@ local average_proc_sidebuffer   = ui.average_proc_sidebuffer;
 local dump_text                 = ui.dump_text;
 local libDD                     = ui.libDD;
 local libstub_icon              = ui.libstub_icon;
+local make_divider              = ui.make_divider;
 local make_frame_scrollable     = ui.make_frame_scrollable;
 local multi_row_checkbutton     = ui.multi_row_checkbutton;
 local register_text_frame_color = ui.register_text_frame_color;
@@ -69,6 +70,8 @@ local function create_sw_ui_settings_frame(pframe)
 
     if sc.loc.locale_found then
 
+        make_divider(pframe);
+        pframe.y_offset = pframe.y_offset - 10;
         f_txt = pframe:CreateFontString(nil, "OVERLAY");
         f_txt:SetFontObject(GameFontNormal);
         f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
@@ -126,6 +129,8 @@ local function create_sw_ui_settings_frame(pframe)
         pframe.y_offset = pframe.y_offset - 25;
     end
 
+    make_divider(pframe);
+    pframe.y_offset = pframe.y_offset - 10;
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
     f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
@@ -177,7 +182,9 @@ local function create_sw_ui_settings_frame(pframe)
 
     multi_row_checkbutton(spell_settings, pframe, 1);
 
-    pframe.y_offset = pframe.y_offset - 5;
+    pframe.y_offset = pframe.y_offset - 10;
+    make_divider(pframe);
+    pframe.y_offset = pframe.y_offset - 10;
     f_txt = pframe:CreateFontString(nil, "OVERLAY");
     f_txt:SetFontObject(GameFontNormal);
     f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
@@ -202,6 +209,8 @@ local function create_sw_ui_settings_frame(pframe)
     };
     multi_row_checkbutton(calc_settings, pframe, 1);
 
+    pframe.y_offset = pframe.y_offset - 10;
+    make_divider(pframe);
     pframe.y_offset = pframe.y_offset - 10;
 
     f_txt = pframe:CreateFontString(nil, "OVERLAY");

@@ -2606,6 +2606,7 @@ local function make_item_tooltip_data(tooltip)
         tooltip_item_link_last = "",
         item_tooltip_frames_hidden = false,
         item_tooltip_effects_update_id = 0,
+        cmp_uses_mana = false,
         new_item = {},
         old_item1 = {},
         old_item2 = {},
@@ -2781,6 +2782,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
     -- TODO: might want to compare item link string
     if tt.tooltip_item_link_last ~= tt.new_item.link or updated or mod_change then
         -- actual evaluation update step and overwrites cache
+        tt.cmp_uses_mana = false;
 
         for item_fits_in_slot, slot in pairs(cmp_slots) do
             local slot_cmp;
@@ -2945,6 +2947,9 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                 end
                 if k and spells[k] then
                     if bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
+                        if spells[k].power_type == powers.mana then
+                            tt.cmp_uses_mana = true;
+                        end
 
                         i = i + 1;
                         slot_cmp.diff_list[i] = slot_cmp.diff_list[i] or { frames = make_item_tooltip_line_frames(tooltip) };
@@ -3033,13 +3038,13 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         header3 = L["Per sec"];
         fight_type_str = L["Repeated casts"];
         color_tag = "effect_per_sec";
-        mode_switch_tip = L["Hold ALT key for Casting until OOM change"];
+        mode_switch_tip = L["ALT: Cast until OOM"];
     else
         header2 = L["Effect"].."  ";
         header3 = L["Duration (s)"];
         fight_type_str = L["Cast until OOM"];
         color_tag = "effect_until_oom";
-        mode_switch_tip = L["Hold ALT key for Repeated casts change"];
+        mode_switch_tip = L["ALT: Repeated casts"];
     end
 
     tt.headers.first_fstr:SetText(header2);
@@ -3216,11 +3221,17 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             tooltip:AddLine(slot_cmp.diff_str);
         end
     end
-    if config.settings.tooltip_item_show_evaluation_modes and
-        bit.band(mod, sc.tooltip_mod_flags.ALT) == 0 and
-        not not_caster_class then
-
-        tooltip:AddLine(mode_switch_tip, 1, 1, 1);
+    if config.settings.tooltip_item_key_hints then
+        local hint = "";
+        if not config.settings.tooltip_item_stat_diff and bit.band(mod, sc.tooltip_mod_flags.SHIFT) == 0 then
+            hint = L["SHIFT: Stats"];
+        end
+        if tt.cmp_uses_mana and bit.band(mod, sc.tooltip_mod_flags.ALT) == 0 then
+            hint = hint == "" and mode_switch_tip or hint .. " | " .. mode_switch_tip;
+        end
+        if hint ~= "" then
+            tooltip:AddLine(hint, 1, 1, 1);
+        end
     end
     tt.item_tooltip_frames_hidden = false;
     tooltip:Show();

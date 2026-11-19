@@ -66,7 +66,7 @@ local default_settings     = {
     tooltip_item_apply_gems                                     = true,
     tooltip_item_apply_enchant                                  = false,
 
-    tooltip_item_show_evaluation_modes                          = false,
+    tooltip_item_key_hints                                      = true,
     tooltip_item_ignore_unequippable                            = false,
     tooltip_item_ignore_cloth                                   = false,
     tooltip_item_ignore_leather                                 = false,

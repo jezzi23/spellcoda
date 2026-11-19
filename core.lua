@@ -206,6 +206,89 @@ sc.tooltip_mod_flags = {
 
 local tooltip_time = 1.0/2.0;
 
+local legacy_tooltip_scripts = GameTooltip:HasScript("OnTooltipSetSpell");
+
+-- Blizzard sets the item again every 0.2 s only when the tooltip's owner has UpdateTooltip (bags, character slots),
+-- the other item tooltips are redrawn here when a modifier key changes
+local key_mod_mask = bit.bor(sc.tooltip_mod_flags.ALT, sc.tooltip_mod_flags.CTRL, sc.tooltip_mod_flags.SHIFT);
+local item_tooltip_mods = { [GameTooltip] = 0, [ItemRefTooltip] = 0 };
+-- line count once the tooltip is filled, a different count means lines added outside the item hooks that a redraw
+-- would lose
+local item_tooltip_lines = {};
+local item_ref_link;
+-- legacy clients keep no tooltip data to rebuild from, the last item setter of GameTooltip is called again
+local last_item_setter;
+
+if legacy_tooltip_scripts then
+    for _, method in ipairs({
+        "SetHyperlink", "SetItemByID", "SetBagItem", "SetInventoryItem", "SetLootItem", "SetLootRollItem",
+        "SetMerchantItem", "SetBuybackItem", "SetQuestItem", "SetQuestLogItem", "SetAuctionItem",
+        "SetAuctionSellItem", "SetInboxItem", "SetSendMailItem", "SetTradePlayerItem", "SetTradeTargetItem",
+        "SetCraftItem", "SetTradeSkillItem",
+    }) do
+        if GameTooltip[method] then
+            hooksecurefunc(GameTooltip, method, function(self, ...)
+                local _, link = self:GetItem();
+                if link then
+                    last_item_setter = { method = method, owner = self:GetOwner(), link = link,
+                                         n = select("#", ...), ... };
+                end
+            end);
+        end
+    end
+end
+
+local function redraw_item_tooltip(tooltip)
+    if tooltip == ItemRefTooltip then
+        if legacy_tooltip_scripts then
+            tooltip:SetHyperlink(item_ref_link);
+            -- setting the shown link again may close it, as a second click on the link does
+            if not tooltip:IsShown() then
+                tooltip:SetOwner(UIParent, "ANCHOR_PRESERVE");
+                tooltip:SetHyperlink(item_ref_link);
+            end
+        else
+            tooltip:RefreshData();
+            local mod = key_mod_flags();
+            local mod_change = mod ~= item_tooltip_mods[tooltip];
+            item_tooltip_mods[tooltip] = mod;
+            write_item_tooltip(tooltip, mod, mod_change, item_ref_link);
+        end
+    elseif legacy_tooltip_scripts then
+        local s = last_item_setter;
+        if not s or s.owner ~= tooltip:GetOwner() or s.link ~= select(2, tooltip:GetItem()) then
+            return;
+        end
+        tooltip[s.method](tooltip, unpack(s, 1, s.n));
+    else
+        tooltip:RefreshData();
+    end
+    item_tooltip_lines[tooltip] = tooltip:NumLines();
+end
+
+local function refresh_item_tooltip(tooltip, mod)
+    if not tooltip:IsShown() or not tooltip:GetItem() then
+        return;
+    end
+    local lines = tooltip:NumLines();
+    if not item_tooltip_lines[tooltip] then
+        item_tooltip_lines[tooltip] = lines;
+    end
+    if bit.band(mod, key_mod_mask) == bit.band(item_tooltip_mods[tooltip], key_mod_mask) or
+        lines ~= item_tooltip_lines[tooltip] then
+        return;
+    end
+    if tooltip == GameTooltip then
+        local owner = tooltip:GetOwner();
+        if (owner and owner.UpdateTooltip) or tooltip.UpdateTooltip then
+            return;
+        end
+    elseif not item_ref_link then
+        return;
+    end
+    redraw_item_tooltip(tooltip);
+end
+
 local refreshing_tooltip = false;
 local tooltip_dt = 0.1;
 local tooltip_refresh_scheduled = false;
@@ -229,6 +312,12 @@ local function refresh_tooltip()
     elseif calc_frame_open and __sc_frame.calculator_frame.calculator_plan_changed then
         -- lower response time of calc updates when plan changed
         sc.ui.update_calc_list(false);
+    end
+
+    if not config.settings.tooltip_disable_item then
+        local mod = key_mod_flags();
+        refresh_item_tooltip(GameTooltip, mod);
+        refresh_item_tooltip(ItemRefTooltip, mod);
     end
 
     if config.settings.tooltip_disable then
@@ -546,18 +635,17 @@ local function on_tooltip_set_spell()
     end
 end
 
-local item_tooltip_mod = 0;
 local function on_tooltip_set_item(self)
     if not config.settings.tooltip_disable_item then
         core.activate_tooltip_refresh();
         local mod = key_mod_flags();
-        local mod_change = mod ~= item_tooltip_mod;
-        item_tooltip_mod = mod;
+        local mod_change = mod ~= item_tooltip_mods[self];
+        item_tooltip_mods[self] = mod;
+        item_tooltip_lines[self] = nil;
         write_item_tooltip(self, mod, mod_change);
     end
 end
 
-local legacy_tooltip_scripts = GameTooltip:HasScript("OnTooltipSetSpell");
 if legacy_tooltip_scripts then
     GameTooltip:HookScript("OnTooltipSetSpell", on_tooltip_set_spell);
     GameTooltip:HookScript("OnTooltipSetItem", on_tooltip_set_item);
@@ -580,11 +668,14 @@ else
 end
 
 hooksecurefunc(ItemRefTooltip, "SetHyperlink", function(self, link)
-    if not config.settings.tooltip_disable_item then
+    item_ref_link = link;
+    item_tooltip_lines[self] = nil;
+    -- not shown after the call that closed a shown link
+    if not config.settings.tooltip_disable_item and self:IsShown() then
         core.activate_tooltip_refresh();
         local mod = key_mod_flags();
-        local mod_change = mod ~= item_tooltip_mod;
-        item_tooltip_mod = mod;
+        local mod_change = mod ~= item_tooltip_mods[self];
+        item_tooltip_mods[self] = mod;
         write_item_tooltip(self, mod, mod_change, link);
     end
 end);
@@ -599,6 +690,7 @@ ItemRefTooltip:HookScript("OnShow", function(self)
 end);
 
 GameTooltip:HookScript("OnTooltipCleared", function(self)
+    last_item_setter = nil;
     on_clear_tooltip(self);
 end);
 GameTooltip:HookScript("OnHide", function(self)

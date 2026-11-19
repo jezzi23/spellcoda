@@ -479,6 +479,16 @@ local function multi_row_checkbutton(buttons_info, parent_frame, num_columns, fu
     return frames;
 end
 
+-- a line across the frame at its y offset, one anchor so make_frame_scrollable can move it
+local function make_divider(frame)
+    local div = frame:CreateTexture(nil, "ARTWORK");
+    div:SetColorTexture(0.5, 0.5, 0.5, 0.6);
+    div:SetHeight(1);
+    div:SetWidth(frame:GetWidth());
+    div:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, frame.y_offset);
+    return div;
+end
+
 local function make_frame_scrollable(frame)
 
     local height = frame:GetHeight();
@@ -542,6 +552,7 @@ ui.create_sw_spell_id_viewer = create_sw_spell_id_viewer;
 ui.create_subtabs            = create_subtabs;
 ui.create_tab_button         = create_tab_button;
 ui.layout_tabs               = layout_tabs;
+ui.make_divider              = make_divider;
 ui.make_frame_scrollable     = make_frame_scrollable;
 ui.multi_row_checkbutton     = multi_row_checkbutton;
 ui.select_tab                = select_tab;
