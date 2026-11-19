@@ -222,6 +222,12 @@ elseif sc.class == sc.classes.priest then
 
 elseif sc.class == sc.classes.shaman then
 
+    for _, v in pairs(rank_seqs[spids.frostbrand_weapon]) do
+        if sc.procs[v] then
+            sc.procs[v].ppm = 9; -- unconfirmed
+        end
+    end
+
     lookups.averaged_procs = {
         16246 -- clearcast
     };
@@ -276,6 +282,12 @@ elseif sc.class == sc.classes.rogue then
     end
 
 elseif sc.class == sc.classes.paladin then
+
+    for _, v in pairs(rank_seqs[spids.seal_of_command]) do
+        if sc.procs[v] then
+            sc.procs[v].ppm = 7; -- unconfirmed
+        end
+    end
 
     for _, seal in ipairs({spids.seal_of_light, spids.seal_of_wisdom}) do
         for _, v in pairs(rank_seqs[seal]) do

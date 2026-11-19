@@ -289,19 +289,27 @@ local function sort_stat_weights(weights, sort_by_field)
     end
 end
 
+local function school_suffix(school)
+    return (school and " (" .. school .. ")") or "";
+end
+
 local function format_bounce_spell(min_hit, max_hit, bounces, falloff)
     local bounce_str = "     + ";
-    for _ = 1, bounces - 1 do
-        bounce_str = bounce_str .. string.format(" %.0f %s %.0f  + ",
-            math.floor(falloff * min_hit),
-            L["to"],
-            math.ceil(falloff * max_hit));
-        falloff = falloff * falloff;
+    local mul = 1.0;
+    for i = 1, bounces do
+        mul = mul * falloff;
+        if min_hit == max_hit then
+            bounce_str = bounce_str .. string.format(" %.1f", mul * min_hit);
+        else
+            bounce_str = bounce_str .. string.format(" %.0f %s %.0f",
+                math.floor(mul * min_hit),
+                L["to"],
+                math.ceil(mul * max_hit));
+        end
+        if i < bounces then
+            bounce_str = bounce_str .. "  + ";
+        end
     end
-    bounce_str = bounce_str .. string.format(" %.0f %s %.0f",
-        math.floor(falloff * min_hit),
-            L["to"],
-        math.ceil(falloff * max_hit));
     return bounce_str;
 end
 
@@ -1013,7 +1021,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         end
 
         for i = 1, info.num_direct_effects do
-            if i ~= 1 or not spell.direct then
+            if (i ~= 1 or not spell.direct) and bit.band(info["direct_flags" .. i], effect_flags.hidden) == 0 then
                 local oh = "";
                 if info.oh_info then
                     oh = " | ...";
@@ -1043,9 +1051,10 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                         string.format("%s (%.2f%%):",
                             info["direct_description" .. i],
                             100 * info["hit_normal" .. i] * info["direct_utilization" .. i]),
-                        string.format("%.0f to %.0f%s",
+                        string.format("%.0f to %.0f%s%s",
                             math.floor(info["min_noncrit_if_hit" .. i]),
                             math.ceil(info["max_noncrit_if_hit" .. i]),
+                            school_suffix(info["direct_school" .. i]),
                             oh),
                         effect_color("normal")
                     );
@@ -1055,9 +1064,25 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                         string.format("%s (%.2f%%):",
                             info["direct_description" .. i],
                             100 * info["hit_normal" .. i] * info["direct_utilization" .. i]),
-                        string.format("%.1f%s",
+                        string.format("%.1f%s%s",
                             info["min_noncrit_if_hit" .. i],
+                            school_suffix(info["direct_school" .. i]),
                             oh),
+                        effect_color("normal")
+                    );
+                end
+                local jumps = info["direct_jumps" .. i];
+                if jumps and jumps ~= 0 and info["direct_jump_amp" .. i] ~= 1 and
+                    info["min_noncrit_if_hit" .. i] ~= 0 and
+                    bit.band(eval_flags, evaluation_flags.assume_single_effect) == 0 then
+                    add_line(tooltip,
+                        "",
+                        format_bounce_spell(
+                            info["min_noncrit_if_hit" .. i],
+                            info["max_noncrit_if_hit" .. i],
+                            jumps,
+                            info["direct_jump_amp" .. i]
+                        ),
                         effect_color("normal")
                     );
                 end
@@ -1140,7 +1165,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         end
 
         for i = 1, info.num_direct_effects do
-            if i ~= 1 or not spell.direct then
+            if (i ~= 1 or not spell.direct) and bit.band(info["direct_flags" .. i], effect_flags.hidden) == 0 then
                 if info["crit" .. i] ~= 0 then
                     if info["min_crit_if_hit" .. i] ~= info["max_crit_if_hit" .. i] then
                         add_line(
@@ -1148,9 +1173,10 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                             string.format("%s (%.2f%%):",
                                 info["direct_description" .. i],
                                 100 * info["crit" .. i] * info["direct_utilization" .. i]),
-                            string.format("%.0f to %.0f",
+                            string.format("%.0f to %.0f%s",
                                 math.floor(info["min_crit_if_hit" .. i]),
-                                math.ceil(info["max_crit_if_hit" .. i])),
+                                math.ceil(info["max_crit_if_hit" .. i]),
+                                school_suffix(info["direct_school" .. i])),
                             effect_color("crit")
                         );
                     else
@@ -1159,8 +1185,9 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                             string.format("%s (%.2f%%):",
                                 info["direct_description" .. i],
                                 100 * info["crit" .. i] * info["direct_utilization" .. i]),
-                            string.format("%.1f",
-                                info["min_crit_if_hit" .. i]),
+                            string.format("%.1f%s",
+                                info["min_crit_if_hit" .. i],
+                                school_suffix(info["direct_school" .. i])),
                             effect_color("crit")
                         );
                     end

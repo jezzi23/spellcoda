@@ -6,6 +6,8 @@ local special_item_properties          = sc.special_item_properties;
 
 local apply_effect                     = sc.loadouts.apply_effect;
 local apply_flat_scaled                = sc.loadouts.apply_flat_scaled;
+local apply_proc                       = sc.loadouts.apply_proc;
+local apply_procs                      = sc.loadouts.apply_procs;
 local write_item_info_from_link        = sc.utils.write_item_info_from_link;
 local request_item_data                = sc.utils.request_item_data;
 local is_secret                        = sc.utils.is_secret;
@@ -409,6 +411,9 @@ local function apply_enchant(effects, enchant_id, forced, undo, slot)
     if slot and wpn_strs[slot] and sc.damage_enchants[enchant_id] then
         apply_damage_enchant(effects, sc.damage_enchants[enchant_id], slot, undo);
     end
+    if slot then
+        apply_procs(effects, sc.enchant_procs[enchant_id], wpn_strs[slot] or "any", undo);
+    end
 
     if sc.enchants[enchant_id] then
         for _, effect_id in pairs(sc.enchants[enchant_id]) do
@@ -547,6 +552,8 @@ local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems,
         end
     end
 
+    apply_procs(effects, sc.item_procs[item_info.id], wpn_strs[slot] or "any", undo);
+
     apply_item_stats(effects, item_info.link, true, undo);
 
     if should_apply_gems then
@@ -621,6 +628,14 @@ local function apply_set_bonuses(effects, force, undo, shapeshift)
 
     for set_id, num in pairs(effects.num_set_pieces) do
         if num > 1 then
+            local procs = sc.set_procs[set_id];
+            if procs then
+                for _, v in pairs(procs) do
+                    if num >= v[1] then
+                        apply_proc(effects, v[2], "any", undo);
+                    end
+                end
+            end
             local bonuses = sc.set_bonuses[set_id];
             if bonuses then -- remove this check when old sets handling is gone
                 for _, v in pairs(bonuses) do
@@ -734,6 +749,9 @@ local function apply_equipment(loadout, effects)
                     apply_effect(effects, effect_id, sc.item_effects[effect_id], false, 1.0);
                 end
             end
+            if id then
+                apply_procs(effects, sc.item_procs[id], wpn_strs[item] or "any", false);
+            end
             apply_item_stats(effects, item_link, false, false);
             found_anything = true;
             local _, enchant_id, gem1, gem2, gem3, gem4, suffix_id =
@@ -774,12 +792,14 @@ local function apply_equipment(loadout, effects)
         end
     end
 
-    local _, _, _, enchant_id = GetWeaponEnchantInfo();
+    local enchant_id = loadout.temp_enchant_mh;
     if sc.enchants[enchant_id] then
          -- may need to deal with weapon slots here instead of nil
         local slot = nil;
         apply_enchant(effects, enchant_id, false, false, slot);
     end
+    apply_procs(effects, sc.enchant_procs[loadout.temp_enchant_mh], "mh", false);
+    apply_procs(effects, sc.enchant_procs[loadout.temp_enchant_oh], "oh", false);
 
     if bit.band(sc.game_mode, sc.game_modes.season_of_discovery) ~= 0 then
         for _, i in pairs(slots) do
@@ -788,6 +808,7 @@ local function apply_equipment(loadout, effects)
                 local ench_id = rune_slot.itemEnchantmentID;
                 if ench_id then
                     apply_enchant(effects, ench_id, false, false, nil);
+                    apply_procs(effects, sc.enchant_procs[ench_id], "any", false);
                 end
             end
         end
@@ -826,6 +847,13 @@ local function apply_equipment(loadout, effects)
             end
         end
         print(enchants_applied, "gen enchants applied");
+
+        local procs_applied = 0;
+        for id in pairs(sc.procs) do
+            effects.procs.any[id] = 1;
+            procs_applied = procs_applied + 1;
+        end
+        print(procs_applied, "gen procs applied");
     end
 
     return found_anything;

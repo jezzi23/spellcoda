@@ -635,6 +635,10 @@ local item_planner_gem_enchant_dropdown_entries = {};
 local item_planner_gem_enchant_dropdown_filtered = {};
 local item_planner_gem_enchant_dropdown_rows_count = 12;
 local item_planner_enchant_icon_tex = "Interface\\Icons\\Trade_Engraving";
+local temporary_enchants = {};
+for _, enchant_id in pairs(sc.temp_enchant_spells) do
+    temporary_enchants[enchant_id] = true;
+end
 local item_planner_dropdown_check_tex = "Interface\\Buttons\\UI-CheckBox-Check";
 local item_planner_dropdown_none_tex = "Interface\\Buttons\\UI-GroupLoot-Pass-Up";
 local item_planner_dropdown_missing_tex = "Interface\\Icons\\INV_Misc_QuestionMark";
@@ -771,9 +775,10 @@ local function item_planner_gem_enchant_dropdown_build_entries(mode, active_id)
     else
         for enchant_id, lname in pairs(sc.enchant_id_to_lname) do
             -- filter out some enchants intended as ilvl based suffix scaling effect
-            if sc.enchants[enchant_id] and
+            if (sc.enchants[enchant_id] and
                 sc.enchant_effects[sc.enchants[enchant_id][1]] and
-                sc.enchant_effects[sc.enchants[enchant_id][1]][1][sc.aura_idx_value] ~= 0 then
+                sc.enchant_effects[sc.enchants[enchant_id][1]][1][sc.aura_idx_value] ~= 0) or
+                (sc.enchant_procs[enchant_id] and not temporary_enchants[enchant_id]) then
 
                 n = n + 1;
                 item_planner_gem_enchant_dropdown_entries[n] = {

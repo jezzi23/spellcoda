@@ -255,6 +255,7 @@ local default_settings     = {
     general_prio_heal                                           = true,
     general_prio_multiplied_effect                              = true,
     general_average_proc_effects                                = true,
+    general_on_hit_procs                                        = true,
 
     -- general calc settings
     general_calc_secondary_tooltip                              = true,

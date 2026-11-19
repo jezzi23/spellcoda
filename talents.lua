@@ -3,6 +3,7 @@ local _, sc                = ...;
 local class                 = sc.class;
 local config                = sc.config;
 local apply_effect          = sc.loadouts.apply_effect;
+local apply_proc            = sc.loadouts.apply_proc;
 ---------------------------------------------------------------------------------------------------
 local talents_export        = {};
 
@@ -140,6 +141,10 @@ local function apply_talents(loadout, effects, wowhead_code, forced, undo)
                                  forced,
                                  1,
                                  undo);
+                    -- a castable talent (Seal of Command) procs through its buff
+                    if sc.procs[effect_id] and not sc.spells[effect_id] then
+                        apply_proc(effects, effect_id, "any", undo);
+                    end
                 end
             elseif pts > 0 then
                 local node_id = sc.talent_nodes[tree_index] and sc.talent_nodes[tree_index][talent_index];
@@ -154,6 +159,10 @@ local function apply_talents(loadout, effects, wowhead_code, forced, undo)
                                  nil,
                                  nil,
                                  pts);
+                    -- a castable talent (Seal of Command) procs through its buff
+                    if sc.procs[effect_id] and not sc.spells[effect_id] then
+                        apply_proc(effects, effect_id, "any", undo);
+                    end
                 end
             end
 

@@ -1,6 +1,8 @@
 local _, sc               = ...;
 
 local apply_effect        = sc.loadouts.apply_effect;
+local apply_proc          = sc.loadouts.apply_proc;
+local apply_procs         = sc.loadouts.apply_procs;
 local is_secret           = sc.utils.is_secret;
 local any_secret          = sc.utils.any_secret;
 local client_matches      = sc.utils.client_matches;
@@ -44,6 +46,25 @@ for k, _ in pairs(sc.enchant_effects) do
         unique_buffs[k] = {
             id = k,
             --lname = C_Spell.GetSpellName(sc.enchant_effects[k]),
+            lname = C_Spell.GetSpellName(k),
+            cat = buff_category.enchant,
+        };
+    end
+end
+-- seals that only proc (Vanilla / TBC Seal of Command) have no class_buffs entry
+for k, _ in pairs(sc.procs) do
+    if sc.spells[k] and not sc.temp_enchant_spells[k] and not unique_buffs[k] then
+        unique_buffs[k] = {
+            id = k,
+            lname = C_Spell.GetSpellName(k),
+            cat = buff_category.class,
+        };
+    end
+end
+for k, _ in pairs(sc.temp_enchant_spells) do
+    if not unique_buffs[k] then
+        unique_buffs[k] = {
+            id = k,
             lname = C_Spell.GetSpellName(k),
             cat = buff_category.enchant,
         };
@@ -812,6 +833,10 @@ local function apply_buffs(loadout, effects, forced, undo)
             elseif sc.player_buffs[k] then
                 apply_effect(effects, k, sc.player_buffs[k], forced, v.count, undo, v.player_owned);
             end
+            -- seals only, the Windfury Totem buff 8516 also has a proc entry
+            if sc.procs[k] and sc.spells[k] and not sc.temp_enchant_spells[k] then
+                apply_proc(effects, k, "any", undo);
+            end
         end
         for k, v in pairs(loadout.dynamic_buffs[loadout.friendly_towards]) do
             if sc.friendly_buffs[k] then
@@ -855,6 +880,11 @@ local function apply_fake_buffs(loadout, effects, buffs_cfg)
                 apply_effect(effects, k, sc.player_buffs[k], true, cnt, false, true);
             elseif sc.enchant_effects[k] then
                 apply_effect(effects, k, sc.enchant_effects[k], true, cnt, false, true);
+            end
+            if sc.temp_enchant_spells[k] then
+                apply_procs(effects, sc.enchant_procs[sc.temp_enchant_spells[k]], "mh", false);
+            elseif sc.procs[k] and sc.spells[k] then
+                apply_proc(effects, k, "any", false);
             end
         end
     end

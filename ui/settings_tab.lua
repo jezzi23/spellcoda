@@ -178,6 +178,11 @@ local function create_sw_ui_settings_frame(pframe)
                 end
             end
         },
+        {
+            id = "general_on_hit_procs",
+            txt = L["On hit proc effects"],
+            tooltip = L["Adds the expected damage of on hit effects to attacks and the abilities that trigger them. Example: Windfury, Hand of Justice, chance on hit weapons and weapon enchants."],
+        },
     };
 
     multi_row_checkbutton(spell_settings, pframe, 1);

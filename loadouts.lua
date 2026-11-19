@@ -99,6 +99,8 @@ local loadout_numbers = {
     "target_defense",
     "target_creature_mask",
     "target_res",
+    "temp_enchant_mh",
+    "temp_enchant_oh",
 };
 
 local ratings = {
@@ -250,6 +252,7 @@ local effect_categories = {
     "num_set_pieces",
     "enchants",
     "talent_pts",
+    "procs",
 };
 
 local effects_additive = {
@@ -467,6 +470,8 @@ local function empty_effects(effects)
     effects.enchants = {};
     effects.num_set_pieces = {};
     effects.talent_pts = {};
+    -- proc ids by the hits that fire them: any, or one weapon's
+    effects.procs = {any = {}, mh = {}, oh = {}, ranged = {}};
 
     for _, v in pairs(effects_multiplicative.by_school) do
         effects.mul.by_school[v] = {1, 1, 1, 1, 1, 1, 1};
@@ -748,6 +753,12 @@ local function init_lnames()
     lnames = {
         schools =
             {L["Physical"], L["Holy"], L["Fire"], L["Nature"], L["Frost"], L["Shadow"], L["Arcane"]},
+        on_hit = {
+            {"any", L["On hit"], bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)},
+            {"mh", L["On hit, main hand"], stat_diff_flags.melee},
+            {"oh", L["On hit, off hand"], stat_diff_flags.melee},
+            {"ranged", L["On hit, ranged"], stat_diff_flags.ranged},
+        },
         attributes =
             {L["Strength"], L["Agility"], L["Stamina"], L["Intellect"], L["Spirit"]},
             -- some selected ability fields to show
@@ -1558,6 +1569,18 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
         end
     end
 
+    ---------------------------------
+    --- On hit procs
+    ---------------------------------
+
+    for _, v in ipairs(lnames.on_hit) do
+        if bit.band(stat_flags, v[3]) ~= 0 then
+            for id, count in pairs(effects.procs[v[1]]) do
+                add_field_line(info, count, v[2]..": "..(spell_lname(id) or tostring(id)), is_diff);
+            end
+        end
+    end
+
     return info.str, info.num_in + info.num_out, info.num_in, info.num_out;
 end
 
@@ -2132,6 +2155,10 @@ local function dynamic_loadout(loadout, prev)
         loadout.cr_scaling = 1;
     end
 
+    local _, _, _, mh_enchant, _, _, _, oh_enchant = GetWeaponEnchantInfo();
+    loadout.temp_enchant_mh = mh_enchant or 0;
+    loadout.temp_enchant_oh = oh_enchant or 0;
+
     loadout.shapeshift = GetShapeshiftForm();
     if class == classes.druid and loadout.shapeshift ~= 0 and loadout.shapeshift ~= 5 then
         loadout.shapeshift_feral_skill = 1;
@@ -2404,6 +2431,20 @@ local function apply_effect(effects, spid, auras, forced, stacks, undo, player_o
     end
 end
 
+local function apply_proc(effects, proc_id, from, undo)
+    local counts = effects.procs[from];
+    counts[proc_id] = (counts[proc_id] or 0) + ((undo and -1) or 1);
+end
+
+local function apply_procs(effects, proc_ids, from, undo)
+    if not proc_ids then
+        return;
+    end
+    for _, id in pairs(proc_ids) do
+        apply_proc(effects, id, from, undo);
+    end
+end
+
 -- adds the aura values times amount, for additive auras scaled by a count like the points of an item stat
 local function apply_flat_scaled(effects, auras, amount, forced)
     for _, aura in pairs(auras) do
@@ -2615,6 +2656,11 @@ local function update_loadout_and_effects(relaxed_update_dt)
     end
     dynamic_loadout(other, loadout_front);
     loadout_read_id = loadout_read_id + 1;
+    -- temporary enchants raise no PLAYER_EQUIPMENT_CHANGED
+    if other.temp_enchant_mh ~= loadout_front.temp_enchant_mh or
+        other.temp_enchant_oh ~= loadout_front.temp_enchant_oh then
+        sc.core.equipment_update_needed = true;
+    end
 
     -- the legacy spellbook recycles its buttons without notice, the modern one forces an update itself (overlay.hook_spell_book)
     if not (SpellBookFrame and SpellBookFrame:IsShown()) and
@@ -2895,6 +2941,9 @@ loadouts.calculator_has_changes                       = calculator_has_changes;
 loadouts.loadout_flags                                = loadout_flags;
 loadouts.apply_effect                                 = apply_effect;
 loadouts.apply_flat_scaled                            = apply_flat_scaled;
+loadouts.apply_proc                                   = apply_proc;
+loadouts.live_effects                                 = function() return final; end;
+loadouts.apply_procs                                  = apply_procs;
 loadouts.stats_diff_format                            = stats_diff_format;
 loadouts.diffed_stats_diff_format                     = diffed_stats_diff_format;
 loadouts.stats_format                                 = stats_format;

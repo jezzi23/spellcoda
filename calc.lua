@@ -63,6 +63,7 @@ local cr_weights                                    = sc.scaling.cr_weights;
 
 local effect_flags                                  = sc.calc.effect_flags;
 local add_extra_effect                              = sc.calc.add_extra_effect;
+local add_extra_effect_own                          = sc.calc.add_extra_effect_own;
 local indexed_keys                                  = sc.calc.indexed_keys;
 local school_keys                                   = indexed_keys.school;
 
@@ -87,6 +88,18 @@ local stats_buffer = {};
 
 local secondary_info = {};
 local secondary_stats = {};
+
+-- own evaluation tables: the off hand evaluation of dual wield attacks uses secondary_info
+local on_hit = {
+    info = {},
+    stats = {},
+    extra_ap = 0,
+    cache = {mh = {}, oh = {}, ranged = {}},
+    cache_read_id = -1,
+    cache_loadout = nil,
+    cache_flags = -1,
+    special_attack = nil,
+};
 
 local fight_types   = {
     repeated_casts = 1,
@@ -124,6 +137,7 @@ local evaluation_flags = {
     fix_weapon_skill_to_level               = bit_lshift(1, 8),
     at_max_mana                             = bit_lshift(1, 9),
     at_max_hp                               = bit_lshift(1, 10), -- player hp
+    no_on_hit_procs                         = bit_lshift(1, 11),
 
     -- combo points value shifted, reserve 3 bits for max 5 points
     num_combo_points_bit_start              = 20,
@@ -650,7 +664,7 @@ local function stats_sp(sp_extra, bid, comp, spell, loadout, effects)
         if bit_band(spell.flags, spell_flags.requires_ranged_slot) ~= 0 then
             sp = loadout.rap + effects.raw.rap_flat + creature_flat(effects, loadout, "rap_flat");
         else
-            sp = loadout.ap + effects.raw.ap_flat + creature_flat(effects, loadout, "ap_flat");
+            sp = loadout.ap + effects.raw.ap_flat + creature_flat(effects, loadout, "ap_flat") + on_hit.extra_ap;
         end
     else
         if bid == auto_wand_spell_id then
@@ -920,8 +934,34 @@ local function mh_swing_time(loadout, effects)
     end
 end
 
+local function oh_swing_time(loadout, effects)
+    local haste_mul_from_rating = 1.0 +
+        0.01*(loadout.melee_haste_rating+effects.raw.melee_haste_rating_flat)/
+            (loadout.cr_scaling * cr_weights[CR_HASTE_MELEE]);
+    return effects.raw.wpn_delay_oh /
+        (effects.mul.raw.melee_haste*effects.mul.raw.melee_haste_forced*haste_mul_from_rating);
+end
+
+local function ranged_swing_time(loadout, effects)
+    local haste_mul_from_rating = 1.0 +
+        0.01*(loadout.ranged_haste_rating+effects.raw.ranged_haste_rating_flat)/
+            (loadout.cr_scaling * cr_weights[CR_HASTE_RANGED]);
+    local ranged_delay;
+    if effects.raw.wpn_delay_ranged == 0 then
+        ranged_delay = 2.0;
+    else
+        ranged_delay = effects.raw.wpn_delay_ranged;
+    end
+    return ranged_delay /
+        (effects.mul.raw.ranged_haste*effects.mul.raw.ranged_haste_forced*haste_mul_from_rating);
+end
+
 -- chance that a main hand swing lands and procs a per swing component
 local function per_swing_chance(periodic, loadout, effects, eval_flags)
+    -- the attack's proc line applies landing and proc chance
+    if bit_band(eval_flags, evaluation_flags.no_on_hit_procs) ~= 0 then
+        return 1.0;
+    end
     local attack = spells[auto_attack_spell_id];
     local skill, _, subclass = stats_attack_skill(attack.direct, attack, loadout, effects, eval_flags);
     local miss = stats_hit(0, skill, subclass, auto_attack_spell_id, attack.direct, attack, loadout, effects);
@@ -949,25 +989,11 @@ local function stats_cast_time(stats, bid, comp, spell, loadout, effects, eval_f
             bit_band(comp.flags, comp_flags.applies_oh) ~= 0 and
             bit_band(eval_flags, evaluation_flags.isolate_oh) ~= 0 then
 
-            local haste_mul_from_rating = 1.0 +
-                0.01*(loadout.melee_haste_rating+effects.raw.melee_haste_rating_flat)/
-                    (loadout.cr_scaling * cr_weights[CR_HASTE_MELEE]);
-            cast_time = effects.raw.wpn_delay_oh /
-                (effects.mul.raw.melee_haste*effects.mul.raw.melee_haste_forced*haste_mul_from_rating);
+            cast_time = oh_swing_time(loadout, effects);
         elseif bit_band(comp.flags, comp_flags.applies_mh) ~= 0 then
             cast_time = mh_swing_time(loadout, effects);
         elseif bit_band(comp.flags, comp_flags.applies_ranged) ~= 0 then
-            local haste_mul_from_rating = 1.0 +
-                0.01*(loadout.ranged_haste_rating+effects.raw.ranged_haste_rating_flat)/
-                    (loadout.cr_scaling * cr_weights[CR_HASTE_RANGED]);
-            local ranged_delay;
-            if effects.raw.wpn_delay_ranged == 0 then
-                ranged_delay = 2.0;
-            else
-                ranged_delay = effects.raw.wpn_delay_ranged;
-            end
-            cast_time = ranged_delay /
-                (effects.mul.raw.ranged_haste*effects.mul.raw.ranged_haste_forced*haste_mul_from_rating);
+            cast_time = ranged_swing_time(loadout, effects);
         end
         return cast_time, cast_time;
     end
@@ -1131,6 +1157,8 @@ local function write_attack_table(stats, is_direct)
     stats[keys.crit_excess] = crit - stats[keys.crit];
 end
 
+local add_on_hit_procs;
+
 local function spell_stats_direct(stats, spell, loadout, effects, eval_flags)
 
     local bid = spell.base_id;
@@ -1199,6 +1227,13 @@ local function spell_stats_direct(stats, spell, loadout, effects, eval_flags)
                              );
         end
 
+    end
+    if config.settings.general_on_hit_procs and
+        bit_band(eval_flags, evaluation_flags.no_on_hit_procs) == 0 and
+        direct.school1 == schools.physical and
+        bit_band(direct.flags, comp_flags.no_attack) == 0 then
+
+        add_on_hit_procs(stats, spell, loadout, effects, eval_flags);
     end
 
 
@@ -1339,6 +1374,274 @@ for i, v in ipairs(stats_needing_both_components) do
 end
 
 local spell_stats_info;
+
+on_hit.eval_flags = bit_bor(evaluation_flags.assume_single_effect, evaluation_flags.fix_weapon_skill_to_level);
+on_hit.school_lnames = {L["Physical"], L["Holy"], L["Fire"], L["Nature"], L["Frost"], L["Shadow"], L["Arcane"]};
+
+function on_hit.cache_of(hand, loadout, effects, flags)
+    if effects ~= sc.loadouts.live_effects() then
+        return nil;
+    end
+    local read_id = loadout_read_id();
+    if on_hit.cache_read_id ~= read_id or on_hit.cache_loadout ~= loadout or on_hit.cache_flags ~= flags then
+        for _, entries in pairs(on_hit.cache) do
+            for k in pairs(entries) do
+                entries[k] = nil;
+            end
+        end
+        on_hit.cache_read_id = read_id;
+        on_hit.cache_loadout = loadout;
+        on_hit.cache_flags = flags;
+    end
+    return on_hit.cache[hand];
+end
+
+function on_hit.damage_entry(e, spell_id, loadout, effects, flags)
+    local spell = sc.proc_spells[spell_id];
+    local info, stats = on_hit.info, on_hit.stats;
+    spell_stats_info(info, stats, spell, loadout, effects, bit_bor(flags, evaluation_flags.no_on_hit_procs), spell_id);
+    e.none = not spell.direct or info.num_direct_effects == 0 or info.expected_direct_st == 0;
+    if e.none then
+        return;
+    end
+    local scale = 1.0 - stats.target_avg_resi;
+    e.desc = spell_lname(spell_id) or "";
+    e.school = on_hit.school_lnames[spell.direct.school1];
+    e.targets = info.expected_direct / info.expected_direct_st;
+    e.jumps = stats.direct_jumps;
+    e.jump_amp = stats.direct_jump_amp;
+    e.min = info.min_noncrit_if_hit1 * scale;
+    e.max = info.max_noncrit_if_hit1 * scale;
+    e.crit_min = info.min_crit_if_hit1 * scale;
+    e.crit_max = info.max_crit_if_hit1 * scale;
+    e.hit_normal = info.hit_normal1;
+    e.crit = info.crit1;
+end
+
+-- Windfury Weapon's hits are Attack under base id 0: the two roll table, no glance, no modifiers of Attack
+function on_hit.extra_entry(e, proc, proc_id, hand, loadout, effects, flags)
+    local attack = spells[auto_attack_spell_id];
+    if proc.extra_special then
+        if not on_hit.special_attack then
+            on_hit.special_attack = {};
+            for k, v in pairs(attack) do
+                on_hit.special_attack[k] = v;
+            end
+            on_hit.special_attack.base_id = 0;
+        end
+        attack = on_hit.special_attack;
+    end
+    local ap = proc.ap or 0;
+    if proc.ap_per_lvl then
+        ap = ap + proc.ap_per_lvl * (math_max(proc.ap_lvl_min, math_min(loadout.lvl, proc.ap_lvl_max)) - proc.ap_lvl_min);
+    end
+    local hand_flag = (hand == "oh" and evaluation_flags.isolate_oh) or evaluation_flags.isolate_mh;
+    local info, stats = on_hit.info, on_hit.stats;
+    on_hit.extra_ap = ap;
+    spell_stats_info(info, stats, attack, loadout, effects,
+                     bit_bor(flags, evaluation_flags.no_on_hit_procs, hand_flag), auto_attack_spell_id);
+    on_hit.extra_ap = 0;
+
+    local name = spell_lname(proc_id) or "";
+    if proc.extra_attacks > 1 then
+        name = string.format("%s %dx", name, proc.extra_attacks);
+    end
+    e.landed = stats.hit;
+    e.num_lines = info.num_direct_effects;
+    e.lines = e.lines or {};
+    for i = 1, info.num_direct_effects do
+        local l = e.lines[i] or {};
+        e.lines[i] = l;
+        if i == 1 then
+            l.desc = name;
+        else
+            l.desc = string.format("%s (%s)", name, info[indexed_keys.direct_description[i]] or "");
+        end
+        l.util = info[indexed_keys.direct_utilization[i]];
+        l.hit_normal = info[indexed_keys.hit_normal[i]];
+        l.crit = info[indexed_keys.crit[i]];
+        l.min = info[indexed_keys.min_noncrit_if_hit[i]];
+        l.max = info[indexed_keys.max_noncrit_if_hit[i]];
+        l.crit_min = info[indexed_keys.min_crit_if_hit[i]];
+        l.crit_max = info[indexed_keys.max_crit_if_hit[i]];
+    end
+end
+
+on_hit.scratch = {};
+
+function on_hit.per_swing_entry(e, spell_id, loadout, effects, flags)
+    local spell = spells[spell_id];
+    e.none = not spell or not spell.periodic;
+    if e.none then
+        return;
+    end
+    local info, stats = on_hit.info, on_hit.stats;
+    spell_stats_info(info, stats, spell, loadout, effects, bit_bor(flags, evaluation_flags.no_on_hit_procs), spell_id);
+    e.none = info.num_periodic_effects == 0 or info.ot_ticks1 == 0;
+    if e.none then
+        return;
+    end
+    -- periodic values are totals over all ticks
+    local scale = (1.0 - stats.target_avg_resi_ot) / info.ot_ticks1;
+    e.desc = spell_lname(spell_id) or "";
+    e.school = on_hit.school_lnames[spell.periodic.school1];
+    e.targets = 1.0;
+    e.jumps = 0;
+    e.jump_amp = 1.0;
+    e.min = info.ot_min_noncrit_if_hit1 * scale;
+    e.max = info.ot_max_noncrit_if_hit1 * scale;
+    e.crit_min = info.ot_min_crit_if_hit1 * scale;
+    e.crit_max = info.ot_max_crit_if_hit1 * scale;
+    e.hit_normal = info.ot_hit_normal1;
+    e.crit = info.ot_crit1;
+end
+
+function on_hit.entry(cache, key, proc, proc_id, hand, loadout, effects, flags)
+    local e = cache and cache[key];
+    if e then
+        return e;
+    end
+    if cache then
+        e = {};
+        cache[key] = e;
+    else
+        e = on_hit.scratch;
+    end
+    if proc.extra_attacks then
+        on_hit.extra_entry(e, proc, proc_id, hand, loadout, effects, flags);
+    elseif proc.per_swing then
+        on_hit.per_swing_entry(e, proc_id, loadout, effects, flags);
+    else
+        on_hit.damage_entry(e, proc.spell, loadout, effects, flags);
+    end
+    return e;
+end
+
+on_hit.ctx = {};
+
+-- with a cooldown p / (1 + k p), k the landed white swings within it
+function on_hit.chance(proc, proc_id, is_any, ctx)
+    local p = proc.chance;
+    if not p then
+        local ppm = proc.ppm;
+        if proc.per_swing then
+            local periodic = spells[proc_id] and spells[proc_id].periodic;
+            ppm = periodic and periodic.ppm;
+            if not ppm then
+                p = 1.0;
+            end
+        end
+        p = p or (ppm * ctx.wpn_speed / 60);
+    end
+    p = math_min(1.0, p);
+    if proc.icd then
+        local rate = (is_any and ctx.rate_any) or ctx.rate_hand;
+        local k = math_max(0, math_ceil(proc.icd * rate) - 1) * ctx.landed;
+        p = p / (1.0 + k * p);
+    end
+    return p;
+end
+
+-- pass 1 extra attacks first, their landed hits fire the damage procs of pass 2 too
+function on_hit.pass(counts, is_any, pass, ctx, loadout, effects)
+    local stats = ctx.stats;
+    for id, n in pairs(counts) do
+        local proc = n > 0 and sc.procs[id];
+        if proc and
+            bit_band(proc.triggers, ctx.trigger) ~= 0 and
+            (pass == 1) == (proc.extra_attacks ~= nil) and
+            (not proc.wpn_mask or (ctx.subclass and bit_band(proc.wpn_mask, bit_lshift(1, ctx.subclass)) ~= 0)) then
+
+            local p = on_hit.chance(proc, id, is_any, ctx);
+            if pass == 1 then
+                local hand = (proc.extra_special and ctx.hand) or "mh";
+                local cache = (proc.extra_special and ctx.cache_hand) or ctx.cache_mh;
+                local e = on_hit.entry(cache, id, proc, id, hand, loadout, effects, ctx.flags);
+                local u = ctx.landed * p;
+                for hit = 1, proc.extra_attacks do
+                    for i = 1, e.num_lines do
+                        local l = e.lines[i];
+                        add_extra_effect_own(stats, u * l.util, l.desc, l.min, l.max, l.crit_min, l.crit_max,
+                                             l.hit_normal, l.crit, on_hit.school_lnames[schools.physical], 1.0, 0, 1.0,
+                                             hit > 1);
+                    end
+                end
+                if proc.extra_special then
+                    ctx.extra_special = ctx.extra_special + u * proc.extra_attacks * e.landed;
+                else
+                    ctx.extra_white = ctx.extra_white + u * proc.extra_attacks * e.landed;
+                end
+            else
+                local e = on_hit.entry(ctx.cache_hand, id, proc, id, ctx.hand, loadout, effects, ctx.flags);
+                if not e.none then
+                    local events = 1.0;
+                    if bit_band(proc.triggers, 1) ~= 0 and (is_any or ctx.hand == "mh") then
+                        events = events + ctx.extra_white;
+                    end
+                    if bit_band(proc.triggers, 2) ~= 0 then
+                        events = events + ctx.extra_special;
+                    end
+                    add_extra_effect_own(stats, ctx.landed * p * events,
+                                         e.desc, e.min, e.max, e.crit_min, e.crit_max, e.hit_normal, e.crit,
+                                         e.school, e.targets, e.jumps, e.jump_amp);
+                end
+            end
+        end
+    end
+end
+
+function on_hit.active(counts)
+    for _, n in pairs(counts) do
+        if n > 0 then
+            return true;
+        end
+    end
+    return false;
+end
+
+add_on_hit_procs = function(stats, spell, loadout, effects, eval_flags)
+    local procs = effects.procs;
+    local ctx = on_hit.ctx;
+    local ranged = bit_band(spell.flags, spell_flags.requires_ranged_slot) ~= 0;
+    local hand = (ranged and "ranged") or (bit_band(eval_flags, evaluation_flags.isolate_oh) ~= 0 and "oh") or "mh";
+    if not on_hit.active(procs.any) and not on_hit.active(procs[hand]) then
+        return;
+    end
+    local auto = spell.base_id == auto_attack_spell_id or
+        (ranged and bit_band(spell.flags, spell_flags.uses_attack_speed) ~= 0);
+    ctx.hand = hand;
+    if ranged then
+        ctx.trigger = (auto and 4) or 8;
+        ctx.wpn_speed = (effects.raw.wpn_delay_ranged ~= 0 and effects.raw.wpn_delay_ranged) or 2.0;
+        ctx.rate_hand = 1.0 / ranged_swing_time(loadout, effects);
+        ctx.rate_any = ctx.rate_hand;
+    else
+        ctx.trigger = (auto and 1) or 2;
+        local rate_mh = 1.0 / mh_swing_time(loadout, effects);
+        local rate_oh = (effects.raw.wpn_delay_oh > 0 and 1.0 / oh_swing_time(loadout, effects)) or 0;
+        if hand == "oh" then
+            ctx.wpn_speed = effects.raw.wpn_delay_oh;
+            ctx.rate_hand = rate_oh;
+        else
+            local _, _, mh_delay = mh_weapon(loadout, effects);
+            ctx.wpn_speed = mh_delay;
+            ctx.rate_hand = rate_mh;
+        end
+        ctx.rate_any = rate_mh + rate_oh;
+    end
+    ctx.stats = stats;
+    ctx.subclass = stats.attack_subclass;
+    ctx.landed = stats.hit;
+    ctx.flags = bit_band(eval_flags, on_hit.eval_flags);
+    ctx.cache_hand = on_hit.cache_of(ctx.hand, loadout, effects, ctx.flags);
+    ctx.cache_mh = on_hit.cache_of("mh", loadout, effects, ctx.flags);
+    ctx.extra_white = 0;
+    ctx.extra_special = 0;
+    for pass = 1, 2 do
+        on_hit.pass(procs.any, true, pass, ctx, loadout, effects);
+        on_hit.pass(procs[ctx.hand], false, pass, ctx, loadout, effects);
+    end
+end
 
 local class_stats_spell = (function()
     if class == classes.warrior then
@@ -1720,7 +2023,24 @@ local function resolve_extra_spell_effects(info, stats)
             val = 1.0;
         end
 
-        if bit_band(flags, effect_flags.is_periodic) ~= 0 then
+        if bit_band(flags, effect_flags.own_stats) ~= 0 then
+            info.num_direct_effects = info.num_direct_effects + 1;
+            local i = info.num_direct_effects;
+
+            info[indexed_keys.direct_flags[i]] = flags;
+            info[indexed_keys.direct_description[i]] = stats[indexed_keys.extra_effect_desc[k]];
+            info[indexed_keys.direct_utilization[i]] = stats[indexed_keys.extra_effect_util[k]];
+            info[indexed_keys.hit_normal[i]] = stats[indexed_keys.extra_effect_hit[k]];
+            info[indexed_keys.crit[i]] = stats[indexed_keys.extra_effect_crit[k]];
+            info[indexed_keys.min_noncrit_if_hit[i]] = stats[indexed_keys.extra_effect_val[k]];
+            info[indexed_keys.max_noncrit_if_hit[i]] = stats[indexed_keys.extra_effect_max[k]];
+            info[indexed_keys.min_crit_if_hit[i]] = stats[indexed_keys.extra_effect_crit_min[k]];
+            info[indexed_keys.max_crit_if_hit[i]] = stats[indexed_keys.extra_effect_crit_max[k]];
+            info[indexed_keys.direct_school[i]] = stats[indexed_keys.extra_effect_school[k]];
+            info[indexed_keys.direct_targets[i]] = stats[indexed_keys.extra_effect_targets[k]];
+            info[indexed_keys.direct_jumps[i]] = stats[indexed_keys.extra_effect_jumps[k]];
+            info[indexed_keys.direct_jump_amp[i]] = stats[indexed_keys.extra_effect_jump_amp[k]];
+        elseif bit_band(flags, effect_flags.is_periodic) ~= 0 then
             info.num_periodic_effects = info.num_periodic_effects + 1;
             local i = info.num_periodic_effects;
 
@@ -1776,6 +2096,8 @@ local function resolve_extra_spell_effects(info, stats)
             if bit_band(flags, effect_flags.glance) ~= 0 then
                 info.glance_index = i;
             end
+            info[indexed_keys.direct_school[i]] = nil;
+            info[indexed_keys.direct_jumps[i]] = nil;
             info[indexed_keys.direct_flags[i]] = flags;
             info[indexed_keys.direct_description[i]] = stats[indexed_keys.extra_effect_desc[k]];
             info[indexed_keys.direct_utilization[i]] = stats[indexed_keys.extra_effect_util[k]];
@@ -1869,6 +2191,7 @@ local function calc_expectation(info, spell, stats, loadout, num_unbounded_targe
 
     -- direct
     local expected_direct_sum = 0;
+    local expected_direct_more_targets = 0;
     for i = 1, info.num_direct_effects do
 
         local effect_expected = 0.5 * info[indexed_keys.direct_utilization[i]] *
@@ -1883,6 +2206,10 @@ local function calc_expectation(info, spell, stats, loadout, num_unbounded_targe
                 effect_expected = math_max(0, effect_expected - stats.block * stats.block_amount);
             end
         expected_direct_sum = expected_direct_sum + effect_expected;
+        if bit_band(info[indexed_keys.direct_flags[i]], effect_flags.own_stats) ~= 0 then
+            expected_direct_more_targets = expected_direct_more_targets +
+                effect_expected * (info[indexed_keys.direct_targets[i]] - 1.0);
+        end
     end
 
     if info.num_direct_effects > 0 then
@@ -1904,6 +2231,11 @@ local function calc_expectation(info, spell, stats, loadout, num_unbounded_targe
             info.expected_direct = info.expected_direct_st * num_unbounded_targets;
 
             info.threat_direct = info.threat_direct_st * num_unbounded_targets;
+        end
+        if expected_direct_more_targets ~= 0 then
+            local added = expected_direct_more_targets * (1 - stats.target_avg_resi);
+            info.expected_direct = info.expected_direct + added;
+            info.threat_direct = info.threat_direct + (1.0 + stats.threat_mod) * added * threat_mod_of_expected;
         end
     else
         info.expected_direct_st = 0;
@@ -3039,6 +3371,7 @@ local function stat_weights(normal_info, spell, loadout, effects, eval_flags, sp
         last.eval_flags == eval_flags and
         last.calculator_mode == loadout.calculator_mode and
         last.average_proc_effects == settings.general_average_proc_effects and
+        last.on_hit_procs == settings.general_on_hit_procs and
         last.behind_target == settings.loadout_behind_target and
         last.unbounded_aoe_targets == settings.loadout_unbounded_aoe_targets and
         not __sc_frame:IsShown() then
@@ -3149,6 +3482,7 @@ local function stat_weights(normal_info, spell, loadout, effects, eval_flags, sp
     last.eval_flags = eval_flags;
     last.calculator_mode = loadout.calculator_mode;
     last.average_proc_effects = settings.general_average_proc_effects;
+    last.on_hit_procs = settings.general_on_hit_procs;
     last.behind_target = settings.loadout_behind_target;
     last.unbounded_aoe_targets = settings.loadout_unbounded_aoe_targets;
     last.weights = weights;
