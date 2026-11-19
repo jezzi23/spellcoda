@@ -34,6 +34,7 @@ end
 local talent_trees;
 local talent_rank;
 local talents_staged;
+local talents_readable;
 if sc.talent_ranks then
     talent_trees = sc.talent_order;
     talent_rank = function(tree, talent_index)
@@ -43,8 +44,15 @@ if sc.talent_ranks then
     talents_staged = function()
         return false;
     end;
+    talents_readable = function()
+        return true;
+    end;
 else
     talent_trees = sc.talent_nodes;
+    -- no active config during loading screens, C_Traits errors on a nil config id
+    talents_readable = function()
+        return C_ClassTalents.GetActiveConfigID() ~= nil;
+    end;
     -- currentRank includes staged (uncommitted) points
     talent_rank = function(_, node_id)
         local node = C_Traits.GetNodeInfo(C_ClassTalents.GetActiveConfigID(), node_id);
@@ -213,6 +221,11 @@ else
 end
 
 local function loadout_talents_info(loadout)
+
+    -- keeps the last read codes, the caller retries while this fails
+    if not talents_readable() then
+        return false;
+    end
 
     --loadout_front.talents.code = sc.talents.wowhead_talent_code();
     loadout.talents.code = wowhead_talent_code();
