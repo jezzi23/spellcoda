@@ -3773,6 +3773,15 @@ local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_fin
 
         out.effect = info.expected - normal_exp;
         out.effect_timed = info.effect_per_sec - normal_eps;
+        -- rounding from undone effects is no change, as in effects_differ
+        if math.abs(out.effect) <= 0.000000001 * math.max(1, math.abs(normal_exp)) then
+            out.effect = 0;
+            out.effect_changed_perc = 0;
+        end
+        if math.abs(out.effect_timed) <= 0.000000001 * math.max(1, math.abs(normal_eps)) then
+            out.effect_timed = 0;
+            out.effect_timed_changed_perc = 0;
+        end
     else
         eval_flags = bit_bor(eval_flags, evaluation_flags.at_max_mana);
         local info, stats = calc_spell_eval(spell, loadout, effects_finalized, eval_flags, spell_id);
@@ -3785,7 +3794,14 @@ local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_fin
         info = calc_spell_eval(spell, loadout, effects_d, eval_flags, spell_id);
         cast_until_oom(info, spell, stats, loadout, effects_d, true, eval_flags);
 
-        if not info.effect_until_oom or normal_exp_until_oom == 0 or normal_exp_until_oom == math.huge then
+        -- nil: no longer runs out, -math.huge: runs out now
+        if info.effect_until_oom == normal_exp_until_oom then
+            out.effect = 0;
+            out.effect_changed_perc = 0;
+        elseif normal_exp_until_oom == math.huge then
+            out.effect = -math.huge;
+            out.effect_changed_perc = nil;
+        elseif not info.effect_until_oom or normal_exp_until_oom == 0 or info.effect_until_oom == math.huge then
             out.effect = nil;
             out.effect_changed_perc = nil;
         else
@@ -3793,7 +3809,13 @@ local function spell_diff(out, fight_type, spell, spell_id, loadout, effects_fin
             out.effect = info.effect_until_oom - normal_exp_until_oom;
         end
 
-        if not info.time_until_oom or normal_time_until_oom == 0 or normal_time_until_oom == math.huge then
+        if info.time_until_oom == normal_time_until_oom then
+            out.effect_timed = 0;
+            out.effect_timed_changed_perc = 0;
+        elseif normal_time_until_oom == math.huge then
+            out.effect_timed = -math.huge;
+            out.effect_timed_changed_perc = nil;
+        elseif not info.time_until_oom or normal_time_until_oom == 0 or info.time_until_oom == math.huge then
             out.effect_timed = nil;
             out.effect_timed_changed_perc = nil;
         else

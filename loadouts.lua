@@ -697,6 +697,11 @@ local function add_field_line(info, val, txt, diff, perc, mul, raw, extras)
     local force_add = false;
     local val_str;
     if type(val) == "number" then
+        -- rounding from undone multiplicative effects, as in effects_differ; the raw dump stays exact
+        if not raw and
+            ((mul and math.abs(val - 1) <= 0.000000001) or (not mul and math.abs(val) <= 0.000000001)) then
+            return false;
+        end
         local perc_symbol = "";
         local val_disp = val;
         if not raw then
@@ -2766,7 +2771,8 @@ local function item_plan_slot_ui_diffs(loadout, old_items, new_items)
     local planned_items = __sc_frame.calculator_frame.items.working;
 
     for slot in pairs(__sc_frame.calculator_frame.items.slots) do
-        if planned_items[slot] then
+        -- unchanged: taking it off and back on leaves rounding behind
+        if planned_items[slot] and planned_items[slot].link ~= loadout.item_links[slot] then
             if not new_items[slot] then
                 new_items[slot] = {};
             end
@@ -2778,9 +2784,7 @@ local function item_plan_slot_ui_diffs(loadout, old_items, new_items)
             if not old_items[slot] then
                 old_items[slot] = {};
             end
-            if loadout.item_links[slot] then
-                write_item_info_from_link(old_items[slot], loadout.item_links[slot]);
-            end
+            write_item_info_from_link(old_items[slot], loadout.item_links[slot]);
 
         else
             old_items[slot] = nil;

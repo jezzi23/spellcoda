@@ -353,7 +353,13 @@ local function write_item_info_from_link(info, link)
 
     local link_fields = link and link:match("item:(.+)");
     if not link or not link_fields then
+        -- reused buffers must not keep the previous item
+        info.link = nil;
+        info.id = nil;
         info.gem1 = nil;
+        info.gem2 = nil;
+        info.gem3 = nil;
+        info.gem4 = nil;
         info.enchant_id = nil;
         info.suffix_id = nil;
         info.inv_type = nil;

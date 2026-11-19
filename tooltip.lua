@@ -2617,6 +2617,9 @@ local function colored_diff_str(val, perc, num_digits)
     if not val then
         color = "|cFF21B915";
         val_str = "∞";
+    elseif val == -math.huge then
+        color = "|cFFC32C0B";
+        val_str = "-∞";
     elseif val > 0 then
         color = "|cFF21B915";
     elseif val < 0 then
@@ -2628,7 +2631,7 @@ local function colored_diff_str(val, perc, num_digits)
         perc_str = "∞";
     end
 
-    if val_str == "∞" or val == 0 then
+    if val_str == "∞" or val_str == "-∞" or val == 0 then
         return string.format("%s%s|r", color, val_str);
 
     else
@@ -2682,6 +2685,19 @@ local function hide_spells_cmp(view)
     end
 end
 
+local function compared_spells_use_mana()
+    for _, k in ipairs(config.compared_spell_list()) do
+        if config.settings.calc_list_use_highest_rank and spells[k] then
+            k = highest_learned_rank(spells[k].base_id);
+        end
+        local spell = k and spells[k];
+        if spell and bit.band(spell.flags, spell_flags.eval) ~= 0 and spell.power_type == powers.mana then
+            return true;
+        end
+    end
+    return false;
+end
+
 local function spells_cmp_fight_type(mod)
     local fight_type = config.settings.calc_fight_type;
     if bit.band(mod, sc.tooltip_mod_flags.ALT) ~= 0 then
@@ -2690,6 +2706,9 @@ local function spells_cmp_fight_type(mod)
         else
             fight_type = fight_types.repeated_casts;
         end
+    end
+    if fight_type == fight_types.cast_until_oom and not compared_spells_use_mana() then
+        fight_type = fight_types.repeated_casts;
     end
     return fight_type;
 end
@@ -3276,7 +3295,7 @@ end
 -- the rows' numbers exactly as the tooltip shows them, as one string, to tell whether anything shown changed
 local function plan_spells_counts(loadout, effects_before, effects_after, eval_flags)
     plan_cmp_generation = plan_cmp_generation + 1;
-    local fight_type = config.settings.calc_fight_type;
+    local fight_type = spells_cmp_fight_type(0);
     local cmp = fill_plan_cmp(fight_type, loadout, effects_before, effects_after, eval_flags).cmps[1];
     local better, worse = 0, 0;
     for i = 1, cmp.len do
