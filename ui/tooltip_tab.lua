@@ -338,23 +338,28 @@ local function create_tooltip_spells_frame(pframe)
 end
 
 
--- the comparison list from the frame's y offset to its bottom: icon, name and remove button per entry, as many rows as
--- fit, scrolls when there are more
+-- the comparison list at the frame's y offset: icon, name, move up / down and remove per entry, scrolls past num_rows
 local function create_compared_spells_list(pframe)
-    local row_height = 15;
-    local bottom_pad = 5;
+    local row_height = 16;
+    local num_rows = 5;
     local area = CreateFrame("Frame", nil, pframe);
     area:SetPoint("TOPLEFT", 0, pframe.y_offset);
-    area:SetPoint("BOTTOMRIGHT", 0, bottom_pad);
-    local num_rows = math.floor((pframe:GetHeight() + pframe.y_offset - bottom_pad) / row_height);
+    area:SetPoint("RIGHT", pframe, "RIGHT", -20, 0);
+    area:SetHeight(num_rows * row_height + 4);
+    pframe.y_offset = pframe.y_offset - num_rows * row_height - 4;
     local rows = {};
     local entries = {};
     local offset = 0;
 
+    local bg = area:CreateTexture(nil, "BACKGROUND");
+    bg:SetPoint("TOPLEFT", 8, 0);
+    bg:SetPoint("BOTTOMRIGHT", 0, 0);
+    bg:SetColorTexture(0, 0, 0, 0.3);
+
     local slider = CreateFrame("Slider", nil, area, "UIPanelScrollBarTrimTemplate");
     slider:SetOrientation('VERTICAL');
-    slider:SetPoint("TOPRIGHT", area, "TOPRIGHT", 10, -16);
-    slider:SetPoint("BOTTOMRIGHT", area, "BOTTOMRIGHT", 10, 16);
+    slider:SetPoint("TOPLEFT", area, "TOPRIGHT", 0, -16);
+    slider:SetPoint("BOTTOMLEFT", area, "BOTTOMRIGHT", 0, 16);
     slider:SetWidth(20);
     local show_rows;
     -- replaces the template's script, which scrolls the parent as a ScrollFrame, before any value is set
@@ -370,18 +375,47 @@ local function create_compared_spells_list(pframe)
     slider:SetMinMaxValues(0, 0);
     slider:SetValue(0);
     slider:Hide();
-    local bg = slider:CreateTexture(nil, "BACKGROUND");
-    bg:SetAllPoints(slider);
-    bg:SetColorTexture(0, 0, 0, 0.5);
+    local slider_bg = slider:CreateTexture(nil, "BACKGROUND");
+    slider_bg:SetAllPoints(slider);
+    slider_bg:SetColorTexture(0, 0, 0, 0.5);
 
     area:EnableMouseWheel(true);
     area:SetScript("OnMouseWheel", function(_, delta)
         slider:SetValue(slider:GetValue() - delta);
     end);
 
+    -- swaps the list positions of entries i and j, entries the list UI hides keep their place
+    local function swap_entries(i, j)
+        local list = config.compared_spell_list();
+        local a, b = entries[i].list_index, entries[j].list_index;
+        list[a], list[b] = list[b], list[a];
+        compared_spells_changed();
+    end
+
+    local function make_arrow_button(dir)
+        local btn = CreateFrame("Button", nil, area);
+        btn:SetSize(16, 16);
+        local tex = "Interface\\Buttons\\UI-ScrollBar-Scroll"..dir.."Button-";
+        btn:SetNormalTexture(tex.."Up");
+        btn:SetPushedTexture(tex.."Down");
+        btn:SetDisabledTexture(tex.."Disabled");
+        btn:SetHighlightTexture(tex.."Highlight", "ADD");
+        for _, v in ipairs({btn:GetNormalTexture(), btn:GetPushedTexture(), btn:GetDisabledTexture(), btn:GetHighlightTexture()}) do
+            v:SetTexCoord(0.2, 0.8, 0.25, 0.75);
+        end
+        return btn;
+    end
+
     local function make_row(r)
-        local y = -row_height * (r - 1);
+        local y = -2 - row_height * (r - 1);
         local row = {};
+
+        row.highlight = area:CreateTexture(nil, "BORDER");
+        row.highlight:SetPoint("TOPLEFT", 8, y);
+        row.highlight:SetPoint("RIGHT", area, "RIGHT", 0, 0);
+        row.highlight:SetHeight(row_height);
+        row.highlight:SetColorTexture(1, 1, 1, 0.08);
+        row.highlight:Hide();
 
         row.icon = area:CreateTexture(nil, "ARTWORK");
         row.icon:SetSize(15, 15);
@@ -391,22 +425,9 @@ local function create_compared_spells_list(pframe)
         row.name_str:SetFontObject(font);
         row.name_str:SetPoint("TOPLEFT", 32, y - 2);
 
-        row.hover = CreateFrame("Frame", nil, area);
-        row.hover:SetPoint("TOPLEFT", 12, y);
-        row.hover:SetSize(250, 15);
-        row.hover:EnableMouse(true);
-        row.hover:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT");
-            GameTooltip:SetSpellByID(self.spell_id);
-            GameTooltip:Show();
-        end);
-        row.hover:SetScript("OnLeave", function()
-            GameTooltip:Hide();
-        end);
-
         row.remove = CreateFrame("Button", nil, area, "UIPanelButtonTemplate");
-        row.remove:SetPoint("TOPRIGHT", -10, y + 1);
-        row.remove:SetSize(17, 17);
+        row.remove:SetPoint("TOPRIGHT", -4, y);
+        row.remove:SetSize(16, 16);
         row.remove:SetText("x");
         local fontstr = row.remove:GetFontString();
         if fontstr then
@@ -416,8 +437,35 @@ local function create_compared_spells_list(pframe)
             fontstr:SetMouseClickEnabled(false);
         end
         row.remove:SetScript("OnClick", function(self)
-            config.settings.spell_calc_list[self.spell_id] = nil;
+            table.remove(config.compared_spell_list(), entries[self.entry].list_index);
             compared_spells_changed();
+        end);
+
+        row.down = make_arrow_button("Down");
+        row.down:SetPoint("RIGHT", row.remove, "LEFT", -4, 0);
+        row.down:SetScript("OnClick", function(self)
+            swap_entries(self.entry, self.entry + 1);
+        end);
+        row.up = make_arrow_button("Up");
+        row.up:SetPoint("RIGHT", row.down, "LEFT", 0, 0);
+        row.up:SetScript("OnClick", function(self)
+            swap_entries(self.entry, self.entry - 1);
+        end);
+
+        row.hover = CreateFrame("Frame", nil, area);
+        row.hover:SetPoint("TOPLEFT", 8, y);
+        row.hover:SetPoint("RIGHT", row.up, "LEFT", -4, 0);
+        row.hover:SetHeight(row_height);
+        row.hover:EnableMouse(true);
+        row.hover:SetScript("OnEnter", function(self)
+            row.highlight:Show();
+            GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT");
+            GameTooltip:SetSpellByID(self.spell_id);
+            GameTooltip:Show();
+        end);
+        row.hover:SetScript("OnLeave", function()
+            row.highlight:Hide();
+            GameTooltip:Hide();
         end);
         return row;
     end
@@ -431,7 +479,8 @@ local function create_compared_spells_list(pframe)
             slider:SetValue(max_offset);
         end
         for r = 1, num_rows do
-            local e = entries[offset + r];
+            local i = offset + r;
+            local e = entries[i];
             local row = rows[r];
             if e then
                 if not row then
@@ -446,10 +495,16 @@ local function create_compared_spells_list(pframe)
                     row.name_str:SetTextColor(0.5, 0.5, 0.5);
                 end
                 row.hover.spell_id = e.id;
-                row.remove.spell_id = e.src;
-                for _, v in pairs(row) do
-                    v:Show();
+                row.remove.entry = i;
+                row.up.entry = i;
+                row.down.entry = i;
+                for k, v in pairs(row) do
+                    if k ~= "highlight" then
+                        v:Show();
+                    end
                 end
+                row.up:SetEnabled(i > 1);
+                row.down:SetEnabled(i < #entries);
             elseif row then
                 for _, v in pairs(row) do
                     v:Hide();
@@ -461,14 +516,14 @@ local function create_compared_spells_list(pframe)
     -- entries as the tooltips compare them: the highest learned rank when set, greyed when no rank is learned
     local function refresh()
         entries = {};
-        for k in pairs(config.settings.spell_calc_list) do
+        for list_index, k in ipairs(config.compared_spell_list()) do
             local spell = spells[k];
             if spell and bit.band(spell.flags, bit.bor(spell_flags.eval, spell_flags.ehp)) ~= 0 then
                 local id = k;
                 if config.settings.calc_list_use_highest_rank then
                     id = highest_learned_rank(spell.base_id);
                 end
-                local e = { src = k, id = id or k, compared = id ~= nil };
+                local e = { list_index = list_index, id = id or k, compared = id ~= nil };
                 spell = spells[e.id];
                 if bit.band(spell.flags, spell_flags.eval) ~= 0 then
                     e.name = C_Spell.GetSpellName(e.id);
@@ -485,12 +540,6 @@ local function create_compared_spells_list(pframe)
                 entries[#entries + 1] = e;
             end
         end
-        table.sort(entries, function(a, b)
-            if a.name ~= b.name then
-                return a.name < b.name;
-            end
-            return a.src < b.src;
-        end);
         show_rows();
     end
 
@@ -529,12 +578,12 @@ local function create_tooltip_items_frame(pframe)
     );
     help_icon:SetPoint("LEFT", getglobal("__sc_frame_setting_tooltip_disable_itemText"), "RIGHT", 5, 0);
 
-    pframe.y_offset = pframe.y_offset - 10;
+    pframe.y_offset = pframe.y_offset - 8;
     make_divider(pframe);
     pframe.y_offset = pframe.y_offset - 2;
 
     local function section(title)
-        pframe.y_offset = pframe.y_offset - 8;
+        pframe.y_offset = pframe.y_offset - 4;
         local txt = pframe:CreateFontString(nil, "OVERLAY");
         txt:SetFontObject(GameFontNormal);
         txt:SetPoint("TOPLEFT", 0, pframe.y_offset);
@@ -554,6 +603,17 @@ local function create_tooltip_items_frame(pframe)
             pframe.y_offset = pframe.y_offset - 20;
         end
         return frames;
+    end
+
+    -- a setting's name on its own line, its control placed right of it
+    local function label(text)
+        local txt = pframe:CreateFontString(nil, "OVERLAY");
+        txt:SetFontObject(GameFontNormal);
+        txt:SetPoint("TOPLEFT", 15, pframe.y_offset - 5);
+        txt:SetText(text);
+        txt:SetTextColor(1.0, 1.0, 1.0);
+        tifs[#tifs + 1] = txt;
+        return txt;
     end
 
     section(L["Tooltip display"]);
@@ -578,6 +638,79 @@ local function create_tooltip_items_frame(pframe)
         },
     }, 2);
 
+    f_txt = label(L["Show stats for:"]);
+    -- named after one of its settings so a profile switch refreshes the shown picks (activate_config)
+    pframe.stat_diff_dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_tooltip_item_stat_diff_tank", pframe);
+    pframe.stat_diff_dd._type = "DropDownMenu";
+    pframe.stat_diff_dd:SetPoint("LEFT", f_txt, "RIGHT", -5, -3);
+    local stat_diff_opts = {
+        { "tooltip_item_stat_diff_tank",   L["Tank"],
+            L["Stamina, health, armor, dodge, parry, block, defense and their ratings, threat"] },
+        { "tooltip_item_stat_diff_melee",  L["Melee"],
+            L["Strength, agility, stamina, health, attack power, critical, hit, haste, expertise, armor penetration, weapon damage and speed, physical damage, threat"] },
+        { "tooltip_item_stat_diff_ranged", L["Ranged"],
+            L["Agility, stamina, health, ranged attack power, critical, hit, haste, armor penetration, weapon damage and speed, physical damage, threat"] },
+        { "tooltip_item_stat_diff_caster", L["Caster"],
+            L["Intellect, spirit, stamina, health, mana, spell damage, critical, hit, haste, penetration, cost, mana regeneration, threat"] },
+        { "tooltip_item_stat_diff_healer", L["Healer"],
+            L["Intellect, spirit, stamina, health, mana, healing power, spell critical, haste, cost, mana regeneration, healing done and taken"] },
+        { "tooltip_item_stat_diff_spells", L["Ability effects"],
+            L["Modifications to spells"] },
+    };
+    -- to the right edge; the dropdown template draws about 20 px left of its anchor and 20 px past its width
+    local stat_diff_dd_width = pframe:GetWidth() - 15 - f_txt:GetStringWidth() - 40;
+    pframe.stat_diff_dd.init_func = function()
+        local picked = {};
+        for _, v in ipairs(stat_diff_opts) do
+            if config.settings[v[1]] then
+                picked[#picked + 1] = v[2];
+            end
+        end
+        local dd = pframe.stat_diff_dd;
+        if #picked == 0 then
+            libDD:UIDropDownMenu_SetText(dd, L["None"]);
+        else
+            libDD:UIDropDownMenu_SetText(dd, table.concat(picked, ", "));
+            if dd.Text:GetUnboundedStringWidth() > stat_diff_dd_width - 20 then
+                libDD:UIDropDownMenu_SetText(dd, string.format(L["%d of %d"], #picked, #stat_diff_opts));
+            end
+        end
+    end;
+    libDD:UIDropDownMenu_SetWidth(pframe.stat_diff_dd, stat_diff_dd_width);
+    libDD:UIDropDownMenu_SetInitializeFunction(pframe.stat_diff_dd, function()
+        for _, v in ipairs(stat_diff_opts) do
+            local opt = v[1];
+            libDD:UIDropDownMenu_AddButton(
+                {
+                    text = v[2],
+                    checked = config.settings[opt],
+                    isNotRadio = true,
+                    keepShownOnClick = true,
+                    tooltipTitle = v[2],
+                    tooltipText = v[3],
+                    tooltipOnButton = true,
+                    func = function()
+                        config.settings[opt] = not config.settings[opt];
+                        sc.loadouts.force_update = true;
+                        __sc_frame.calculator_frame.calculator_plan_changed = true;
+                        pframe.stat_diff_dd.init_func();
+                    end
+                }
+            );
+        end
+    end);
+    pframe.stat_diff_dd:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+        GameTooltip:SetText(L["Stats listed in stat changes and the calculator"], 1, 1, 1);
+        GameTooltip:Show();
+    end);
+    pframe.stat_diff_dd:SetScript("OnLeave", function()
+        GameTooltip:Hide();
+    end);
+    pframe.stat_diff_dd.init_func();
+    tifs[#tifs + 1] = pframe.stat_diff_dd;
+    pframe.y_offset = pframe.y_offset - 25;
+
     section(L["Included item changes"]);
     checks({
         {
@@ -595,12 +728,7 @@ local function create_tooltip_items_frame(pframe)
     }, 2);
 
     section(L["Items to compare"]);
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 15, pframe.y_offset - 5);
-    f_txt:SetText(L["Quality threshold"]);
-    f_txt:SetTextColor(1.0, 1.0, 1.0);
-    tifs[#tifs + 1] = f_txt;
+    f_txt = label(L["Quality threshold"]);
 
     pframe.quality_dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_tooltip_item_quality_threshold", pframe);
     pframe.quality_dd._type = "DropDownMenu";
@@ -640,7 +768,7 @@ local function create_tooltip_items_frame(pframe)
     end);
     tifs[#tifs + 1] = pframe.quality_dd;
 
-    pframe.y_offset = pframe.y_offset - 28;
+    pframe.y_offset = pframe.y_offset - 25;
 
     checks({
         {
@@ -683,84 +811,11 @@ local function create_tooltip_items_frame(pframe)
         x = x + w + 40;
     end
 
-    local header = section(L["Compared spells"]);
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(font);
-    f_txt:SetPoint("LEFT", header, "RIGHT", 10, 0);
-    f_txt:SetText(L["Abilities can be added from Spells tab"]);
-    tifs[#tifs + 1] = f_txt;
-
-    checks({
-        {
-            id = "tooltip_item_leveling_skill_normalize",
-            txt = L["Use skill as clvl*5 for weapon comparisons when not at maximum level"],
-            tooltip = L["More intuitive weapon upgrade results when leveling since lower weapon skill type is not punished"],
-        },
-    }, 1);
-
-    local row_y = pframe.y_offset;
-    local refresh_list;
-    checks({
-        {
-            id = "calc_list_use_highest_rank",
-            txt = L["Use highest learned rank"],
-            func = function()
-                refresh_list();
-            end,
-        },
-    }, 2);
-
-    pframe.stat_diff_dd = libDD:Create_UIDropDownMenu(nil, pframe);
-    local stat_diff_opts = {
-        { "tooltip_item_stat_diff_tank",   L["Tank"]            },
-        { "tooltip_item_stat_diff_melee",  L["Melee"]           },
-        { "tooltip_item_stat_diff_ranged", L["Ranged"]          },
-        { "tooltip_item_stat_diff_caster", L["Caster"]          },
-        { "tooltip_item_stat_diff_healer", L["Healer"]          },
-        { "tooltip_item_stat_diff_spells", L["Ability effects"] },
-    };
-    pframe.stat_diff_dd:SetPoint("TOPLEFT", 200, row_y + 2);
-    pframe.stat_diff_dd.init_func = function()
-        libDD:UIDropDownMenu_Initialize(pframe.stat_diff_dd, function()
-
-            libDD:UIDropDownMenu_SetText(pframe.stat_diff_dd, L["Stat categories"]);
-            libDD:UIDropDownMenu_SetWidth(pframe.stat_diff_dd, 100);
-
-            for _, v in ipairs(stat_diff_opts) do
-                local opt = v[1];
-                local lname = v[2];
-
-                libDD:UIDropDownMenu_AddButton(
-                    {
-                        text = lname,
-                        checked = config.settings[opt],
-                        keepShownOnClick = true,
-                        notCheckable = false,
-                        func = function()
-
-                            config.settings[opt] = not config.settings[opt];
-                            sc.loadouts.force_update = true;
-                            __sc_frame.calculator_frame.calculator_plan_changed = true;
-                        end
-                    }
-                );
-            end
-        end);
-    end;
-    pframe.stat_diff_dd:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-        GameTooltip:SetText(L["Tooltips show stats relevant to these categories."], 1, 1, 1);
-        GameTooltip:Show();
-    end);
-    pframe.stat_diff_dd:SetScript("OnLeave", function(self)
-        GameTooltip:Hide();
-    end);
-    pframe.stat_diff_dd.init_func();
-    tifs[#tifs + 1] = pframe.stat_diff_dd;
-
+    section(L["Compared spells"]);
+    f_txt = label(L["Evaluation mode:"]);
     pframe.fight_type_dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_calc_fight_type", pframe);
     pframe.fight_type_dd._type = "DropDownMenu";
-    pframe.fight_type_dd:SetPoint("TOPRIGHT", 20, row_y + 2);
+    pframe.fight_type_dd:SetPoint("LEFT", f_txt, "RIGHT", -5, -3);
     pframe.fight_type_dd.init_func = function()
         if config.settings.calc_fight_type == fight_types.repeated_casts then
             libDD:UIDropDownMenu_SetText(pframe.fight_type_dd, L["Repeated casts"]);
@@ -771,7 +826,7 @@ local function create_tooltip_items_frame(pframe)
     libDD:UIDropDownMenu_SetWidth(pframe.fight_type_dd, 120);
     libDD:UIDropDownMenu_SetInitializeFunction(pframe.fight_type_dd, function()
         for _, v in ipairs({
-            { fight_types.repeated_casts, L["Repeated cast"] },
+            { fight_types.repeated_casts, L["Repeated casts"] },
             { fight_types.cast_until_oom, L["Cast until OOM"] },
         }) do
             libDD:UIDropDownMenu_AddButton(
@@ -788,8 +843,38 @@ local function create_tooltip_items_frame(pframe)
         end
     end);
     tifs[#tifs + 1] = pframe.fight_type_dd;
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(font);
+    f_txt:SetPoint("LEFT", pframe.fight_type_dd, "RIGHT", -8, 3);
+    f_txt:SetText(L["ALT switches it in tooltips"]);
+    f_txt:SetTextColor(0.6, 0.6, 0.6);
+    tifs[#tifs + 1] = f_txt;
+    pframe.y_offset = pframe.y_offset - 25;
 
-    pframe.y_offset = row_y - 28;
+    local refresh_list;
+    checks({
+        {
+            id = "calc_list_use_highest_rank",
+            txt = L["Use highest learned rank"],
+            func = function()
+                refresh_list();
+            end,
+        },
+        {
+            id = "tooltip_item_leveling_skill_normalize",
+            txt = L["Use skill as clvl*5 for weapon comparisons when not at maximum level"],
+            tooltip = L["More intuitive weapon upgrade results when leveling since lower weapon skill type is not punished"],
+        },
+    }, 1);
+
+    pframe.y_offset = pframe.y_offset - 2;
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(font);
+    f_txt:SetPoint("TOPLEFT", 12, pframe.y_offset);
+    f_txt:SetText(L["Abilities can be added from the Spells tab"]);
+    f_txt:SetTextColor(0.6, 0.6, 0.6);
+    tifs[#tifs + 1] = f_txt;
+    pframe.y_offset = pframe.y_offset - 13;
 
     local list_area;
     list_area, refresh_list = create_compared_spells_list(pframe);

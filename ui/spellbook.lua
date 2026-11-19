@@ -197,7 +197,7 @@ local function create_book_catalogue(sb, container, open_sc_tab)
             root:CreateTitle(training.spell_title(spell_id));
             if bit.band(spells[spell_id].flags, bit.bor(spell_flags.eval, spell_flags.ehp)) ~= 0 then
                 root:CreateButton(L["Add to comparison list"], function()
-                    config.settings.spell_calc_list[spell_id] = 1;
+                    config.add_compared_spell(spell_id);
                     compared_spells_changed();
                 end);
                 root:CreateSpacer();

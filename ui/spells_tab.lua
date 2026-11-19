@@ -436,7 +436,7 @@ local function create_sw_ui_spells_frame(pframe)
                             text = L["Add to comparison list"],
                             notCheckable = true,
                             func = function()
-                                config.settings.spell_calc_list[id] = 1;
+                                config.add_compared_spell(id);
                                 compared_spells_changed();
                             end,
                         }

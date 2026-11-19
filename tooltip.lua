@@ -2709,7 +2709,7 @@ end
 -- the comparison list's spells after row i; skip_unusable_attacks drops Attack / Shoot / Throw the class cannot use
 local function spells_cmp_list(cmp, i, tooltip, fight_type, loadout, effects_before, effects_after, eval_flags, skip_unusable_attacks)
     cmp.uses_mana = false;
-    for k, _ in pairs(config.settings.spell_calc_list) do
+    for _, k in ipairs(config.compared_spell_list()) do
         if config.settings.calc_list_use_highest_rank and spells[k] then
             k = highest_learned_rank(spells[k].base_id);
         end
@@ -3146,7 +3146,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                         k = nil;
                     end
 
-                    if k and not config.settings.spell_calc_list[k] and spells[k] then
+                    if k and spells[k] and not config.compared_spells_contains(k) then
                         i = spells_cmp_add_spell(slot_cmp, i, tooltip, k, fight_type, loadout,
                             effects_finalized, effects_diffed, eval_flags);
                     end

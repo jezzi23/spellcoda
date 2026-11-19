@@ -228,45 +228,19 @@ local default_settings     = {
     spells_ignore_list                                          = {},
 
     -- calculator
-    spell_calc_list                                             = {
-        -- a few basic spells for each class
-        [6603] = 6603, -- Attack
-        [81] = 81, -- Dodge for EHP
-
-        -- warrior
-        [78] = 78, -- heroic strik
-        [23881] = 23881, -- bloodthirst
-        [12294] = 12294, -- mortal strike
-        -- hunter
-        [75] = 75, -- auto shot
-        [19434] = 19434, -- aimed shot
-        [2643] = 2643, -- multi shot
-        -- mage
-        [133] = 133, --fireball
-        [116] = 116, --frostbolt
-        [1449] = 1449, --arcane explosion
-        -- druid
-        [5176] = 5176, -- wrath
-        [5185] = 5185, -- healing touch
-        -- shaman
-        [403] = 403, -- lightning bolt
-        [331] = 331, -- healing wave
-        [17364] = 17364, -- stormstrike
-        --paladin
-        [635] = 635, -- holy light
-        [19750] = 19750, -- flash of light
-        -- priest
-        [8092] = 8092, -- mind blast
-        [15407] = 15407, -- mind flay
-        [2054] = 2054, -- heal
-        -- rogue
-        [1752] = 1752, -- sinister strike
-        [53] = 53, -- backstab
-        [2098] = 2098, -- eviscerate
-        -- warlock
-        [686] = 686, -- shadow bolt
-        [172] = 172, -- corruption
-        [5676] = 5676, -- searing pain
+    -- the old comparison list of all classes, only read for profiles saved before compared_spells
+    spell_calc_list                                             = {},
+    -- ordered spell ids per class token: Attack, Dodge for EHP, then a few basic spells of the class
+    compared_spells                                             = {
+        WARRIOR = { 6603, 81, 78, 12294, 23881 },     -- heroic strike, mortal strike, bloodthirst
+        PALADIN = { 6603, 81, 635, 19750 },           -- holy light, flash of light
+        HUNTER  = { 6603, 81, 75, 19434, 2643 },      -- auto shot, aimed shot, multi shot
+        ROGUE   = { 6603, 81, 1752, 53, 2098 },       -- sinister strike, backstab, eviscerate
+        PRIEST  = { 6603, 81, 8092, 15407, 2054 },    -- mind blast, mind flay, heal
+        SHAMAN  = { 6603, 81, 403, 331, 17364 },      -- lightning bolt, healing wave, stormstrike
+        MAGE    = { 6603, 81, 133, 116, 5143 },       -- fireball, frostbolt, arcane missiles
+        WARLOCK = { 6603, 81, 686, 172, 5676 },       -- shadow bolt, corruption, searing pain
+        DRUID   = { 6603, 81, 5176, 5185 },           -- wrath, healing touch
     },
     calc_list_use_highest_rank                                  = true,
     calc_fight_type                                             = 1,
@@ -495,6 +469,10 @@ local function load_config()
         if v.settings.loadout_combat_ignore_buffs and v.settings.loadout_combat_unseen_buffs == nil then
             v.settings.loadout_combat_unseen_buffs = combat_unseen_buffs.drop;
         end
+        -- profiles saved before compared_spells keep their own lists, each class builds it from spell_calc_list
+        if v.settings.spell_calc_list and v.settings.compared_spells == nil then
+            v.settings.compared_spells = {};
+        end
         load_persistent_data(v.settings, default_settings);
         -- saved data can come from another client, keep values bound by client data in range
         v.settings.loadout_lvl = math.min(v.settings.loadout_lvl, sc.max_lvl);
@@ -640,7 +618,64 @@ local function new_profile_from_active_copy(profile_name)
     return new_profile(profile_name, __sc_p_acc.profiles[config.active_profile_name]);
 end
 
+-- the active profile's comparison list of this class, in order; ids may repeat (several ranks of a spell)
+local function compared_spell_list()
+    local lists = config.settings.compared_spells;
+    local list = lists[sc.class];
+    if not list then
+        list = {};
+        for k in pairs(config.settings.spell_calc_list) do
+            if sc.spells[k] then
+                list[#list + 1] = k;
+            end
+        end
+        -- Attack, then EHP, then by name
+        local group = {};
+        local names = {};
+        for _, k in ipairs(list) do
+            if k == sc.spids.attack then
+                group[k] = 1;
+            elseif bit.band(sc.spells[k].flags, sc.spell_flags.ehp) ~= 0 then
+                group[k] = 2;
+            else
+                group[k] = 3;
+            end
+            names[k] = C_Spell.GetSpellName(k) or "";
+        end
+        table.sort(list, function(a, b)
+            if group[a] ~= group[b] then
+                return group[a] < group[b];
+            end
+            if names[a] ~= names[b] then
+                return names[a] < names[b];
+            end
+            return a < b;
+        end);
+        lists[sc.class] = list;
+    end
+    return list;
+end
+
+local function compared_spells_contains(spell_id)
+    for _, k in ipairs(compared_spell_list()) do
+        if k == spell_id then
+            return true;
+        end
+    end
+    return false;
+end
+
+local function add_compared_spell(spell_id)
+    if not compared_spells_contains(spell_id) then
+        local list = compared_spell_list();
+        list[#list + 1] = spell_id;
+    end
+end
+
 --------------------------------------------------------------------------------
+config.compared_spell_list = compared_spell_list;
+config.compared_spells_contains = compared_spells_contains;
+config.add_compared_spell = add_compared_spell;
 config.delete_profile = delete_profile;
 config.reset_profile = reset_profile;
 config.new_profile_from_default = new_profile_from_default;
