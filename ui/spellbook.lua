@@ -11,6 +11,7 @@ local active_loadout    = sc.loadouts.active_loadout
 local config            = sc.config;
 
 local ui = sc.ui;
+local compared_spells_changed = ui.compared_spells_changed;
 local create_arrow_button     = ui.create_arrow_button;
 local ehp_tex                 = ui.ehp_tex;
 local eval_spell_view_entry   = ui.eval_spell_view_entry;
@@ -25,7 +26,6 @@ local spells_known_changed    = ui.spells_known_changed;
 local sw_activate_frame       = ui.sw_activate_frame;
 local toggle_spell_ignored    = ui.toggle_spell_ignored;
 local training                = ui.training;
-local update_calc_list        = ui.update_calc_list;
 local update_spell_catalogue  = ui.update_spell_catalogue;
 
 -- spell catalogue on the spellbook's pages (forever)
@@ -196,9 +196,9 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         MenuUtil.CreateContextMenu(owner, function(_, root)
             root:CreateTitle(training.spell_title(spell_id));
             if bit.band(spells[spell_id].flags, bit.bor(spell_flags.eval, spell_flags.ehp)) ~= 0 then
-                root:CreateButton(L["Add to calculator list"], function()
+                root:CreateButton(L["Add to comparison list"], function()
                     config.settings.spell_calc_list[spell_id] = 1;
-                    update_calc_list(true);
+                    compared_spells_changed();
                 end);
                 root:CreateSpacer();
             end

@@ -6,6 +6,7 @@ local spell_flags = sc.spell_flags;
 local config      = sc.config;
 
 local ui = sc.ui;
+local compared_spells_changed        = ui.compared_spells_changed;
 local create_arrow_button            = ui.create_arrow_button;
 local font                           = ui.font;
 local libDD                          = ui.libDD;
@@ -17,7 +18,6 @@ local spell_ignore_text              = ui.spell_ignore_text;
 local spells_catalogue               = ui.spells_catalogue;
 local toggle_spell_ignored           = ui.toggle_spell_ignored;
 local training                       = ui.training;
-local update_calc_list               = ui.update_calc_list;
 local update_spells_frame            = ui.update_spells_frame;
 
 local spell_filter_listing;
@@ -433,11 +433,11 @@ local function create_sw_ui_spells_frame(pframe)
                 libDD:UIDropDownMenu_AddButton({text = training.spell_title(id), isTitle = true, notCheckable = true});
                 if bit.band(spells[id].flags, bit.bor(spell_flags.eval, spell_flags.ehp)) ~= 0 then
                     libDD:UIDropDownMenu_AddButton({
-                            text = L["Add to calculator list"],
+                            text = L["Add to comparison list"],
                             notCheckable = true,
                             func = function()
                                 config.settings.spell_calc_list[id] = 1;
-                                update_calc_list(true);
+                                compared_spells_changed();
                             end,
                         }
                     );

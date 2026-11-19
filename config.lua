@@ -574,6 +574,7 @@ local function activate_settings()
     end
     sc.overlay.overlay_reconfig();
     sc.ui.apply_colors();
+    sc.ui.refresh_compared_spells();
 
     sc.overlay.ccf_parent:ClearAllPoints();
     sc.overlay.ccf_parent:SetPoint(

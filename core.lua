@@ -194,6 +194,7 @@ local function key_mod_flags()
 
     return mod;
 end
+core.key_mod_flags = key_mod_flags;
 
 local tooltip_timestamp = 0.0;
 

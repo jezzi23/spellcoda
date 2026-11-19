@@ -12,7 +12,6 @@ local wowhead_talent_code_from_url    = sc.talents.wowhead_talent_code_from_url;
 local inv_type_to_slot_ids            = sc.equipment.inv_type_to_slot_ids;
 local apply_items_cmp                 = sc.equipment.apply_items_cmp;
 local slots                           = sc.equipment.slots;
-local fight_types                     = sc.calc.fight_types;
 local update_loadout_and_effects      = sc.loadouts.update_loadout_and_effects;
 local active_loadout                  = sc.loadouts.active_loadout
 local stats_diff_format               = sc.loadouts.stats_diff_format;
@@ -24,6 +23,8 @@ local buff_category                   = sc.buffs.buff_category;
 local buffs                           = sc.buffs.buffs;
 local target_buffs                    = sc.buffs.target_buffs;
 local stat_diffs_included_effects_str = sc.tooltip.stat_diffs_included_effects_str;
+local plan_spells_text                = sc.tooltip.plan_spells_text;
+local write_plan_spells_tooltip       = sc.tooltip.write_plan_spells_tooltip;
 local config                          = sc.config;
 
 local ui = sc.ui;
@@ -33,9 +34,7 @@ local dump_text              = ui.dump_text;
 local editbox_config         = ui.editbox_config;
 local font                   = ui.font;
 local libDD                  = ui.libDD;
-local multi_row_checkbutton  = ui.multi_row_checkbutton;
-local show_calc_list_rows    = ui.show_calc_list_rows;
-local update_calc_list       = ui.update_calc_list;
+local make_divider           = ui.make_divider;
 
 
 local default_talents_plan = {
@@ -150,6 +149,75 @@ local function update_calculator_item_frame(frame, allow_empty)
     end
 end
 
+local plan_model_hands = {
+    { slot = slots.MainHandSlot, name = "MAINHANDSLOT" },
+    { slot = slots.SecondaryHandSlot, name = "SECONDARYHANDSLOT" },
+};
+local plan_model_weapon_slots = {
+    [slots.MainHandSlot] = true,
+    [slots.SecondaryHandSlot] = true,
+    [slots.RangedSlot] = true,
+    [slots.AmmoSlot] = true,
+};
+
+-- the weapon in a slot with the plan applied, nil when the slot ends up empty
+local function plan_weapon_link(slot)
+    local info = working_item_plan[slot];
+    if info then
+        return info.link;
+    end
+    return GetInventoryItemLink("player", slot);
+end
+
+local function is_two_hand(link)
+    return link ~= nil and select(4, C_Item.GetItemInfoInstant(link)) == "INVTYPE_2HWEAPON";
+end
+
+-- the plan on the character: the worn gear, then each planned item tried on or its slot emptied; the weapons last,
+-- the hands as they end up and the ranged weapon only with both hands empty (trying it on takes a hand)
+local function update_plan_model(model, anything)
+    model:SetShown(anything);
+    if not anything then
+        return;
+    end
+    model:SetUnit("player");
+    for slot, info in pairs(working_item_plan) do
+        if not plan_model_weapon_slots[slot] then
+            if info.link then
+                model:TryOn(info.link);
+            else
+                model:UndressSlot(slot);
+            end
+        end
+    end
+
+    local hand_links = {
+        plan_weapon_link(slots.MainHandSlot),
+        plan_weapon_link(slots.SecondaryHandSlot),
+    };
+    -- a planned 2H knocks out the off hand, a planned off hand knocks out a worn 2H
+    if working_item_plan[slots.MainHandSlot] and not working_item_plan[slots.SecondaryHandSlot] and
+        is_two_hand(hand_links[1]) then
+        hand_links[2] = nil;
+    elseif working_item_plan[slots.SecondaryHandSlot] and hand_links[2] and
+        not working_item_plan[slots.MainHandSlot] and is_two_hand(hand_links[1]) then
+        hand_links[1] = nil;
+    end
+    for i, hand in ipairs(plan_model_hands) do
+        if hand_links[i] then
+            model:TryOn(hand_links[i], hand.name);
+        else
+            model:UndressSlot(hand.slot);
+        end
+    end
+    if not hand_links[1] and not hand_links[2] then
+        local ranged_link = plan_weapon_link(slots.RangedSlot);
+        if ranged_link then
+            model:TryOn(ranged_link);
+        end
+    end
+end
+
 local function update_calculator_character_items(slot)
 
     __sc_frame.calculator_frame.calculator_plan_changed = true;
@@ -182,6 +250,8 @@ local function update_calculator_character_items(slot)
             end
         end
     end
+    -- the worn gear under the plan changed
+    update_plan_model(__sc_frame.calculator_frame.items.plan_model, next(working_item_plan) ~= nil);
 end
 
 -- gems
@@ -313,11 +383,8 @@ local function update_calculator_item_planner()
         end
     end
     pframe.items_tab:set_changed(anything);
-    if anything then
-        pframe.items.item_add_tip:Hide();
-    else
-        pframe.items.item_add_tip:Show();
-    end
+    pframe.items.item_add_tip:SetShown(not anything);
+    update_plan_model(pframe.items.plan_model, anything);
 end
 
 local function update_talents_frame()
@@ -1072,27 +1139,66 @@ local function create_calculator_items_subframe(pframe)
         "AmmoSlot",
     };
 
-    local slot_padding = 2;
-    local slot_size = 28;
+    local slot_padding = 6;
+    local slot_size = 30;
+    -- between a slot and its planned item, the arrow sits in it
+    local plan_gap = 14;
+    local gem_icon_size = 10;
+    local cancel_size = 16;
+    -- the strip below the divider at the bottom
+    local bottom_strip_height = 36;
     local slots_realign_to = {
         HeadSlot = {
             align_from = "LEFT", panchor = "TOPLEFT",
-            px_offset = 10, py_offset = -30,
+            px_offset = cancel_size + 2, py_offset = -26,
             x_between = 0, y_between = -(slot_size + slot_padding)
         },
         HandsSlot = {
             align_from = "RIGHT", panchor = "TOPRIGHT",
-            px_offset = -130, py_offset = -30,
+            px_offset = -(cancel_size + 2), py_offset = -26,
             x_between = 0, y_between = -(slot_size + slot_padding)
         },
+        -- centred between the columns: the middle of the four slots
         MainHandSlot = {
-            align_from = "BOTTOM", panchor = "BOTTOMLEFT",
-            px_offset = 130, py_offset = 45,
+            align_from = "BOTTOM", panchor = "BOTTOM",
+            px_offset = -1.5 * (slot_size + slot_padding), py_offset = bottom_strip_height + cancel_size + 4,
             x_between = slot_size + slot_padding, y_between = 0
         },
     };
 
     local items_max_y_offset = 0;
+
+    -- between the columns like on the character sheet, under the slots (the weapons row covers its feet); shown
+    -- instead of the tip once the plan has changes, drag to rotate
+    local model_inset = cancel_size + 2 + 3 * slot_size + plan_gap + 5;
+    -- the top of the weapons' planned item boxes; the camera leaves about 40 empty below the feet and above the head,
+    -- the model starts at the top of the subframe (higher would cover the subtabs)
+    local weapons_plan_top = bottom_strip_height + cancel_size + 4 + slot_size + plan_gap + 2 * slot_size + 1;
+    local model = CreateFrame("DressUpModel", nil, pframe.items);
+    model:SetPoint("TOPLEFT", model_inset, 0);
+    model:SetPoint("BOTTOMRIGHT", -model_inset, weapons_plan_top - 24);
+    model:SetFrameLevel(pframe.items:GetFrameLevel());
+    model.rotation = 0;
+    model:EnableMouse(true);
+    model:SetScript("OnMouseDown", function(self, btn)
+        if btn == "LeftButton" then
+            self.drag_x = GetCursorPosition();
+            self.drag_rotation = self.rotation;
+        end
+    end);
+    model:SetScript("OnUpdate", function(self)
+        if not self.drag_x then
+            return;
+        end
+        if not IsMouseButtonDown("LeftButton") then
+            self.drag_x = nil;
+            return;
+        end
+        self.rotation = self.drag_rotation + (GetCursorPosition() - self.drag_x) * 0.02;
+        self:SetRotation(self.rotation);
+    end);
+    model:Hide();
+    pframe.items.plan_model = model;
 
     pframe.items.slots = {};
     pframe.items:HookScript("OnShow", function()
@@ -1196,7 +1302,7 @@ local function create_calculator_items_subframe(pframe)
         end
         local arrowf = f;
 
-        f:SetPoint(slotf.expand_point, 13*slotf.expand_x_dir, 12*slotf.expand_y_dir);
+        f:SetPoint(slotf.expand_point, 11*slotf.expand_x_dir, 11*slotf.expand_y_dir);
         f:SetScript("OnEnter", function(self)
 
             if not self.slot or not working_item_plan[self.slot] then
@@ -1250,8 +1356,8 @@ local function create_calculator_items_subframe(pframe)
         new_itemf:SetPoint(
             slotf.expand_point,
             slotf,
-            45*slotf.expand_x_dir,
-            45*slotf.expand_y_dir
+            (slot_size + plan_gap)*slotf.expand_x_dir,
+            (slot_size + plan_gap)*slotf.expand_y_dir
         );
 
         new_itemf.bg = new_itemf:CreateTexture(nil, "BACKGROUND");
@@ -1298,7 +1404,6 @@ local function create_calculator_items_subframe(pframe)
         end);
 
         local plus_tex = "Interface\\Buttons\\UI-PlusButton-Up";
-        local gem_icon_size = 10;
         -- Gem slot frames
         local gemsf = {};
         for i = 1, 3 do
@@ -1308,8 +1413,8 @@ local function create_calculator_items_subframe(pframe)
             gemf:SetSize(gem_icon_size, gem_icon_size);
             gemf:SetPoint(
                 slotf.expand_point,
-                12*slotf.expand_x_dir - 18*slotf.expand_y_dir + i*9*slotf.expand_y_dir,
-                12*slotf.expand_y_dir + 18*math.abs(slotf.expand_x_dir) - i*9*math.abs(slotf.expand_x_dir)
+                13*slotf.expand_x_dir - 18*slotf.expand_y_dir + i*9*slotf.expand_y_dir,
+                13*slotf.expand_y_dir + 18*math.abs(slotf.expand_x_dir) - i*9*math.abs(slotf.expand_x_dir)
             );
 
             gemf.bg = gemf:CreateTexture(nil, "BACKGROUND");
@@ -1367,8 +1472,8 @@ local function create_calculator_items_subframe(pframe)
         f:SetPoint(
             slotf.expand_point,
             new_itemf,
-            25*slotf.expand_x_dir + 10*slotf.expand_y_dir,
-            -10*math.abs(slotf.expand_x_dir) + 25*slotf.expand_y_dir
+            26*slotf.expand_x_dir + 10*slotf.expand_y_dir,
+            -10*math.abs(slotf.expand_x_dir) + 26*slotf.expand_y_dir
         );
         f.id = 0;
 
@@ -1390,8 +1495,8 @@ local function create_calculator_items_subframe(pframe)
 
         enchantf:SetPoint(
             slotf.expand_point,
-            25*slotf.expand_x_dir - 9*slotf.expand_y_dir,
-            9*math.abs(slotf.expand_x_dir) + 25*slotf.expand_y_dir
+            26*slotf.expand_x_dir - 9*slotf.expand_y_dir,
+            9*math.abs(slotf.expand_x_dir) + 26*slotf.expand_y_dir
         );
 
         enchantf.bg = enchantf:CreateTexture(nil, "BACKGROUND");
@@ -1467,9 +1572,9 @@ local function create_calculator_items_subframe(pframe)
             update_calculator_item_planner();
         end);
 
-        local cancel_offset = -17;
+        local cancel_offset = -(cancel_size + 2);
         cancelf:SetPoint(pos.align_from, cancel_offset * slotf.expand_x_dir, cancel_offset * slotf.expand_y_dir);
-        cancelf:SetSize(17, 17);
+        cancelf:SetSize(cancel_size, cancel_size);
         cancelf:SetText("x");
         local fontstr = cancelf:GetFontString();
         if fontstr then
@@ -1537,8 +1642,8 @@ local function create_calculator_items_subframe(pframe)
     end);
 
     f_txt = pframe.items:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPLEFT", 100, -150);
+    f_txt:SetFontObject(GameFontNormalLarge);
+    f_txt:SetPoint("TOP", 0, -130);
     f_txt:SetText(L["SHIFT click on any item\n to add to plan!"]);
     f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
     pframe.items.item_add_tip = f_txt;
@@ -1602,147 +1707,37 @@ local function create_calculator_items_subframe(pframe)
         end
     end
 
-    pframe.items.y_offset = pframe.items.y_offset - 18;
 
-    f_txt = pframe:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(font);
-    f_txt:SetPoint("TOPLEFT", 5, pframe.y_offset+2);
-    f_txt:SetText(L["Active profile: "]);
-    pframe.profile_name_label = f_txt;
+    f = pframe.items:CreateTexture(nil, "ARTWORK");
+    f:SetColorTexture(0.5, 0.5, 0.5, 0.6);
+    f:SetHeight(1);
+    f:SetPoint("BOTTOMLEFT", 0, bottom_strip_height);
+    f:SetPoint("BOTTOMRIGHT", 0, bottom_strip_height);
 
-
-    local rhs_y_offset = pframe.y_offset - 10;
-
-    f_txt = pframe.items:CreateFontString(nil, "OVERLAY");
-    f_txt:SetFontObject(GameFontNormal);
-    f_txt:SetPoint("TOPRIGHT", 0, rhs_y_offset);
-    f_txt:SetText(L["Rename selected"]);
-    f_txt:SetTextColor(1, 1, 1);
-    f_txt:Hide();
-    pframe.items.plan_rename_fstr = f_txt;
-
-    rhs_y_offset = rhs_y_offset - 20;
-
-    f = CreateFrame("EditBox", nil, pframe.items, "InputBoxTemplate");
-    f:SetPoint("TOPRIGHT", 5, rhs_y_offset);
-    f:SetSize(97, 15);
-    f:SetAutoFocus(false);
-    local editbox_save = function(self)
-
-        local new_name = self:GetText();
-
-        if new_name ~= "" and working_name ~= new_name then
-
-            __sc_p_char.calculator_saves[new_name] = __sc_p_char.calculator_saves[working_name];
-            __sc_p_char.calculator_saves[working_name] = nil;
-
-            pframe.plan_dd.init_func(new_name);
-
-            working_name = new_name;
-        end
+    -- the two buttons above the divider, either side of the weapons row and level with it
+    local weapons_row_width = 4 * slot_size + 3 * slot_padding;
+    local side_button_max_width = (pframe.items:GetWidth() - weapons_row_width) / 2 - 10;
+    local side_button_y = bottom_strip_height + cancel_size + 4 + (slot_size - 22) / 2;
+    local function side_button(text)
+        local btn = CreateFrame("Button", nil, pframe.items, "UIPanelButtonTemplate");
+        btn:SetHeight(22);
+        btn:SetNormalFontObject(GameFontNormalSmall);
+        btn:SetHighlightFontObject(GameFontHighlightSmall);
+        btn:SetDisabledFontObject(GameFontDisableSmall);
+        btn:SetText(text);
+        btn:SetWidth(math.min(side_button_max_width, math.ceil(btn:GetFontString():GetStringWidth()) + 24));
+        return btn;
     end
-    f:SetScript("OnEnterPressed", function(self)
-        editbox_save(self);
-        self:ClearFocus();
-    end);
-    f:SetScript("OnEscapePressed", function(self)
-        editbox_save(self);
-        self:ClearFocus();
-    end);
-    f:SetScript("OnTextChanged", editbox_save);
-    f:Hide();
-    pframe.items.plan_rename_editbox = f;
-
-    rhs_y_offset = rhs_y_offset - 80;
-
-    f = CreateFrame("Button", nil, pframe.items, "UIPanelButtonTemplate");
-    f:SetPoint("TOPRIGHT", 5, rhs_y_offset+5);
-    f:SetHeight(40);
-    f:SetWidth(105);
-    f:SetText(L["Save\nplan as"]);
-    f:SetScript("OnClick", function(self)
-
-        local plan_name = pframe.items.new_plan_name_editbox:GetText();
-        if plan_name ~= "" then
-
-            working_name = plan_name;
-            save_calculator_plan(plan_name);
-            pframe.plan_dd.init_func(plan_name);
-            pframe.items.new_plan_name_editbox:SetText("");
-
-            pframe.items.plan_rename_editbox:SetText(plan_name);
-            pframe.items.plan_rename_editbox:Show();
-            pframe.items.plan_rename_fstr:Show();
-            pframe.save_plan_btn:Enable();
-        end
-    end);
-    pframe.items.save_plan_as_btn = f;
-
-    rhs_y_offset = rhs_y_offset - 40;
-
-    f = CreateFrame("EditBox", nil, pframe.items, "InputBoxTemplate");
-    f:SetPoint("TOPRIGHT", 5, rhs_y_offset);
-    f:SetSize(97, 15);
-    f:SetAutoFocus(false);
-    f:SetScript("OnTextChanged", function(self)
-        local txt = self:GetText();
-        if txt == "" then
-            pframe.items.plan_name_empty:Show();
-            pframe.items.save_plan_as_btn:Disable();
-        else
-            pframe.items.plan_name_empty:Hide();
-            pframe.items.save_plan_as_btn:Enable();
-        end
-    end);
-    pframe.items.new_plan_name_editbox = f;
-
-    f = pframe.items:CreateFontString(nil, "OVERLAY");
-    f:SetFontObject(font);
-    f:SetText(L["New plan name"]);
-    f:SetPoint("LEFT", pframe.items.new_plan_name_editbox, 5, 0);
-    pframe.items.plan_name_empty = f;
-
-
-    rhs_y_offset = rhs_y_offset - 40;
-
-    f = CreateFrame("Button", nil, pframe.items, "UIPanelButtonTemplate");
-    f:SetPoint("TOPRIGHT", 5, rhs_y_offset+5);
-    f:SetHeight(40);
-    f:SetWidth(105);
-    f:SetText(L["Delete\nselected"]);
-    f:SetScript("OnClick", function(self)
-        if working_name ~= "" then
-
-            __sc_p_char.calculator_saves[working_name] = nil;
-            pframe.save_plan_btn:Disable();
-
-            pframe.items.plan_rename_fstr:Hide();
-            pframe.items.plan_rename_editbox:Hide();
-            working_name = "";
-            pframe.plan_dd.init_func(L["Saved plans"]);
-
-            self:Disable();
-        end
-    end);
-    f:Disable();
-    pframe.items.delete_plan_btn = f;
-
-    f = CreateFrame("Button", nil, pframe.items, "UIPanelButtonTemplate");
-    f:SetPoint("BOTTOMLEFT", 5, -2);
-    f:SetHeight(25);
-    f:SetWidth(140);
-    f:SetText(L["Clear items"]);
+    f = side_button(L["Clear all items"]);
+    f:SetPoint("BOTTOMLEFT", 4, side_button_y);
     f:SetScript("OnClick", function()
         clear_table(working_item_plan);
         update_calculator_item_planner();
     end);
     local clear_btn = f;
 
-    f = CreateFrame("Button", nil, pframe.items, "UIPanelButtonTemplate");
-    f:SetPoint("BOTTOMLEFT", 150, -2);
-    f:SetHeight(25);
-    f:SetWidth(220);
-    f:SetText(L["Use target's equipment"]);
+    f = side_button(L["Use target's equipment"]);
+    f:SetPoint("BOTTOMRIGHT", -4, side_button_y);
     f:SetScript("OnClick", function(self)
 
         if not CheckInteractDistance("target", 1) or not CanInspect("target") then
@@ -1780,7 +1775,7 @@ local function create_calculator_stats_subframe(pframe)
     local f, f_txt;
 
 
-    pframe.stats.y_offset = pframe.stats.y_offset - 70;
+    pframe.stats.y_offset = pframe.stats.y_offset - 10;
 
     -- NOTE: the keys here are important and serves as template for other manual style stat-changes
     pframe.stats.stat_fields = {
@@ -1977,7 +1972,7 @@ local function create_calculator_talents_subframe(pframe)
     local x_pad = 5;
 
 
-    pframe.talents.y_offset = pframe.talents.y_offset - 80;
+    pframe.talents.y_offset = pframe.talents.y_offset - 10;
 
     local f = CreateFrame("CheckButton", "__sc_frame_calculator_talents_custom_talents_chk", pframe.talents, "ChatConfigCheckButtonTemplate");
     f:SetPoint("TOPLEFT", x_pad, pframe.talents.y_offset);
@@ -2325,7 +2320,6 @@ end
 
 local function create_sw_ui_calculator_frame(pframe)
 
-    local x_pad = 5;
     pframe.calculator_plan_changed = true;
 
     pframe:HookScript("OnHide", function()
@@ -2342,105 +2336,211 @@ local function create_sw_ui_calculator_frame(pframe)
     f_txt:SetText(L["While this tab is open, ability overlay & tooltips reflect the change below"]);
     f_txt:SetTextColor(232.0/255, 225.0/255, 32.0/255);
 
-    pframe.y_offset = pframe.y_offset - 40;
+    pframe.y_offset = pframe.y_offset - 22;
 
-    local tabs = {
-        {"items", L["Item planner"]},
-        {"stats", L["Stat changes"]},
-        {"talents", L["Talents"]},
-        {"buffs", L["Buffs"]},
-    };
+    -- plan row: everything above the subtabs is about the whole plan
+    f_txt = pframe:CreateFontString(nil, "OVERLAY");
+    f_txt:SetFontObject(GameFontNormal);
+    f_txt:SetPoint("TOPLEFT", 0, pframe.y_offset - 9);
+    f_txt:SetText(L["Plan:"]);
+    f_txt:SetTextColor(1.0, 1.0, 1.0);
+    local plan_label = f_txt;
 
-    local subframe_height = 315;
-    create_subtabs(pframe, tabs, subframe_height, function(tab)
-        if tab == pframe.items_tab then
-            pframe.after_area:ClearAllPoints();
-            pframe.before_area:ClearAllPoints();
-            pframe.before_area:SetPoint("TOP", pframe.diffs_area, "BOTTOM", 0, -5);
-            pframe.after_area:SetPoint("TOP", pframe.before_area, "BOTTOM", 0, -5);
-        else
-            pframe.after_area:ClearAllPoints();
-            pframe.before_area:ClearAllPoints();
-            pframe.after_area:SetPoint("LEFT", pframe.diffs_area, "RIGHT", 5, 0);
-            pframe.before_area:SetPoint("RIGHT", pframe.diffs_area, "LEFT", -5, 0);
+    local function plan_button(text)
+        local btn = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
+        btn:SetHeight(22);
+        btn:SetText(text);
+        btn:SetWidth(math.max(50, math.ceil(btn:GetFontString():GetStringWidth()) + 20));
+        return btn;
+    end
+
+    -- the buttons are placed from the right edge
+    f = plan_button(L["Delete"]);
+    f:SetPoint("TOPRIGHT", 0, pframe.y_offset - 4);
+    f:SetScript("OnClick", function(self)
+        if working_name ~= "" then
+
+            __sc_p_char.calculator_saves[working_name] = nil;
+            pframe.save_plan_btn:Disable();
+
+            working_name = "";
+            pframe.plan_dd.init_func(L["Saved plans"]);
+
+            self:Disable();
         end
     end);
+    f:Disable();
+    pframe.delete_plan_btn = f;
 
-    pframe.items.working = working_item_plan;
-    pframe.stats.working = working_stats;
-    pframe.talents.working = working_talents;
-    pframe.buffs.working = working_buffs;
+    f = CreateFrame("EditBox", nil, pframe, "InputBoxTemplate");
+    f:SetPoint("RIGHT", pframe.delete_plan_btn, "LEFT", -8, 0);
+    f:SetSize(90, 15);
+    f:SetAutoFocus(false);
+    f:SetScript("OnTextChanged", function(self)
+        local txt = self:GetText();
+        if txt == "" then
+            pframe.plan_name_empty:Show();
+            pframe.save_plan_as_btn:Disable();
+        else
+            pframe.plan_name_empty:Hide();
+            pframe.save_plan_as_btn:Enable();
+        end
+    end);
+    pframe.new_plan_name_editbox = f;
 
-    pframe.buffs.on_show = function()
-        update_buffs_frame(pframe.buffs);
+    f = pframe:CreateFontString(nil, "OVERLAY");
+    f:SetFontObject(font);
+    f:SetText(L["New plan name"]);
+    f:SetPoint("LEFT", pframe.new_plan_name_editbox, 5, 0);
+    pframe.plan_name_empty = f;
+
+    f = plan_button(L["Save as"]);
+    f:SetPoint("RIGHT", pframe.new_plan_name_editbox, "LEFT", -10, 0);
+    f:SetScript("OnClick", function(self)
+
+        local plan_name = pframe.new_plan_name_editbox:GetText();
+        if plan_name ~= "" then
+
+            working_name = plan_name;
+            save_calculator_plan(plan_name);
+            pframe.plan_dd.init_func(plan_name);
+            pframe.new_plan_name_editbox:SetText("");
+
+            pframe.save_plan_btn:Enable();
+            pframe.delete_plan_btn:Enable();
+        end
+    end);
+    f:Disable();
+    pframe.save_plan_as_btn = f;
+
+    f = plan_button(L["Save"]);
+    f:SetPoint("RIGHT", pframe.save_plan_as_btn, "LEFT", -4, 0);
+    f:SetScript("OnClick", function(self)
+        save_calculator_plan(working_name);
+        pframe.plan_dd.init_func(working_name);
+    end);
+    f:Disable();
+    pframe.save_plan_btn = f;
+
+    -- the dropdown gets the width the buttons leave, its art reaches about 45 beyond the set width
+    local buttons_width = pframe.delete_plan_btn:GetWidth() + 8 + pframe.new_plan_name_editbox:GetWidth() + 10 +
+        pframe.save_plan_as_btn:GetWidth() + 4 + pframe.save_plan_btn:GetWidth();
+    local plan_dd_width = math.max(60, math.min(120,
+        pframe:GetWidth() - buttons_width - plan_label:GetStringWidth() - 55));
+
+    pframe.plan_dd = libDD:Create_UIDropDownMenu(nil, pframe);
+    pframe.plan_dd:SetPoint("LEFT", plan_label, "RIGHT", -5, -3);
+    pframe.plan_dd.init_func = function(plan_name)
+        libDD:UIDropDownMenu_Initialize(pframe.plan_dd, function()
+
+            libDD:UIDropDownMenu_SetWidth(pframe.plan_dd, plan_dd_width);
+            libDD:UIDropDownMenu_SetText(pframe.plan_dd, plan_name);
+
+            for name, plan in pairs(__sc_p_char.calculator_saves) do
+
+                libDD:UIDropDownMenu_AddButton({
+                    text = name,
+                    checked = name == working_name,
+                    func = function()
+
+                        pframe.save_plan_btn:Enable();
+                        pframe.delete_plan_btn:Enable();
+
+                        load_calculator_plan(plan);
+                        working_name = name;
+                        pframe.plan_dd.init_func(name);
+                        update_calculator_item_planner();
+                        -- Texture may be unavailable when loaded cold
+                        -- Try again in 1 second
+                        C_Timer.After(1.0, update_calculator_item_planner);
+                    end
+                });
+            end
+        end);
     end;
-    pframe.talents.on_show = update_talents_frame;
+    pframe.plan_dd.init_func(L["Saved plans"]);
 
-    pframe.y_offset = pframe.y_offset - 5;
+    pframe.y_offset = pframe.y_offset - 32;
+    make_divider(pframe);
+    pframe.y_offset = pframe.y_offset - 8;
 
+    -- result row: Before -> Spells, Stats -> After, hover for the text, click to copy it
     pframe.diffs_txt = "";
 
     local function stats_txt(effects)
         return effects and (stats_format(active_loadout(), effects));
     end
 
-    local diffs_area = CreateFrame("Frame", nil, pframe, "BackdropTemplate");
-    diffs_area:SetSize(110, 40);
-    diffs_area:SetPoint("TOPLEFT", 119, pframe.y_offset-17);
-    diffs_area:EnableMouse(true);
-    diffs_area:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-
-        if config.settings.general_calc_stats_raw_dump then
-            GameTooltip:SetText(L["Changes"]);
-        else
-            GameTooltip:SetText(L["Changes (simplified)"]);
-        end
-        GameTooltip:AddLine(pframe.diffs_txt);
-        GameTooltip:Show();
-    end);
-    diffs_area:SetScript("OnLeave", function()
-        GameTooltip:Hide();
-    end);
-    diffs_area:SetScript("OnMouseDown", function(self)
-        dump_text(
-            L["Effect changes"],
-            pframe.diffs_txt,
-            300,
-            400
-        );
-    end);
-
-    diffs_area:SetBackdrop({
-        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-        edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
-        edgeSize = 2; -- thickness of the border
-    });
-    diffs_area:SetBackdropColor(0.2, 0.2, 0.2, 0.8);
-    diffs_area:SetBackdropBorderColor(1, 0.8, 0, 1);
-
-    pframe.diffs_area = diffs_area;
-
-    f = diffs_area:CreateFontString(nil, "OVERLAY");
-    f:SetFontObject(GameFontNormal);
-    local fp, _, flags = f:GetFont();
-    f:SetFont(fp, 17, flags);
-    f:SetPoint("CENTER");
-    pframe.diffs_fontstr = f;
-
     local arrow_tex_path = "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up";
+    local box_spacing = 5;
+    local flow_arrow_size = 20;
+    local flow_arrow_space = flow_arrow_size + 2 * box_spacing;
+    local end_box_width = 90;
+    local change_box_width = math.floor((pframe:GetWidth() - 2 * end_box_width - 2 * flow_arrow_space - box_spacing) / 2);
+    local box_x = 0;
+    local function flow_arrow()
+        local arrow = pframe:CreateTexture(nil, "ARTWORK");
+        arrow:SetTexture(arrow_tex_path);
+        arrow:SetTexCoord(0.3, 0.7, 0.3, 0.7);
+        arrow:SetSize(flow_arrow_size, flow_arrow_size);
+        arrow:SetPoint("TOPLEFT", box_x + box_spacing, pframe.y_offset - (30 - flow_arrow_size) / 2);
+        box_x = box_x + flow_arrow_space;
+        return arrow;
+    end
+    local function result_box(text, width)
+        local box = CreateFrame("Frame", nil, pframe, "BackdropTemplate");
+        box:SetSize(width, 30);
+        box:SetPoint("TOPLEFT", box_x, pframe.y_offset);
+        box_x = box_x + width;
+        box:EnableMouse(true);
+        box:SetScript("OnLeave", function()
+            GameTooltip:Hide();
+        end);
+        box:SetBackdrop({
+            bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+            edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
+            edgeSize = 2; -- thickness of the border
+        });
+        box:SetBackdropColor(0.2, 0.2, 0.2, 0.8);
+        box:SetBackdropBorderColor(1, 0.8, 0, 1);
 
-    local f = diffs_area:CreateTexture(nil, "ARTWORK");
-    f:SetTexture(arrow_tex_path);
-    f:SetPoint("BOTTOMRIGHT", -2, 2);
-    f:SetTexCoord(0.3, 0.7, 0.3, 0.7);
-    f:SetSize(8, 8);
-    f:SetRotation(-3.14592/4);
+        local fstr = box:CreateFontString(nil, "OVERLAY");
+        fstr:SetFontObject(GameFontNormal);
+        local fp, _, flags = fstr:GetFont();
+        fstr:SetFont(fp, 15, flags);
+        fstr:SetPoint("CENTER");
+        fstr:SetText(text);
+        box.fontstr = fstr;
 
+        local arrow = box:CreateTexture(nil, "ARTWORK");
+        arrow:SetTexture(arrow_tex_path);
+        arrow:SetPoint("BOTTOMRIGHT", -2, 2);
+        arrow:SetTexCoord(0.3, 0.7, 0.3, 0.7);
+        arrow:SetSize(8, 8);
+        arrow:SetRotation(-3.14592/4);
 
-    local before_area = CreateFrame("Frame", nil, pframe, "BackdropTemplate");
-    before_area:SetSize(110, 30);
-    before_area:EnableMouse(true);
+        -- box.flash(): a gold glow pulsing twice, for a result that just changed
+        local glow = box:CreateTexture(nil, "OVERLAY");
+        glow:SetAllPoints(box);
+        glow:SetColorTexture(1, 0.8, 0, 1);
+        glow:SetBlendMode("ADD");
+        glow:SetAlpha(0);
+        local flash = glow:CreateAnimationGroup();
+        for i, v in ipairs({ { 0, 0.4, 0.12 }, { 0.4, 0, 0.3 }, { 0, 0.4, 0.12 }, { 0.4, 0, 0.45 } }) do
+            local a = flash:CreateAnimation("Alpha");
+            a:SetFromAlpha(v[1]);
+            a:SetToAlpha(v[2]);
+            a:SetDuration(v[3]);
+            a:SetOrder(i);
+        end
+        box.flash = function()
+            flash:Stop();
+            flash:Play();
+        end;
+        return box;
+    end
+
+    local before_area = result_box(L["Before"], end_box_width);
     before_area:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
 
@@ -2453,9 +2553,6 @@ local function create_sw_ui_calculator_frame(pframe)
         GameTooltip:AddLine(stats_txt(pframe.stats_effects));
         GameTooltip:Show();
     end);
-    before_area:SetScript("OnLeave", function()
-        GameTooltip:Hide();
-    end);
     before_area:SetScript("OnMouseDown", function(self)
         dump_text(
             L["Before"],
@@ -2464,34 +2561,60 @@ local function create_sw_ui_calculator_frame(pframe)
             400
         );
     end);
-
-    before_area:SetBackdrop({
-        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-        edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
-        edgeSize = 2; -- thickness of the border
-    });
-    before_area:SetBackdropColor(0.2, 0.2, 0.2, 0.8);
-    before_area:SetBackdropBorderColor(1, 0.8, 0, 1);
-
-    f = before_area:CreateFontString(nil, "OVERLAY");
-    f:SetFontObject(GameFontNormal);
-    local fp, _, flags = f:GetFont();
-    f:SetFont(fp, 17, flags);
-    f:SetPoint("CENTER");
-    f:SetText(L["Before"]);
-
-    local f = before_area:CreateTexture(nil, "ARTWORK");
-    f:SetTexture(arrow_tex_path);
-    f:SetPoint("BOTTOMRIGHT", -2, 2);
-    f:SetTexCoord(0.3, 0.7, 0.3, 0.7);
-    f:SetSize(8, 8);
-    f:SetRotation(-3.14592/4);
     pframe.before_area = before_area;
 
+    pframe.flow_arrow_before = flow_arrow();
+    local spells_area = result_box(L["Spells"], change_box_width);
+    spells_area:SetScript("OnEnter", function(self)
+        self.tooltip_mod = sc.core.key_mod_flags();
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+        GameTooltip:SetText(L["Spells"]);
+        write_plan_spells_tooltip(GameTooltip, self.tooltip_mod);
+    end);
+    -- the shown tooltip calls its owner's UpdateTooltip every 0.2 s: redrawn when a modifier key changed,
+    -- update_calc_list redraws it when the numbers change
+    spells_area.UpdateTooltip = function(self)
+        if sc.core.key_mod_flags() ~= self.tooltip_mod then
+            self:GetScript("OnEnter")(self);
+        end
+    end;
+    spells_area:SetScript("OnMouseDown", function(self)
+        dump_text(
+            L["Spells"],
+            plan_spells_text(sc.core.key_mod_flags()),
+            400,
+            400
+        );
+    end);
+    pframe.spells_area = spells_area;
+    pframe.spells_fontstr = spells_area.fontstr;
 
-    local after_area = CreateFrame("Frame", nil, pframe, "BackdropTemplate");
-    after_area:SetSize(110, 30);
-    after_area:EnableMouse(true);
+    box_x = box_x + box_spacing;
+    local diffs_area = result_box(L["Stats"], change_box_width);
+    diffs_area:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+
+        if config.settings.general_calc_stats_raw_dump then
+            GameTooltip:SetText(L["Changes"]);
+        else
+            GameTooltip:SetText(L["Changes (simplified)"]);
+        end
+        GameTooltip:AddLine(pframe.diffs_txt);
+        GameTooltip:Show();
+    end);
+    diffs_area:SetScript("OnMouseDown", function(self)
+        dump_text(
+            L["Effect changes"],
+            pframe.diffs_txt,
+            300,
+            400
+        );
+    end);
+    pframe.diffs_area = diffs_area;
+    pframe.diffs_fontstr = diffs_area.fontstr;
+
+    pframe.flow_arrow_after = flow_arrow();
+    local after_area = result_box(L["After"], end_box_width);
     after_area:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
         if config.settings.general_calc_stats_raw_dump then
@@ -2502,9 +2625,6 @@ local function create_sw_ui_calculator_frame(pframe)
         GameTooltip:AddLine(stats_txt(pframe.stats_effects_diffed));
         GameTooltip:Show();
     end);
-    after_area:SetScript("OnLeave", function()
-        GameTooltip:Hide();
-    end);
     after_area:SetScript("OnMouseDown", function(self)
         dump_text(
             L["After"],
@@ -2513,77 +2633,30 @@ local function create_sw_ui_calculator_frame(pframe)
             400
         );
     end);
-
-    after_area:SetBackdrop({
-        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-        edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
-        edgeSize = 2; -- thickness of the border
-    });
-    after_area:SetBackdropColor(0.2, 0.2, 0.2, 0.8);
-    after_area:SetBackdropBorderColor(1, 0.8, 0, 1);
     pframe.after_area = after_area;
 
-    f = after_area:CreateFontString(nil, "OVERLAY");
-    f:SetFontObject(GameFontNormal);
-    local fp, _, flags = f:GetFont();
-    f:SetFont(fp, 17, flags);
-    f:SetPoint("CENTER");
-    f:SetText(L["After"]);
+    -- the subtab row takes the 34 above the subframes
+    pframe.y_offset = pframe.y_offset - 30 - 38;
 
-    local f = after_area:CreateTexture(nil, "ARTWORK");
-    f:SetTexture(arrow_tex_path);
-    f:SetPoint("BOTTOMRIGHT", -2, 2);
-    f:SetTexCoord(0.3, 0.7, 0.3, 0.7);
-    f:SetSize(8, 8);
-    f:SetRotation(-3.14592/4);
+    local tabs = {
+        {"items", L["Item planner"]},
+        {"stats", L["Custom stats"]},
+        {"talents", L["Talents"]},
+        {"buffs", L["Buffs"]},
+    };
 
-    pframe.plan_dd = libDD:Create_UIDropDownMenu(nil, pframe);
-    pframe.plan_dd:SetPoint("TOPRIGHT", 20, pframe.y_offset);
-    pframe.plan_dd.init_func = function(plan_name)
-        libDD:UIDropDownMenu_Initialize(pframe.plan_dd, function()
+    create_subtabs(pframe, tabs);
+    local subframe_height = pframe:GetHeight() + pframe.y_offset;
 
-            libDD:UIDropDownMenu_SetWidth(pframe.plan_dd, 90);
-            libDD:UIDropDownMenu_SetText(pframe.plan_dd, plan_name);
+    pframe.items.working = working_item_plan;
+    pframe.stats.working = working_stats;
+    pframe.talents.working = working_talents;
+    pframe.buffs.working = working_buffs;
 
-            for name, plan in pairs(__sc_p_char.calculator_saves) do
-
-                libDD:UIDropDownMenu_AddButton({
-                    text = name,
-                    checked = name == working_name,
-                    func = function()
-
-                        pframe.save_plan_btn:Enable();
-                        pframe.items.plan_rename_editbox:SetText(name);
-                        pframe.items.plan_rename_editbox:Show();
-                        pframe.items.plan_rename_fstr:Show();
-                        pframe.items.delete_plan_btn:Enable();
-
-                        load_calculator_plan(plan);
-                        working_name = name;
-                        pframe.plan_dd.init_func(name);
-                        --libDD:UIDropDownMenu_SetText(pframe.plan_dd, name);
-                        update_calculator_item_planner();
-                        -- Texture may be unavailable when loaded cold
-                        -- Try again in 1 second
-                        C_Timer.After(1.0, update_calculator_item_planner);
-                    end
-                });
-            end
-        end);
+    pframe.buffs.on_show = function()
+        update_buffs_frame(pframe.buffs);
     end;
-    pframe.plan_dd.init_func(L["Saved plans"]);
-
-    f = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
-    f:SetPoint("TOPRIGHT", 5, pframe.y_offset-28);
-    f:SetHeight(20);
-    f:SetWidth(105);
-    f:SetText(L["Save"]);
-    f:SetScript("OnClick", function(self)
-        save_calculator_plan(working_name);
-        pframe.plan_dd.init_func(working_name);
-    end);
-    f:Disable();
-    pframe.save_plan_btn = f;
+    pframe.talents.on_show = update_talents_frame;
 
     -- Item planner subframe
     create_calculator_items_subframe(pframe);
@@ -2610,10 +2683,9 @@ local function create_sw_ui_calculator_frame(pframe)
             bf.preserve_buffs_btn:SetChecked(working_buffs.preserve_active);
         end;
         bf.lname_to_id = forced_buffs_lname_to_id;
-        bf.list_height = 200;
         bf.name_prefix = "__sc_frame_buffs_";
 
-        bf.y_offset = bf.y_offset - 65;
+        bf.y_offset = bf.y_offset - 5;
 
         f = CreateFrame("CheckButton", "__sc_frame_calculator_custom_buffs", bf, "ChatConfigCheckButtonTemplate");
         f:SetPoint("TOPLEFT", bf, 0, bf.y_offset);
@@ -2639,199 +2711,14 @@ local function create_sw_ui_calculator_frame(pframe)
         bf.legend_y_offset = bf.y_offset - 8;
         bf.y_offset = bf.y_offset - 25;
 
+        -- create_buffs_list puts the two lists 36 below its y offset, they reach down to the bottom
+        bf.list_height = subframe_height + bf.y_offset - 36 - 5;
         create_buffs_list(bf);
         bf.fadeable_checkboxes[#bf.fadeable_checkboxes + 1] = bf.preserve_buffs_btn;
     end
 
-    pframe.y_offset = pframe.y_offset - subframe_height;
-
-    local div = pframe:CreateTexture(nil, "ARTWORK")
-    div:SetColorTexture(0.5, 0.5, 0.5, 0.6);
-    div:SetHeight(1);
-    div:SetPoint("TOPLEFT", pframe, "TOPLEFT", 0, pframe.y_offset);
-    div:SetPoint("TOPRIGHT", pframe, "TOPRIGHT", 0, pframe.y_offset);
-
-    pframe.y_offset = pframe.y_offset - 3;
-
-    multi_row_checkbutton(
-        {{id = "calc_list_use_highest_rank", txt = L["Use highest learned rank"]}},
-        pframe,
-        2,
-        function()
-            if __sc_frame:IsShown() and pframe:IsShown() then
-                update_calc_list(true);
-            end
-        end,
-        -5);
-
-
-    pframe.stat_diff_dd = libDD:Create_UIDropDownMenu(nil, pframe);
-
-    local stat_diff_opts = {
-        { "tooltip_item_stat_diff_tank",   L["Tank"]            },
-        { "tooltip_item_stat_diff_melee",  L["Melee"]           },
-        { "tooltip_item_stat_diff_ranged", L["Ranged"]          },
-        { "tooltip_item_stat_diff_caster", L["Caster"]          },
-        { "tooltip_item_stat_diff_healer", L["Healer"]          },
-        { "tooltip_item_stat_diff_spells", L["Ability effects"] },
-    };
-    pframe.stat_diff_dd:SetPoint("TOPLEFT", 200, pframe.y_offset+2);
-    pframe.stat_diff_dd.init_func = function()
-        libDD:UIDropDownMenu_Initialize(pframe.stat_diff_dd, function()
-
-            libDD:UIDropDownMenu_SetText(pframe.stat_diff_dd, L["Stats display"]);
-            libDD:UIDropDownMenu_SetWidth(pframe.stat_diff_dd, 100);
-
-            for _, v in ipairs(stat_diff_opts) do
-                local opt = v[1];
-                local lname = v[2];
-
-                libDD:UIDropDownMenu_AddButton(
-                    {
-                        text = lname,
-                        checked = config.settings[opt],
-                        keepShownOnClick = true,
-                        notCheckable = false,
-                        func = function()
-
-                            config.settings[opt] = not config.settings[opt];
-                            __sc_frame.calculator_frame.calculator_plan_changed = true;
-                        end
-                    }
-                );
-            end
-        end);
-    end;
-
-    pframe.stat_diff_dd:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-        GameTooltip:SetText(L["Tooltips show stats relevant to these categories."], 1, 1, 1);
-        GameTooltip:Show();
-    end);
-
-    pframe.stat_diff_dd:SetScript("OnLeave", function(self)
-        GameTooltip:Hide();
-    end);
-    pframe.stat_diff_dd.init_func();
-
-    -- sim type button
-    pframe.sim_type_button = libDD:Create_UIDropDownMenu("__sc_frame_setting_calc_fight_type", pframe);
-
-    pframe.sim_type_button._type = "DropDownMenu";
-    pframe.sim_type_button:SetPoint("TOPRIGHT", 20, pframe.y_offset+2);
-    pframe.sim_type_button.init_func = function()
-        if config.settings.calc_fight_type == fight_types.repeated_casts then
-            libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Repeated casts"]);
-            pframe.spell_diff_header_center:SetText(L["Effect"]);
-            pframe.spell_diff_header_right:SetText(L["Per sec"]);
-        elseif config.settings.calc_fight_type == fight_types.cast_until_oom then
-            libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Cast until OOM"]);
-            pframe.spell_diff_header_center:SetText(L["Effect"]);
-            pframe.spell_diff_header_right:SetText(L["Duration (sec)"]);
-        end
-    end;
-    libDD:UIDropDownMenu_SetWidth(pframe.sim_type_button, 120);
-    libDD:UIDropDownMenu_SetInitializeFunction(pframe.sim_type_button, function()
-        libDD:UIDropDownMenu_AddButton(
-            {
-                text = L["Repeated cast"],
-                checked = config.settings.calc_fight_type == fight_types.repeated_casts,
-                func = function()
-
-                    config.settings.calc_fight_type = fight_types.repeated_casts;
-                    libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Repeated casts"]);
-                    pframe.spell_diff_header_center:SetText(L["Effect"]);
-                    pframe.spell_diff_header_right:SetText(L["Per sec"]);
-                    update_calc_list(true);
-                end
-            }
-        );
-        libDD:UIDropDownMenu_AddButton(
-            {
-                text = L["Cast until OOM"],
-                checked = config.settings.calc_fight_type == fight_types.cast_until_oom,
-                func = function()
-
-                    config.settings.calc_fight_type = fight_types.cast_until_oom;
-                    libDD:UIDropDownMenu_SetText(pframe.sim_type_button, L["Cast until OOM"]);
-                    pframe.spell_diff_header_center:SetText(L["Effect"]);
-                    pframe.spell_diff_header_right:SetText(L["Duration (sec)"]);
-                    update_calc_list(true);
-                end
-            }
-        );
-    end);
-
-    pframe.y_offset = pframe.y_offset - 27;
-
-    pframe.spell_diff_header_spell = pframe:CreateFontString(nil, "OVERLAY");
-    pframe.spell_diff_header_spell:SetFontObject(font);
-    pframe.spell_diff_header_spell:SetPoint("TOPLEFT", x_pad, pframe.y_offset);
-    pframe.spell_diff_header_spell:SetText(L["Spell difference"]);
-
-    pframe.spell_diff_header_center = pframe:CreateFontString(nil, "OVERLAY");
-    pframe.spell_diff_header_center:SetFontObject(font);
-    pframe.spell_diff_header_center:SetPoint("LEFT", pframe, "TOPLEFT", x_pad + 255, pframe.y_offset-4);
-    pframe.spell_diff_header_center:SetText("");
-
-    pframe.spell_diff_header_right = pframe:CreateFontString(nil, "OVERLAY");
-    pframe.spell_diff_header_right:SetFontObject(font);
-    pframe.spell_diff_header_right:SetPoint("LEFT", pframe, "TOPLEFT", x_pad + 356, pframe.y_offset-4);
-    pframe.spell_diff_header_right:SetText("");
-
-
-    f = pframe:CreateFontString(nil, "OVERLAY");
-    f:SetFontObject(GameFontNormal);
-    f:SetText(L["Abilities can be added from Spells tab"]);
-    f:SetTextColor(232.0/255, 225.0/255, 32.0/255);
-    f:SetPoint("BOTTOMLEFT", 5, 5);
-    pframe.spells_add_tip = f;
-
-    -- spell list between the headers and the tip, as many rows as fit, scrolls when there are more
-    local list_bottom = 22;
-    local row_height = 15;
-    local area = CreateFrame("Frame", nil, pframe);
-    area:SetPoint("TOPLEFT", 0, pframe.y_offset);
-    area:SetPoint("BOTTOMRIGHT", 0, list_bottom);
-    pframe.calc_list_area = area;
-    pframe.calc_list_row_height = row_height;
-    -- a row reaches 13 below its line
-    pframe.calc_list_num_rows = math.floor((pframe:GetHeight() + pframe.y_offset - list_bottom - 13) / row_height);
-    pframe.calc_list_offset = 0;
-
-    f = CreateFrame("Slider", nil, area, "UIPanelScrollBarTrimTemplate");
-    f:SetOrientation('VERTICAL');
-    f:SetPoint("TOPRIGHT", area, "TOPRIGHT", 10, -row_height-14);
-    f:SetPoint("BOTTOMRIGHT", area, "BOTTOMRIGHT", 10, 16);
-    f:SetWidth(20);
-    -- replaces the template's script, which scrolls the parent as a ScrollFrame, before any value is set
-    f:SetScript("OnValueChanged", function(_, val)
-        local offset = math.max(0, math.floor(val + 0.5));
-        if offset ~= pframe.calc_list_offset then
-            pframe.calc_list_offset = offset;
-            show_calc_list_rows(pframe);
-        end
-    end);
-    f.scrollStep = 1;
-    f:SetValueStep(1);
-    f:SetMinMaxValues(0, 0);
-    f:SetValue(0);
-    f:Hide();
-    local bg = f:CreateTexture(nil, "BACKGROUND");
-    bg:SetAllPoints(f);
-    bg:SetColorTexture(0, 0, 0, 0.5);
-    pframe.calc_list_slider = f;
-
-    -- over a row's icon and name the wheel switches the evaluation mode instead
-    area:EnableMouseWheel(true);
-    area:SetScript("OnMouseWheel", function(_, delta)
-        local slider = pframe.calc_list_slider;
-        slider:SetValue(slider:GetValue() - delta);
-    end);
-
     update_calculator_item_planner();
     pframe.items_tab:Click();
-    pframe.calc_list = {};
 end
 
 ui.create_buffs_list                 = create_buffs_list;

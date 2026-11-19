@@ -2582,42 +2582,6 @@ local armor_ignorable = {
     [4] = "plate",
 };
 
-local function make_item_tooltip_line_frames(tooltip)
-    local role_tex = tooltip:CreateTexture(nil, "ARTWORK");
-    role_tex:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-ROLES");
-    role_tex:SetSize(16, 16);
-
-    return {
-        role_tex = role_tex,
-        first_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
-        second_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
-    };
-end
-
-local empty_tex = "Interface\\Buttons\\UI-Quickslot2";
-
-local function make_item_tooltip_data(tooltip)
-    local data = {
-
-        cached_spells_cmp_item_slots = {
-            [1] = { len = 0, diff_list = {}, diff_str = ""},
-            [2] = { len = 0, diff_list = {}, diff_str = ""}
-        },
-        tooltip_item_link_last = "",
-        item_tooltip_frames_hidden = false,
-        item_tooltip_effects_update_id = 0,
-        cmp_uses_mana = false,
-        new_item = {},
-        old_item1 = {},
-        old_item2 = {},
-        headers = {
-            first_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
-            second_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
-        }
-    };
-    return data;
-end
-
 local function colored_diff_str(val, perc, num_digits)
     local val_str = format_number(val, num_digits-1);
     local perc_str = format_number(perc, num_digits).."%";
@@ -2645,6 +2609,289 @@ local function colored_diff_str(val, perc, num_digits)
     end
 end
 
+local function make_spells_cmp_row_frames(tooltip)
+    local role_tex = tooltip:CreateTexture(nil, "ARTWORK");
+    role_tex:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-ROLES");
+    role_tex:SetSize(16, 16);
+
+    return {
+        role_tex = role_tex,
+        first_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
+        second_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
+    };
+end
+
+-- a spell comparison drawn on one tooltip: cmps[i] is one before / after pair, drawn under its own lhs line;
+-- no_stat_diffs set on a view drops the SHIFT key hint (a view that never shows stat changes)
+local function make_spells_cmp_view(tooltip, num_cmps)
+    local view = {
+        cmps = {},
+        frames_hidden = false,
+        headers = {
+            first_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
+            second_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
+        }
+    };
+    for i = 1, num_cmps do
+        view.cmps[i] = { len = 0, diff_list = {}, diff_str = "", uses_mana = false };
+    end
+    return view;
+end
+
+local function hide_spells_cmp(view)
+    if view.frames_hidden then
+        return;
+    end
+    view.frames_hidden = true;
+    for _, cmp in pairs(view.cmps) do
+        for _, row in ipairs(cmp.diff_list) do
+            for _, frame in pairs(row.frames) do
+                frame:Hide();
+            end
+        end
+    end
+    for _, v in pairs(view.headers) do
+        v:Hide();
+    end
+end
+
+local function spells_cmp_fight_type(mod)
+    local fight_type = config.settings.calc_fight_type;
+    if bit.band(mod, sc.tooltip_mod_flags.ALT) ~= 0 then
+        if fight_type == fight_types.repeated_casts then
+            fight_type = fight_types.cast_until_oom;
+        else
+            fight_type = fight_types.repeated_casts;
+        end
+    end
+    return fight_type;
+end
+
+local function spells_cmp_show_stat_diffs(mod)
+    return config.settings.tooltip_item_stat_diff or bit.band(mod, sc.tooltip_mod_flags.SHIFT) ~= 0;
+end
+
+local function spells_cmp_stat_diffs(cmp, loadout, effects_before, effects_after, gems, enchants, set_bonuses)
+    effects_finalize_forced(loadout, effects_after);
+    cmp.diff_str = stats_diff_format(loadout, effects_before, effects_after);
+    if cmp.diff_str ~= "" then
+        cmp.diff_str = stat_diffs_included_effects_str(gems, enchants, set_bonuses)..cmp.diff_str;
+    end
+end
+
+-- rows i + 1, ... for spell k, returns the last row
+local function spells_cmp_add_spell(cmp, i, tooltip, k, fight_type, loadout, effects_before, effects_after, eval_flags)
+    local spell = spells[k];
+    if bit.band(spell.flags, spell_flags.eval) ~= 0 then
+
+        i = i + 1;
+        cmp.diff_list[i] = cmp.diff_list[i] or { frames = make_spells_cmp_row_frames(tooltip) };
+
+        spell_diff(cmp.diff_list[i], fight_type, spell, k, loadout, effects_before, effects_after, eval_flags);
+
+        -- for spells with both heal and dmg
+        if spell.healing_version then
+            i = i + 1;
+            cmp.diff_list[i] = cmp.diff_list[i] or { frames = make_spells_cmp_row_frames(tooltip) };
+
+            spell_diff(cmp.diff_list[i], fight_type, spell.healing_version, k, loadout, effects_before, effects_after, eval_flags);
+        end
+    elseif bit.band(spell.flags, spell_flags.ehp) ~= 0 then
+
+        i = i + 1;
+        cmp.diff_list[i] = cmp.diff_list[i] or { frames = make_spells_cmp_row_frames(tooltip) };
+
+        ehp_diff(cmp.diff_list[i], loadout, effects_before, effects_after, eval_flags);
+    end
+    return i;
+end
+
+-- the comparison list's spells after row i; skip_unusable_attacks drops Attack / Shoot / Throw the class cannot use
+local function spells_cmp_list(cmp, i, tooltip, fight_type, loadout, effects_before, effects_after, eval_flags, skip_unusable_attacks)
+    cmp.uses_mana = false;
+    for k, _ in pairs(config.settings.spell_calc_list) do
+        if config.settings.calc_list_use_highest_rank and spells[k] then
+            k = highest_learned_rank(spells[k].base_id);
+        end
+        if skip_unusable_attacks then
+            if ((k == spids.shoot or k == spids.throw) and not_ranged_class) or
+               (k == spids.attack and not_melee_class) then
+                k = nil;
+            end
+        end
+        if k and spells[k] then
+            if bit.band(spells[k].flags, spell_flags.eval) ~= 0 and spells[k].power_type == powers.mana then
+                cmp.uses_mana = true;
+            end
+            i = spells_cmp_add_spell(cmp, i, tooltip, k, fight_type, loadout, effects_before, effects_after, eval_flags);
+        end
+    end
+    cmp.len = i;
+end
+
+local function spells_cmp_neutral(view, num_cmps)
+    for c = 1, num_cmps do
+        local cmp = view.cmps[c];
+        for i = 1, cmp.len do
+            local diff = cmp.diff_list[i];
+            if diff.effect ~= 0 or diff.effect_timed ~= 0 then
+                return false;
+            end
+        end
+    end
+    return true;
+end
+
+-- The only reliable way to get alignment on comparison numbers to be nicely aligned
+-- is to set them as frame objects because monospaced fonts seem to be broken ingame
+-- Per cmp: lhs (its first line, the column headers sit on the first cmp's), attack_tex / ranged_tex (shown instead of
+-- the spell icon on Attack / ranged attack rows)
+local function write_spells_cmp(tooltip, view, num_cmps, mod, loadout, fight_type, show_stat_diffs)
+
+    local header2;
+    local header3;
+    local fight_type_str;
+    local color_tag;
+    local mode_switch_tip;
+    if fight_type == fight_types.repeated_casts then
+        header2 = L["Effect"];
+        header3 = L["Per sec"];
+        fight_type_str = L["Repeated casts"];
+        color_tag = "effect_per_sec";
+        mode_switch_tip = L["ALT: Cast until OOM"];
+    else
+        header2 = L["Effect"].."  ";
+        header3 = L["Duration (s)"];
+        fight_type_str = L["Cast until OOM"];
+        color_tag = "effect_until_oom";
+        mode_switch_tip = L["ALT: Repeated casts"];
+    end
+
+    view.headers.first_fstr:SetText(header2);
+    view.headers.second_fstr:SetText(header3);
+
+    for _, v in pairs(view.headers) do
+        v:SetParent(tooltip);
+        v:Show();
+        v:SetTextColor(effect_color(color_tag));
+    end
+
+    -- add a certain minimum width to the tooltip so there is enough clearance for the diff columns
+    tooltip:AddLine(
+        "                                                                                      "
+    );
+    tooltip:AddDoubleLine(sc.core.addon_name,
+        string.format("%s %s%d|r | %s",
+            L["Target level"],
+            color_by_lvl_diff(loadout.lvl, loadout.target_lvl),
+            loadout.target_lvl,
+            fight_type_str),
+        1, 1, 1,
+        1, 1, 1);
+
+    tooltip:AddDoubleLine(view.cmps[1].lhs,
+        " ",
+        1, 1, 1,
+        effect_color(color_tag));
+
+    local min_width = 95;
+
+    -- anchors to tooltip lines left from the last show make the width secret when those lines are secret
+    view.headers.first_fstr:ClearAllPoints();
+    view.headers.second_fstr:ClearAllPoints();
+    local offset_to_first = math.max(min_width,
+        secret_or(view.headers.second_fstr:GetWidth(), min_width));
+    local offset_to_role_icon = offset_to_first + math.max(min_width,
+        secret_or(view.headers.first_fstr:GetWidth(), min_width));
+
+    local tooltip_name = tooltip:GetName();
+    local rhs_txt = _G[tooltip_name .. "TextRight" .. tooltip:NumLines()];
+    view.headers.second_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", 0, 0);
+    view.headers.first_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", -offset_to_first, 0);
+
+    local uses_mana = false;
+    for c = 1, num_cmps do
+        local cmp = view.cmps[c];
+        if c > 1 then
+            tooltip:AddDoubleLine(cmp.lhs, " ", 1, 1, 1);
+        end
+
+        for i = 1, cmp.len do
+            local diff = cmp.diff_list[i];
+            local spell_texture_str = "|T" .. diff.tex .. ":16:16:0:0|t "
+
+            diff.frames.first_fstr:SetText(colored_diff_str(diff.effect, diff.effect_changed_perc, 2));
+
+            diff.frames.second_fstr:SetText(colored_diff_str(diff.effect_timed, diff.effect_timed_changed_perc, 2));
+
+            -- false: a weapon attack without its weapon's icon
+            local weapon_tex;
+            if diff.id == sc.auto_attack_spell_id then
+                weapon_tex = cmp.attack_tex or false;
+            elseif diff.id == spids.auto_shot or diff.id == spids.shoot or diff.id == spids.throw then -- hunter ranged auto attack
+                weapon_tex = cmp.ranged_tex or false;
+            end
+            if weapon_tex then
+                tooltip:AddDoubleLine(string.format("  |T%s:16:16:0:0|t  %s", weapon_tex, diff.disp), " ");
+            elseif weapon_tex == false then
+                tooltip:AddDoubleLine(string.format("  %s %s", spell_texture_str, diff.disp), " ");
+            else
+                tooltip:AddDoubleLine(string.format("  %s%s", spell_texture_str, diff.extra), " ");
+            end
+
+            rhs_txt = _G[tooltip_name .. "TextRight" .. tooltip:NumLines()];
+            diff.frames.second_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", 0, 0);
+            diff.frames.first_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", -offset_to_first, 0);
+
+
+            if diff.heal_like then
+                diff.frames.role_tex:SetTexCoord(0.25, 0.5, 0.0, 0.25);
+            elseif diff.tank_like then
+                diff.frames.second_fstr:SetText("");
+                diff.frames.role_tex:SetTexCoord(0.0, 0.25, 0.25, 0.5);
+            else
+                diff.frames.role_tex:SetTexCoord(0.25, 0.5, 0.25, 0.5);
+            end
+            diff.frames.role_tex:SetPoint("RIGHT", rhs_txt, "RIGHT", -offset_to_role_icon - 10, 0);
+            for k, v in pairs(diff.frames) do
+                v:SetParent(tooltip);
+                v:Show();
+            end
+        end
+
+        if show_stat_diffs then
+            tooltip:AddLine(cmp.diff_str);
+        end
+        uses_mana = uses_mana or cmp.uses_mana;
+    end
+    if config.settings.tooltip_item_key_hints then
+        local hint = "";
+        if not show_stat_diffs and not view.no_stat_diffs then
+            hint = L["SHIFT: Stats"];
+        end
+        if uses_mana and bit.band(mod, sc.tooltip_mod_flags.ALT) == 0 then
+            hint = hint == "" and mode_switch_tip or hint .. " | " .. mode_switch_tip;
+        end
+        if hint ~= "" then
+            tooltip:AddLine(hint, 1, 1, 1);
+        end
+    end
+    view.frames_hidden = false;
+    tooltip:Show();
+end
+
+local empty_tex = "Interface\\Buttons\\UI-Quickslot2";
+
+local function make_item_tooltip_data(tooltip)
+    local data = make_spells_cmp_view(tooltip, 2);
+    data.tooltip_item_link_last = "";
+    data.item_tooltip_effects_update_id = 0;
+    data.new_item = {};
+    data.old_item1 = {};
+    data.old_item2 = {};
+    return data;
+end
+
 local new_items_buffer, old_items_buffer = {}, {};
 local knocked_slots = {};
 
@@ -2653,9 +2900,25 @@ local knocked_slots = {};
 local game_tooltip_item_cmp = make_item_tooltip_data(GameTooltip);
 local ref_tooltip_item_cmp = make_item_tooltip_data(ItemRefTooltip);
 
--- The only reliable way to get alignment on item comparison numbers to be nicely aligned
--- is to set them as frame objects because monospaced fonts seem to be broken ingame
+local function item_wpn_skill_change(should_fix_wpn_skill, loadout, old_item, new_item, fmt)
+    if config.settings.tooltip_item_weapon_skill then
+        if should_fix_wpn_skill then
+            return string.format(" %s: %d",
+                L["Skill as"],
+                loadout.lvl * 5
+            );
+        elseif new_item.wpn_skill ~= old_item.wpn_skill then
+            return string.format(fmt,
+                L["Skill"],
+                old_item.wpn_skill,
+                new_item.wpn_skill);
+        end
+    end
+    return "";
+end
+
 local function write_item_tooltip(tooltip, mod, mod_change, item_link)
+
 
     -- Try multiple checks for early exit if don't want to commit to a diff calculation
     if config.settings.tooltip_shift_to_show and bit.band(mod, sc.tooltip_mod_flags.SHIFT) == 0 then
@@ -2754,14 +3017,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         return;
     end
 
-    local fight_type = config.settings.calc_fight_type;
-    if bit.band(mod, sc.tooltip_mod_flags.ALT) ~= 0 then
-        if fight_type == fight_types.repeated_casts then
-            fight_type = fight_types.cast_until_oom;
-        else
-            fight_type = fight_types.repeated_casts;
-        end
-    end
+    local fight_type = spells_cmp_fight_type(mod);
 
     -- "On next attack" spells eval the entire attack instead of net gain
     local eval_flags = bit.bor(sc.overlay.overlay_eval_flags(), evaluation_flags.expectation_of_self);
@@ -2774,24 +3030,20 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
         eval_flags = bit.bor(eval_flags, evaluation_flags.fix_weapon_skill_to_level);
     end
 
-    local show_stat_diffs = config.settings.tooltip_item_stat_diff or
-        bit.band(mod, sc.tooltip_mod_flags.SHIFT) ~= 0;
+    local show_stat_diffs = spells_cmp_show_stat_diffs(mod);
 
     --local effects_diffed = sc.loadouts.diffed;
     local effects_diffed = tooltip_effects_diffed;
     -- TODO: might want to compare item link string
     if tt.tooltip_item_link_last ~= tt.new_item.link or updated or mod_change then
         -- actual evaluation update step and overwrites cache
-        tt.cmp_uses_mana = false;
 
         for item_fits_in_slot, slot in pairs(cmp_slots) do
-            local slot_cmp;
+            local slot_cmp = tt.cmps[item_fits_in_slot];
             local old_item;
             if item_fits_in_slot > 1 then
-                slot_cmp = tt.cached_spells_cmp_item_slots[2];
                 old_item = tt.old_item2;
             else
-                slot_cmp = tt.cached_spells_cmp_item_slots[1];
                 old_item = tt.old_item1;
             end
             --old_item.link = GetInventoryItemLink("player", slot);
@@ -2875,16 +3127,11 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             end
 
             if show_stat_diffs then
-
-                effects_finalize_forced(loadout, effects_diffed);
-                slot_cmp.diff_str = stats_diff_format(loadout, effects_finalized, effects_diffed);
-                if slot_cmp.diff_str ~= "" then
-                    slot_cmp.diff_str = stat_diffs_included_effects_str(
-                        config.settings.tooltip_item_apply_gems,
-                        config.settings.tooltip_item_apply_enchant,
-                        config.settings.tooltip_item_apply_set_bonuses
-                    )..slot_cmp.diff_str;
-                end
+                spells_cmp_stat_diffs(slot_cmp, loadout, effects_finalized, effects_diffed,
+                    config.settings.tooltip_item_apply_gems,
+                    config.settings.tooltip_item_apply_enchant,
+                    config.settings.tooltip_item_apply_set_bonuses
+                );
             end
 
             local i = 0;
@@ -2900,196 +3147,30 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
                     end
 
                     if k and not config.settings.spell_calc_list[k] and spells[k] then
-                        if bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
-
-                            i = i + 1;
-                            slot_cmp.diff_list[i] = slot_cmp.diff_list[i] or { frames = make_item_tooltip_line_frames(tooltip) };
-
-                            spell_diff(
-                                slot_cmp.diff_list[i],
-                                fight_type,
-                                spells[k],
-                                k,
-                                loadout,
-                                effects_finalized,
-                                effects_diffed,
-                                eval_flags
-                            );
-
-                        elseif bit.band(spells[k].flags, spell_flags.ehp) ~= 0 then
-
-                            i = i + 1;
-                            slot_cmp.diff_list[i] = slot_cmp.diff_list[i] or { frames = make_item_tooltip_line_frames(tooltip) };
-
-                            ehp_diff(
-                                slot_cmp.diff_list[i],
-                                loadout,
-                                effects_finalized,
-                                effects_diffed,
-                                eval_flags
-                            );
-                        end
+                        i = spells_cmp_add_spell(slot_cmp, i, tooltip, k, fight_type, loadout,
+                            effects_finalized, effects_diffed, eval_flags);
                     end
                 end
             end
 
-            for k, _ in pairs(config.settings.spell_calc_list) do
-                if config.settings.calc_list_use_highest_rank and spells[k] then
-                    k = highest_learned_rank(spells[k].base_id);
-                end
-                if config.settings.tooltip_item_smart then
-                    if ((k == spids.shoot or k == spids.throw) and not_ranged_class) or
-                       (k == spids.attack and not_melee_class)
-                       --or (k == spids.dodge and not_shield_class)
-                       then
-                        k = nil;
-                    end
-                end
-                if k and spells[k] then
-                    if bit.band(spells[k].flags, spell_flags.eval) ~= 0 then
-                        if spells[k].power_type == powers.mana then
-                            tt.cmp_uses_mana = true;
-                        end
-
-                        i = i + 1;
-                        slot_cmp.diff_list[i] = slot_cmp.diff_list[i] or { frames = make_item_tooltip_line_frames(tooltip) };
-
-                        spell_diff(
-                            slot_cmp.diff_list[i],
-                            fight_type,
-                            spells[k],
-                            k,
-                            loadout,
-                            effects_finalized,
-                            effects_diffed,
-                            eval_flags
-                        );
-
-                        -- for spells with both heal and dmg
-                        if spells[k].healing_version then
-                            i = i + 1;
-                            slot_cmp.diff_list[i] = slot_cmp.diff_list[i] or
-                                { frames = make_item_tooltip_line_frames(tooltip) };
-
-                            spell_diff(
-                                slot_cmp.diff_list[i],
-                                fight_type,
-                                spells[k].healing_version,
-                                k,
-                                loadout,
-                                effects_finalized,
-                                effects_diffed,
-                                eval_flags
-                            );
-                        end
-                    elseif bit.band(spells[k].flags, spell_flags.ehp) ~= 0 then
-
-                        i = i + 1;
-                        slot_cmp.diff_list[i] = slot_cmp.diff_list[i] or { frames = make_item_tooltip_line_frames(tooltip) };
-
-                        ehp_diff(
-                            slot_cmp.diff_list[i],
-                            loadout,
-                            effects_finalized,
-                            effects_diffed,
-                            eval_flags
-                        );
-                    end
-                end
-            end
-            slot_cmp.len = i;
+            spells_cmp_list(slot_cmp, i, tooltip, fight_type, loadout, effects_finalized, effects_diffed,
+                eval_flags, config.settings.tooltip_item_smart);
         end
     end
 
     tt.tooltip_item_link_last = tt.new_item.link;
 
     -- abort if no spells or all diffs are 0
-    local neutral_abort = true;
-
-    for item_fits_in_slot, _ in pairs(cmp_slots) do
-        local slot_cmp;
-        if item_fits_in_slot > 1 then
-            slot_cmp = tt.cached_spells_cmp_item_slots[2];
-        else
-            slot_cmp = tt.cached_spells_cmp_item_slots[1];
-        end
-
-        for i = 1, slot_cmp.len do
-            local diff = slot_cmp.diff_list[i];
-            if diff.effect ~= 0 or diff.effect_timed ~= 0 then
-                neutral_abort = false;
-                break;
-            end
-        end
-    end
-    if neutral_abort then
+    if spells_cmp_neutral(tt, #cmp_slots) then
         return;
     end
 
-    -- display the cached evaluation data
-    local header1 = L["Change"];
-    local header2;
-    local header3;
-    local fight_type_str;
-    local color_tag;
-    local mode_switch_tip;
-    if fight_type == fight_types.repeated_casts then
-        header2 = L["Effect"];
-        header3 = L["Per sec"];
-        fight_type_str = L["Repeated casts"];
-        color_tag = "effect_per_sec";
-        mode_switch_tip = L["ALT: Cast until OOM"];
-    else
-        header2 = L["Effect"].."  ";
-        header3 = L["Duration (s)"];
-        fight_type_str = L["Cast until OOM"];
-        color_tag = "effect_until_oom";
-        mode_switch_tip = L["ALT: Repeated casts"];
-    end
-
-    tt.headers.first_fstr:SetText(header2);
-    tt.headers.second_fstr:SetText(header3);
-
-    for _, v in pairs(tt.headers) do
-        v:SetParent(tooltip);
-        v:Show();
-        v:SetTextColor(effect_color(color_tag));
-    end
-
-    -- add a certain minimum width to the tooltip so there is enough clearance for the diff columns
-    tooltip:AddLine(
-        "                                                                                      "
-    );
-    tooltip:AddDoubleLine(sc.core.addon_name,
-        --string.format("%s %s%d|r | %s",
-        string.format("%s %s%d|r | %s",
-            L["Target level"],
-            color_by_lvl_diff(loadout.lvl, loadout.target_lvl),
-            loadout.target_lvl,
-            fight_type_str),
-        1, 1, 1,
-        1, 1, 1);
-
-    local wpn_skill_change = "";
-
-    if config.settings.tooltip_item_weapon_skill then
-        if should_fix_wpn_skill then
-            wpn_skill_change = string.format(" %s: %d",
-                L["Skill as"],
-                loadout.lvl * 5
-            );
-        elseif tt.new_item.wpn_skill ~= tt.old_item1.wpn_skill then
-            wpn_skill_change = string.format(" %s: %d -> %d",
-                L["Skill"],
-                tt.old_item1.wpn_skill,
-                tt.new_item.wpn_skill);
-        end
-    end
-    local header0;
+    local cmp1 = tt.cmps[1];
+    local wpn_skill_change = item_wpn_skill_change(should_fix_wpn_skill, loadout, tt.old_item1, tt.new_item, " %s: %d -> %d");
     if knocked_slots[1] then
         local knock_slot = knocked_slots[1][1];
         local knock_tex = knocked_slots[1][2];
-        header0 = string.format("|cFF4682B4|T%s:16:16:0:0|t|T%s:16:16:0:0|t -> |T%s:16:16:0:0|t|T%s:16:16:0:0|t%s|r",
+        cmp1.lhs = string.format("|cFF4682B4|T%s:16:16:0:0|t|T%s:16:16:0:0|t -> |T%s:16:16:0:0|t|T%s:16:16:0:0|t%s|r",
             (knock_slot == slots.MainHandSlot and knock_tex) or tt.old_item1.tex,
             (knock_slot == slots.MainHandSlot and tt.old_item1.tex) or knock_tex,
             (knock_slot == slots.MainHandSlot and empty_tex) or tt.new_item.tex,
@@ -3097,172 +3178,161 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             wpn_skill_change
         );
     else
-        header0 = string.format("|cFF4682B4|T%s:16:16:0:0|t -> |T%s:16:16:0:0|t%s|r",
+        cmp1.lhs = string.format("|cFF4682B4|T%s:16:16:0:0|t -> |T%s:16:16:0:0|t%s|r",
             tt.old_item1.tex,
             tt.new_item.tex,
             wpn_skill_change
         );
     end
-    tooltip:AddDoubleLine(header0,
-        " ",
-        1, 1, 1,
-        effect_color(color_tag));
 
-    local num_lines = tooltip:NumLines();
-
-    local min_width = 95;
-
-    -- anchors to tooltip lines left from the last show make the width secret when those lines are secret
-    tt.headers.first_fstr:ClearAllPoints();
-    tt.headers.second_fstr:ClearAllPoints();
-    local offset_to_first = math.max(min_width,
-        secret_or(tt.headers.second_fstr:GetWidth(), min_width));
-    local offset_to_role_icon = offset_to_first + math.max(min_width,
-        secret_or(tt.headers.first_fstr:GetWidth(), min_width));
-
-    local tooltip_name = tooltip:GetName();
-    local rhs_txt = _G[tooltip_name .. "TextRight" .. num_lines];
-    tt.headers.second_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", 0, 0);
-    tt.headers.first_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", -offset_to_first, 0);
-
-
-    for item_fits_in_slot, _ in pairs(cmp_slots) do
-        local slot_cmp;
-        if item_fits_in_slot > 1 then
-            slot_cmp = tt.cached_spells_cmp_item_slots[2];
-
-            local wpn_skill_change = "";
-            if config.settings.tooltip_item_weapon_skill then
-                if should_fix_wpn_skill then
-                    wpn_skill_change = string.format(" %s: %d",
-                        L["Skill as"],
-                        loadout.lvl * 5
-                    );
-                elseif tt.new_item.wpn_skill ~= tt.old_item2.wpn_skill then
-                    wpn_skill_change = string.format("%s: %d -> %d",
-                        L["Skill"],
-                        tt.old_item2.wpn_skill,
-                        tt.new_item.wpn_skill);
-                end
-            end
-
-            if knocked_slots[2] then
-                tooltip:AddDoubleLine(string.format("|cFF4682B4|T%s:16:16:0:0|t|T%s:16:16:0:0|t-> |T%s:16:16:0:0|t|T%s:16:16:0:0|t%s|r",
-                        empty_tex,
-                        tt.old_item2.tex,
-                        empty_tex,
-                        tt.new_item.tex,
-                        wpn_skill_change),
-                    " ",
-                    1, 1, 1);
-            else
-                tooltip:AddDoubleLine(string.format("|cFF4682B4|T%s:16:16:0:0|t -> |T%s:16:16:0:0|t%s|r",
-                        tt.old_item2.tex,
-                        tt.new_item.tex,
-                        wpn_skill_change),
-                    " ",
-                    1, 1, 1);
-            end
-            num_lines = num_lines + 1;
-            if show_stat_diffs then
-                num_lines = num_lines + 1;
-            end
+    if cmp_slots[2] then
+        wpn_skill_change = item_wpn_skill_change(should_fix_wpn_skill, loadout, tt.old_item2, tt.new_item, "%s: %d -> %d");
+        if knocked_slots[2] then
+            tt.cmps[2].lhs = string.format("|cFF4682B4|T%s:16:16:0:0|t|T%s:16:16:0:0|t-> |T%s:16:16:0:0|t|T%s:16:16:0:0|t%s|r",
+                empty_tex,
+                tt.old_item2.tex,
+                empty_tex,
+                tt.new_item.tex,
+                wpn_skill_change);
         else
-            slot_cmp = tt.cached_spells_cmp_item_slots[1];
-        end
-
-        for i = 1, slot_cmp.len do
-            local diff = slot_cmp.diff_list[i];
-            local spell_texture_str = "|T" .. diff.tex .. ":16:16:0:0|t "
-
-            diff.frames.first_fstr:SetText(colored_diff_str(diff.effect, diff.effect_changed_perc, 2));
-
-            diff.frames.second_fstr:SetText(colored_diff_str(diff.effect_timed, diff.effect_timed_changed_perc, 2));
-
-            if diff.id == sc.auto_attack_spell_id then
-                if cmp_slots[item_fits_in_slot] == slots.MainHandSlot then
-                    tooltip:AddDoubleLine(string.format("  |T%s:16:16:0:0|t  %s", tt.new_item.tex, diff.disp), " ");
-                else
-                    tooltip:AddDoubleLine(string.format("  %s %s", spell_texture_str, diff.disp), " ");
-                end
-            elseif diff.id == spids.auto_shot or diff.id == spids.shoot or diff.id == spids.throw then -- hunter ranged auto attack
-                if cmp_slots[item_fits_in_slot] == slots.RangedSlot then
-                    tooltip:AddDoubleLine(string.format("  |T%s:16:16:0:0|t  %s", tt.new_item.tex, diff.disp), " ");
-                else
-                    tooltip:AddDoubleLine(string.format("  %s %s", spell_texture_str, diff.disp), " ");
-                end
-            else
-                tooltip:AddDoubleLine(string.format("  %s%s", spell_texture_str, diff.extra), " ");
-            end
-
-            num_lines = num_lines + 1;
-
-            rhs_txt = _G[tooltip_name .. "TextRight" .. num_lines];
-            diff.frames.second_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", 0, 0);
-            diff.frames.first_fstr:SetPoint("RIGHT", rhs_txt, "RIGHT", -offset_to_first, 0);
-
-
-            if diff.heal_like then
-                diff.frames.role_tex:SetTexCoord(0.25, 0.5, 0.0, 0.25);
-            elseif diff.tank_like then
-                diff.frames.second_fstr:SetText("");
-                diff.frames.role_tex:SetTexCoord(0.0, 0.25, 0.25, 0.5);
-            else
-                diff.frames.role_tex:SetTexCoord(0.25, 0.5, 0.25, 0.5);
-            end
-            diff.frames.role_tex:SetPoint("RIGHT", rhs_txt, "RIGHT", -offset_to_role_icon - 10, 0);
-            for k, v in pairs(diff.frames) do
-                v:SetParent(tooltip);
-                v:Show();
-            end
-        end
-
-        if show_stat_diffs then
-            tooltip:AddLine(slot_cmp.diff_str);
+            tt.cmps[2].lhs = string.format("|cFF4682B4|T%s:16:16:0:0|t -> |T%s:16:16:0:0|t%s|r",
+                tt.old_item2.tex,
+                tt.new_item.tex,
+                wpn_skill_change);
         end
     end
-    if config.settings.tooltip_item_key_hints then
-        local hint = "";
-        if not config.settings.tooltip_item_stat_diff and bit.band(mod, sc.tooltip_mod_flags.SHIFT) == 0 then
-            hint = L["SHIFT: Stats"];
+
+    for c, slot in ipairs(cmp_slots) do
+        tt.cmps[c].attack_tex = slot == slots.MainHandSlot and tt.new_item.tex or nil;
+        tt.cmps[c].ranged_tex = slot == slots.RangedSlot and tt.new_item.tex or nil;
+    end
+
+    write_spells_cmp(tooltip, tt, #cmp_slots, mod, loadout, fight_type, show_stat_diffs);
+end
+
+-- the calculator plan's comparison: before is the current state, after the plan; one view per fight type, filled
+-- when plan_spells_counts brings new data (update_calc_list) and reused by the tooltip and the text until the next
+local plan_cmp_views = {
+    [fight_types.repeated_casts] = make_spells_cmp_view(GameTooltip, 1),
+    [fight_types.cast_until_oom] = make_spells_cmp_view(GameTooltip, 1),
+};
+for _, view in pairs(plan_cmp_views) do
+    view.no_stat_diffs = true;
+end
+local plan_cmp_generation = 0;
+local plan_attack_slots = { slots.MainHandSlot, slots.RangedSlot };
+local plan_result_parts = {};
+
+local function plan_eval_flags()
+    return bit.bor(sc.overlay.overlay_eval_flags(), evaluation_flags.expectation_of_self);
+end
+
+local function fill_plan_cmp(fight_type, loadout, effects_before, effects_after, eval_flags)
+    local view = plan_cmp_views[fight_type];
+    spells_cmp_list(view.cmps[1], 0, GameTooltip, fight_type, loadout, effects_before, effects_after, eval_flags, false);
+    view.generation = plan_cmp_generation;
+    return view;
+end
+
+-- the view of fight_type with the latest data
+local function plan_cmp_current(fight_type)
+    local view = plan_cmp_views[fight_type];
+    if view.generation ~= plan_cmp_generation then
+        local loadout, _, _, effects_before, effects_after = update_loadout_and_effects_diffed_from_ui();
+        fill_plan_cmp(fight_type, loadout, effects_before, effects_after, plan_eval_flags());
+    end
+    return view;
+end
+
+-- new data for the plan's comparison, with the setting's fight type: returns how many rows get better and worse (by
+-- the effect until OOM and for EHP, else by the effect per second; changes that show as 0.0 count as neither) and
+-- the rows' numbers exactly as the tooltip shows them, as one string, to tell whether anything shown changed
+local function plan_spells_counts(loadout, effects_before, effects_after, eval_flags)
+    plan_cmp_generation = plan_cmp_generation + 1;
+    local fight_type = config.settings.calc_fight_type;
+    local cmp = fill_plan_cmp(fight_type, loadout, effects_before, effects_after, eval_flags).cmps[1];
+    local better, worse = 0, 0;
+    for i = 1, cmp.len do
+        local diff = cmp.diff_list[i];
+        local v = diff.effect_timed;
+        if diff.tank_like or fight_type == fight_types.cast_until_oom then
+            v = diff.effect;
         end
-        if tt.cmp_uses_mana and bit.band(mod, sc.tooltip_mod_flags.ALT) == 0 then
-            hint = hint == "" and mode_switch_tip or hint .. " | " .. mode_switch_tip;
+        if not v or v >= 0.05 then
+            better = better + 1;
+        elseif v <= -0.05 then
+            worse = worse + 1;
         end
-        if hint ~= "" then
-            tooltip:AddLine(hint, 1, 1, 1);
+        plan_result_parts[i] = diff.id.." "..colored_diff_str(diff.effect, diff.effect_changed_perc, 2)..
+            " "..colored_diff_str(diff.effect_timed, diff.effect_timed_changed_perc, 2);
+    end
+    return better, worse, table.concat(plan_result_parts, ",", 1, cmp.len);
+end
+
+-- the plan as an item comparison: the icons of the weapons it puts in on their attack rows, no weapon skill line
+-- (item tooltips only) and no stat changes (the Stats box has them)
+local function write_plan_spells_tooltip(tooltip, mod)
+    for _, view in pairs(plan_cmp_views) do
+        hide_spells_cmp(view);
+    end
+
+    local fight_type = spells_cmp_fight_type(mod);
+    local view = plan_cmp_current(fight_type);
+    local cmp = view.cmps[1];
+
+    local items_plan = __sc_frame.calculator_frame.items.working;
+    cmp.lhs = "|cFF4682B4"..L["Before"].." -> "..L["After"].."|r";
+    cmp.attack_tex = nil;
+    cmp.ranged_tex = nil;
+    for _, slot in ipairs(plan_attack_slots) do
+        local new_item = items_plan[slot];
+        if new_item and new_item.id then
+            local _, _, _, _, new_tex, new_class = C_Item.GetItemInfoInstant(new_item.id);
+            if new_class == 2 then
+                if slot == slots.MainHandSlot then
+                    cmp.attack_tex = new_tex;
+                else
+                    cmp.ranged_tex = new_tex;
+                end
+            end
         end
     end
-    tt.item_tooltip_frames_hidden = false;
-    tooltip:Show();
+
+    write_spells_cmp(tooltip, view, 1, mod, update_loadout_and_effects_diffed_from_ui(), fight_type, false);
+end
+
+-- the plan's comparison as text, one line per row
+local function plan_spells_text(mod)
+    local fight_type = spells_cmp_fight_type(mod);
+    local cmp = plan_cmp_current(fight_type).cmps[1];
+
+    local lines = {};
+    if fight_type == fight_types.repeated_casts then
+        lines[1] = string.format("%s: %s | %s", L["Repeated casts"], L["Effect"], L["Per sec"]);
+    else
+        lines[1] = string.format("%s: %s | %s", L["Cast until OOM"], L["Effect"], L["Duration (s)"]);
+    end
+    for i = 1, cmp.len do
+        local diff = cmp.diff_list[i];
+        local timed = "";
+        if not diff.tank_like then
+            timed = " | "..colored_diff_str(diff.effect_timed, diff.effect_timed_changed_perc, 2);
+        end
+        lines[#lines + 1] = string.format("%s: %s%s",
+            diff.disp, colored_diff_str(diff.effect, diff.effect_changed_perc, 2), timed);
+    end
+    return table.concat(lines, "\n");
 end
 
 local function on_clear_tooltip(tooltip)
     if tooltip == GameTooltip then
         drop_live_lines();
-    end
-    local tt;
-    if tooltip == GameTooltip then
-        tt = game_tooltip_item_cmp;
-    elseif tooltip == ItemRefTooltip then
-        tt = ref_tooltip_item_cmp;
-    else
-        return;
-    end
-
-    if tt.item_tooltip_frames_hidden then
-        return;
-    end
-    tt.item_tooltip_frames_hidden = true;
-    for _, v in pairs(tt.cached_spells_cmp_item_slots) do
-        for _, vv in ipairs(v.diff_list) do
-            for _, frame in pairs(vv.frames) do
-                frame:Hide();
-            end
+        hide_spells_cmp(game_tooltip_item_cmp);
+        for _, view in pairs(plan_cmp_views) do
+            hide_spells_cmp(view);
         end
-    end
-    for _, v in pairs(tt.headers) do
-        v:Hide();
+    elseif tooltip == ItemRefTooltip then
+        hide_spells_cmp(ref_tooltip_item_cmp);
     end
 end
 
@@ -3306,12 +3376,14 @@ tooltip_export.update_tooltip                   = update_tooltip;
 tooltip_export.append_tooltip_spell_rank        = append_tooltip_spell_rank;
 tooltip_export.eval_mode_scroll_fn              = eval_mode_scroll_fn;
 tooltip_export.on_clear_tooltip                 = on_clear_tooltip;
+tooltip_export.plan_spells_counts               = plan_spells_counts;
+tooltip_export.plan_spells_text                 = plan_spells_text;
+tooltip_export.write_plan_spells_tooltip        = write_plan_spells_tooltip;
 tooltip_export.on_show_tooltip                  = on_show_tooltip;
 tooltip_export.on_show_tooltip_legacy           = on_show_tooltip_legacy;
 tooltip_export.on_hide_tooltip                  = on_hide_tooltip;
 tooltip_export.refresh_live_lines               = refresh_live_lines;
 tooltip_export.stat_diffs_included_effects_str  = stat_diffs_included_effects_str;
-tooltip_export.colored_diff_str                 = colored_diff_str;
 
 
 sc.tooltip                               = tooltip_export;

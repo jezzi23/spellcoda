@@ -40,9 +40,6 @@ local function update_profile_frame()
 
     pframe.rename_editbox:SetText(config.active_profile_name);
 
-    __sc_frame.calculator_frame.profile_name_label:SetText(
-        L["Active profile: "]..config.active_profile_name
-    );
     __sc_frame.loadout_frame.profile_name_label:SetText(
         L["Active profile: "]..config.active_profile_name
     );
