@@ -196,23 +196,54 @@ local cdm_viewers = { "BuffIconCooldownViewer", "BuffBarCooldownViewer" };
 local cdm_candidates = {};
 -- spell id -> time of our last cast, picks the rank of an item linking several
 local cdm_last_cast = {};
--- entries of our own buffs at count 1, shared between reads and never changed
+-- entries of our own buffs per count, shared between reads and never changed
 local own_buff_infos = {};
+-- stacking auras our own casts add (aura_info stack_cast): base id of the cast -> aura, aura -> unit it is on
+local stack_aura_of_cast = {};
+local stack_aura_units = {};
+-- stacks counted from our casts per aura, and the time of the last cast
+local cast_stacks = {};
+local cast_stacks_time = {};
 local own_lnames = {};
 local cdm_present = { player = {}, target = {} };
 local cdm_absent = { player = {}, target = {} };
 
 if client_matches(client_flags.forever) and C_CooldownViewer then
+    for id, info in pairs(sc.aura_info) do
+        if info.stack_cast then
+            local unit = (sc.class_buffs[id] or sc.player_buffs[id]) and "player" or
+                (sc.hostile_buffs[id] and "target");
+            if unit then
+                stack_aura_of_cast[info.stack_cast] = id;
+                stack_aura_units[id] = unit;
+            end
+        end
+    end
     local f = CreateFrame("Frame");
     f:RegisterEvent("SPELLS_CHANGED");
+    f:RegisterEvent("PLAYER_TARGET_CHANGED");
     f:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player");
     f:SetScript("OnEvent", function(_, event, _, _, spell_id)
         if event == "SPELLS_CHANGED" then
             wipe(cdm_candidates);
-        elseif not is_secret(spell_id) and
-            (sc.class_buffs[spell_id] or sc.player_buffs[spell_id] or
-             sc.hostile_buffs[spell_id] or sc.friendly_buffs[spell_id]) then
-            cdm_last_cast[spell_id] = GetTime();
+        elseif event == "PLAYER_TARGET_CHANGED" then
+            -- the new target's stacks are not known
+            for id, unit in pairs(stack_aura_units) do
+                if unit == "target" then
+                    cast_stacks[id] = 0;
+                end
+            end
+        elseif not is_secret(spell_id) then
+            if sc.class_buffs[spell_id] or sc.player_buffs[spell_id] or
+                sc.hostile_buffs[spell_id] or sc.friendly_buffs[spell_id] then
+                cdm_last_cast[spell_id] = GetTime();
+            end
+            local spell = sc.spells[spell_id];
+            local aura = spell and stack_aura_of_cast[spell.base_id];
+            if aura then
+                cast_stacks[aura] = math.min((cast_stacks[aura] or 0) + 1, sc.aura_info[aura].stacks);
+                cast_stacks_time[aura] = GetTime();
+            end
         end
     end);
 end
@@ -275,11 +306,17 @@ local function own_lname(id)
     return lname;
 end
 
-local function add_own_buff(loadout, unit, id)
-    local buff_info = own_buff_infos[id];
+local function add_own_buff(loadout, unit, id, count)
+    count = count or 1;
+    local infos = own_buff_infos[id];
+    if not infos then
+        infos = {};
+        own_buff_infos[id] = infos;
+    end
+    local buff_info = infos[count];
     if not buff_info then
-        buff_info = { count = 1, id = id, player_owned = true };
-        own_buff_infos[id] = buff_info;
+        buff_info = { count = count, id = id, player_owned = true };
+        infos[count] = buff_info;
     end
     loadout.dynamic_buffs[unit][id] = buff_info;
     local lname = own_lname(id);
@@ -389,6 +426,34 @@ local function cdm_apply(loadout, unit)
     end
 end
 
+-- stacks from our own casts on the auras the cooldown manager shows active; an inactive item resets the count, unless
+-- a cast came within the last second (its aura may not be on the item yet)
+local function apply_cast_stacks(loadout, unit)
+    local now = GetTime();
+    for _, ids in ipairs(cdm_absent[unit]) do
+        for _, id in ipairs(ids) do
+            if cast_stacks[id] and now - (cast_stacks_time[id] or 0) > 1 then
+                cast_stacks[id] = 0;
+            end
+        end
+    end
+    local kept = loadout.dynamic_buffs[unit];
+    for id, u in pairs(stack_aura_units) do
+        local n = cast_stacks[id];
+        if u == unit and n and n > 0 and kept[id] and kept[id].count ~= n then
+            add_own_buff(loadout, unit, id, n);
+        end
+    end
+end
+
+-- the count of each stacking aura as read, the start for counting casts once auras turn secret
+local function sync_cast_stacks(loadout)
+    for id, unit in pairs(stack_aura_units) do
+        local buff_info = loadout.dynamic_buffs[unit][id];
+        cast_stacks[id] = buff_info and math.max(buff_info.count, 1) or 0;
+    end
+end
+
 -- player is scanned before target, an item active on the target has no aura on the player
 local function cdm_restricted_buffs(loadout)
     local target_list;
@@ -429,8 +494,10 @@ local function cdm_restricted_buffs(loadout)
         end
     end
     cdm_apply(loadout, "player");
+    apply_cast_stacks(loadout, "player");
     if target_list then
         cdm_apply(loadout, "target");
+        apply_cast_stacks(loadout, "target");
     end
 end
 
@@ -666,6 +733,7 @@ local function detect_buffs(loadout, prev)
     end
     last_read_scanned = true;
     wipe(own_casts);
+    sync_cast_stacks(loadout);
 
     if __spellcoda_test_all_data__ then
         for k, v in pairs(loadout.dynamic_buffs) do
