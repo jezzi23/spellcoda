@@ -51,13 +51,13 @@ for k, _ in pairs(sc.enchant_effects) do
         };
     end
 end
--- seals that only proc (Vanilla / TBC Seal of Command) have no class_buffs entry
-for k, _ in pairs(sc.procs) do
-    if sc.spells[k] and not sc.temp_enchant_spells[k] and not unique_buffs[k] then
+-- seals that only proc (Vanilla / TBC Seal of Command) have no class_buffs entry, nor do Forever totem auras
+for k, proc in pairs(sc.procs) do
+    if (sc.spells[k] or proc.aura) and not sc.temp_enchant_spells[k] and not unique_buffs[k] then
         unique_buffs[k] = {
             id = k,
             lname = C_Spell.GetSpellName(k),
-            cat = buff_category.class,
+            cat = (proc.aura and buff_category.player) or buff_category.class,
         };
     end
 end
@@ -833,9 +833,10 @@ local function apply_buffs(loadout, effects, forced, undo)
             elseif sc.player_buffs[k] then
                 apply_effect(effects, k, sc.player_buffs[k], forced, v.count, undo, v.player_owned);
             end
-            -- seals only, the Windfury Totem buff 8516 also has a proc entry
-            if sc.procs[k] and sc.spells[k] and not sc.temp_enchant_spells[k] then
-                apply_proc(effects, k, "any", undo);
+            -- seals and Forever totem auras only, the Windfury Totem buff 8516 also has a proc entry
+            local proc = sc.procs[k];
+            if proc and (sc.spells[k] or proc.aura) and not sc.temp_enchant_spells[k] then
+                apply_proc(effects, k, proc.aura or "any", undo);
             end
         end
         for k, v in pairs(loadout.dynamic_buffs[loadout.friendly_towards]) do
@@ -883,8 +884,8 @@ local function apply_fake_buffs(loadout, effects, buffs_cfg)
             end
             if sc.temp_enchant_spells[k] then
                 apply_procs(effects, sc.enchant_procs[sc.temp_enchant_spells[k]], "mh", false);
-            elseif sc.procs[k] and sc.spells[k] then
-                apply_proc(effects, k, "any", false);
+            elseif sc.procs[k] and (sc.spells[k] or sc.procs[k].aura) then
+                apply_proc(effects, k, sc.procs[k].aura or "any", false);
             end
         end
     end
