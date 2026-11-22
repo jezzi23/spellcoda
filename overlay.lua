@@ -362,25 +362,7 @@ local function scan_action_frames()
     end
 end
 
-local IsAddOnLoaded = IsAddOnLoaded or function(addon_name)
-
-    -- If for whatever reason IsAddOnLoaded is not defined, have some backup, and this can happen in clients builds...
-    if addon_name == "Bartender4" then
-        return BT4Button1 ~= nil;
-    elseif addon_name == "ElvUI" then
-        return ElvUI_Bar1Button1 ~= nil;
-    elseif addon_name == "Dominos" then
-        return DominosActionButton1 ~= nil;
-    elseif addon_name == "DragonflightUI" then
-        return DragonflightUI ~= nil;
-    elseif addon_name == "EllesmereUIActionBars" then
-        -- namespace is there at load, the bars can come later
-        return EllesmereUI ~= nil and EllesmereUI._ModuleNS ~= nil and
-            EllesmereUI._ModuleNS.EllesmereUIActionBars ~= nil;
-    else
-        return false;
-    end
-end;
+local IsAddOnLoaded = C_AddOns.IsAddOnLoaded;
 
 local function use_base_bars()
 
