@@ -266,6 +266,7 @@ local effects_additive = {
         "target_res_flat",
         "threat",
         "cost_mod",
+        "cost_mod_flat",
         "res_flat",
     },
     by_attr = {
@@ -410,6 +411,7 @@ local effects_multiplicative = {
         "cast_haste",
         "heal_mod",
         "thp_based_vuln_mod",
+        "cost_mod",
     },
     wpn_subclass = {
         "phys_mod",
@@ -805,6 +807,7 @@ local function init_lnames()
             {"vuln_mod",                  L["Threat"],                      true},
             {"cast_haste",                L["Spell cast haste"],            true},
             {"heal_mod",                  L["Healing modifier"],            true},
+            {"cost_mod",                  L["Cost modifier"],               true},
         };
     };
     local rating_lnames = {

@@ -1055,18 +1055,24 @@ local function stats_cost(bid, spell, loadout, effects)
         base_cost = math_floor(base_cost * loadout.base_mana);
     end
 
-    local mod_flat = effects.ability.cost_mod_flat[bid];
-    if mod_flat then
-        mod_flat = mod_flat * sc.power_mod[spell.power_type];
-    else
-        mod_flat = 0.0;
-    end
+    local comp = spell.direct or spell.periodic;
+    local school = comp and comp.school1 or spell.anyschool;
+
+    local mod_flat =
+        ((effects.ability.cost_mod_flat[bid] or 0.0) + (effects.by_school.cost_mod_flat[school] or 0.0))
+        *
+        sc.power_mod[spell.power_type];
+
     local cost =
         (base_cost + mod_flat)
         *
-        (1.0 + (effects.ability.cost_mod[bid] or 0.0));
+        (1.0 + (effects.ability.cost_mod[bid] or 0.0))
+        *
+        (effects.mul.ability.cost_mod[bid] or 1.0)
+        *
+        (1.0 + (effects.by_school.cost_mod[school] or 0.0));
 
-    cost = math_floor(cost + 0.5);
+    cost = math_max(0, math_floor(cost + 0.5));
 
     return cost, base_cost;
 end
