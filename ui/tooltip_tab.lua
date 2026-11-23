@@ -6,6 +6,8 @@ local spells               = sc.spells;
 local spell_flags          = sc.spell_flags;
 local fight_types          = sc.calc.fight_types;
 local highest_learned_rank = sc.utils.highest_learned_rank;
+local client_matches       = sc.utils.client_matches;
+local client_flags         = sc.client_flags;
 
 local ui = sc.ui;
 local compared_spells_changed = ui.compared_spells_changed;
@@ -670,7 +672,9 @@ local function create_tooltip_items_frame(pframe)
         { "tooltip_item_stat_diff_ranged", L["Ranged"],
             L["Agility, stamina, health, ranged attack power, critical, hit, haste, armor penetration, weapon damage and speed, physical damage, threat"] },
         { "tooltip_item_stat_diff_caster", L["Caster"],
-            L["Intellect, spirit, stamina, health, mana, spell damage, critical, hit, haste, penetration, cost, mana regeneration, threat"] },
+            client_matches(client_flags.forever) and
+                L["Intellect, spirit, stamina, health, mana, spell damage, critical, hit, haste, spell piercing, cost, mana regeneration, threat"] or
+                L["Intellect, spirit, stamina, health, mana, spell damage, critical, hit, haste, spell penetration, cost, mana regeneration, threat"] },
         { "tooltip_item_stat_diff_healer", L["Healer"],
             L["Intellect, spirit, stamina, health, mana, healing power, spell critical, haste, cost, mana regeneration, healing done and taken"] },
         { "tooltip_item_stat_diff_spells", L["Ability effects"],

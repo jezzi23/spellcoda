@@ -539,8 +539,11 @@ local function load_calculator_plan(plan)
     end
 
     for stats_key, v in pairs(pframe.stats.stat_fields) do
-        if plan.stats[stats_key] then
-            v.editbox:SetText(plan.stats[stats_key]);
+        -- plans saved before the split hold one value for both under "pen"
+        local txt = plan.stats[stats_key] or
+            ((stats_key == "armor_pen" or stats_key == "spell_pen") and plan.stats.pen);
+        if txt then
+            v.editbox:SetText(txt);
         else
             v.editbox:SetText("");
         end
@@ -1877,8 +1880,11 @@ local function create_calculator_stats_subframe(pframe)
         mp5 = {
             label_str = L["MP5"]
         },
-        pen = {
-            label_str = L["Penetration"]
+        armor_pen = {
+            label_str = L["Armor Penetration"]
+        },
+        spell_pen = {
+            label_str = client_matches(client_flags.forever) and L["Spell Piercing"] or L["Spell Penetration"]
         },
         expertise_rating = {
             label_str = L["Expertise"],
@@ -1896,7 +1902,7 @@ local function create_calculator_stats_subframe(pframe)
     local comparison_stats_listing_order = {};
     for _, k in ipairs({
         "str", "agi", "stam", "int", "spirit", "mp5", "extra_mana", "armor", "defense_skill_rating", "dodge_rating", "parry_rating", "resilience_rating",
-        "crit_rating", "hit_rating", "haste_rating", "expertise_rating", "ap", "rap", "weapon_skill", "sp", "sd", "hp", "pen",
+        "crit_rating", "hit_rating", "haste_rating", "expertise_rating", "ap", "rap", "weapon_skill", "armor_pen", "sp", "sd", "hp", "spell_pen",
     }) do
         local clients = pframe.stats.stat_fields[k].clients;
         if not clients or client_matches(clients) then

@@ -264,6 +264,7 @@ local effects_additive = {
         "crit_forced",
         "target_res",
         "target_res_flat",
+        "pierce_flat",
         "threat",
         "cost_mod",
         "cost_mod_flat",
@@ -760,6 +761,8 @@ local function init_lnames()
     lnames = {
         schools =
             {L["Physical"], L["Holy"], L["Fire"], L["Nature"], L["Frost"], L["Shadow"], L["Arcane"]},
+        spell_pen = client_matches(client_flags.forever) and L["Spell piercing"] or L["Spell penetration"],
+        school_spell_pen = client_matches(client_flags.forever) and L["spell piercing"] or L["spell penetration"],
         on_hit = {
             {"any", L["On hit"], bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)},
             {"mh", L["On hit, main hand"], stat_diff_flags.melee},
@@ -1301,7 +1304,7 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
         -- ignore 2 in order to be able to compact the other magical spells into one field
         for i = 3, 7 do
 
-            local val = -effects.by_school.target_res_flat[i];
+            local val = -effects.by_school.pierce_flat[i];
 
             school_prev = school_prev or val;
 
@@ -1312,11 +1315,11 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
         end
         if not can_compact then
             for i = 3, 7 do
-                local val = -effects.by_school.target_res_flat[i];
-                add_field_line(info, val, lnames.schools[i].." "..L["spell penetration"], is_diff);
+                local val = -effects.by_school.pierce_flat[i];
+                add_field_line(info, val, lnames.schools[i].." "..lnames.school_spell_pen, is_diff);
             end
         else
-            add_field_line(info, school_prev, L["Spell penetration"], is_diff);
+            add_field_line(info, school_prev, lnames.spell_pen, is_diff);
         end
     end
 
@@ -1711,7 +1714,8 @@ local function manual_effects_zero_diff()
         dodge_rating = 0,
         parry_rating = 0,
         defense_skill_rating = 0,
-        pen = 0,
+        armor_pen = 0,
+        spell_pen = 0,
         weapon_skill = 0,
         extra_mana = 0,
         armor = 0,
@@ -1791,8 +1795,9 @@ local function effects_add_manual_diff(loadout, effects, diff)
         end
     end
 
-    for i = 1, 7 do
-        effects.by_school.target_res_flat[i] = effects.by_school.target_res_flat[i] - diff.pen;
+    effects.by_school.target_res_flat[schools.physical] = effects.by_school.target_res_flat[schools.physical] - diff.armor_pen;
+    for i = 2, 7 do
+        effects.by_school.pierce_flat[i] = effects.by_school.pierce_flat[i] - diff.spell_pen;
     end
 
     effects.by_school.res_flat[schools.physical] = effects.by_school.res_flat[schools.physical] + diff.armor;
@@ -1953,7 +1958,7 @@ for _, targets in pairs(manual_diff_ratings) do
         diff_written_raw[#diff_written_raw + 1] = target[1];
     end
 end
-local diff_written_by_school = { "sp_dmg_flat", "target_res_flat", "crit_forced", "res_flat" };
+local diff_written_by_school = { "sp_dmg_flat", "target_res_flat", "pierce_flat", "crit_forced", "res_flat" };
 
 local function effects_save_diff_written(effects, saved)
     saved.raw = saved.raw or {};

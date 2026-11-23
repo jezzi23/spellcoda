@@ -309,6 +309,35 @@ local function changing_reads(spell, effects)
     return 0;
 end
 
+-- unconfirmed: fit to community combat logs (levels 20 to 50): no level based resistance, debuffs stop at 0,
+-- piercing takes creatures below 0 into a damage bonus, holy is never resisted
+local school_keys = sc.calc.indexed_keys.school;
+local target_pvp_flag = sc.loadouts.loadout_flags.target_pvp;
+
+local function school_res(school, res_scale, loadout, by_school)
+    return math.max(0, res_scale * (loadout.target_res + by_school.target_res_flat[school]))
+        + by_school.pierce_flat[school];
+end
+
+-- resistance against the component and the average share of its damage resisted, negative is a bonus
+local function spell_res(comp, loadout, effects)
+    if comp.school1 == schools.holy then
+        return 0, 0;
+    end
+    local by_school = effects.by_school;
+    local res_scale = 1.0 + by_school.target_res[comp.school1];
+    local resi = school_res(comp.school1, res_scale, loadout, by_school);
+    local i = 2;
+    while comp[school_keys[i]] do
+        resi = math.max(resi, school_res(comp[school_keys[i]], res_scale, loadout, by_school));
+        i = i + 1;
+    end
+    if bit.band(loadout.flags, target_pvp_flag) ~= 0 then
+        resi = math.max(0, resi);
+    end
+    return resi, math.min(0.75, resi / (math.abs(resi) + 8 * loadout.lvl + 19));
+end
+
 --------------------------------------------------------------------------------
 mechanics.client_class_stats_spell          = class_stats_spell;
 mechanics.client_special_abilities          = special_abilities;
@@ -316,6 +345,7 @@ mechanics.client_class_cast_time           = class_cast_time;
 mechanics.stats_glance                      = stats_glance;
 mechanics.caster_coef_multiplier            = caster_coef_multiplier;
 mechanics.client_changing_reads             = changing_reads;
+mechanics.client_spell_res                  = spell_res;
 
 sc.mechanics = mechanics;
 

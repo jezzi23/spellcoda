@@ -79,6 +79,7 @@ local client_class_cast_time                       = sc.mechanics.client_class_c
 local stats_glance                                  = sc.mechanics.stats_glance;
 local caster_coef_multiplier                        = sc.mechanics.caster_coef_multiplier;
 local client_changing_reads                         = sc.mechanics.client_changing_reads;
+local client_spell_res                              = sc.mechanics.client_spell_res;
 
 --------------------------------------------------------------------------------
 local calc = sc.calc;
@@ -215,7 +216,7 @@ local function spell_miss_calc(extra_hit, avg_resi, loadout, spell)
     final_miss = spell_miss(loadout.lvl, loadout.target_lvl, extra_hit, target_is_pvp);
     if bit_band(spell.flags, heal_or_absorb_flags) ~= 0 then
         final_miss = 0.0;
-    elseif bit_band(spell.flags, spell_flags.binary) ~= 0 then
+    elseif bit_band(spell.flags, spell_flags.binary) ~= 0 and avg_resi >= 0 then
         -- @src: https://royalgiraffe.github.io/resist-guide
         -- binary spells will have lower hit chance against higher resistances
         -- rather than partial resists
@@ -461,18 +462,28 @@ local function stats_res(comp, spell, loadout, effects)
         return target_resi, target_avg_mitigated;
     end
 
+    if client_spell_res then
+        target_resi, target_avg_mitigated = client_spell_res(comp, loadout, effects);
+        if bit_band(comp.flags, comp_flags.dot_resi_pen) ~= 0 then
+            target_avg_mitigated = target_avg_mitigated * 0.1;
+        end
+        return target_resi, target_avg_mitigated;
+    end
+
     local base_resi = 0;
     if bit_band(loadout.flags, loadout_flags.target_pvp) == 0 and
         bit_band(spell.flags, spell_flags.requires_ranged_slot) == 0 then
         base_resi = npc_lvl_resi_base(loadout.lvl, loadout.target_lvl);
     end
-    local res_pen_flat = effects.by_school.target_res_flat[comp.school1];
+    local by_school = effects.by_school;
+    local res_pen_flat = by_school.target_res_flat[comp.school1] + by_school.pierce_flat[comp.school1];
     local i = 2;
     while (comp[school_keys[i]]) do
-        res_pen_flat = math_max(res_pen_flat, effects.by_school.target_res_flat[comp[school_keys[i]]]);
+        local school = comp[school_keys[i]];
+        res_pen_flat = math_max(res_pen_flat, by_school.target_res_flat[school] + by_school.pierce_flat[school]);
         i = i + 1;
     end
-    local resi = (1.0 + effects.by_school.target_res[comp.school1]) * (loadout.target_res + res_pen_flat);
+    local resi = (1.0 + by_school.target_res[comp.school1]) * (loadout.target_res + res_pen_flat);
 
     if bit_band(spell.flags, spell_flags.binary) ~= 0 then
         target_resi = math_min(loadout.lvl * 5,
@@ -3307,7 +3318,7 @@ local dmg_magic_stat_weights = {
     { display = "Spirit", key = "spirit"},
     { display = "Crit", key = "crit_rating"},
     { display = "Hit", key = "hit_rating"},
-    { display = "Pen", key = "pen"},
+    { display = client_matches(client_flags.forever) and "Pierce" or "Pen", key = "spell_pen"},
     { display = "MP5", key = "mp5"},
 };
 
@@ -3349,7 +3360,7 @@ if client_matches(bit_bnot(bit_bor(client_flags.vanilla, client_flags.forever)))
         if not client_matches(client_flags.forever) then
             v[#v+1] = {display = "Expr", key = "expertise_rating"};
         end
-        v[#v+1] = {display = "Pen", key = "pen"};
+        v[#v+1] = {display = "Pen", key = "armor_pen"};
     end
 end
 
