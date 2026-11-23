@@ -183,12 +183,25 @@ end
 
 local function label_selection_dropdown(pframe, option_key, on_change)
     if not label_menu then
+        local total_section = {
+            title = L["Total"],
+            tooltip = L["Aggregate of all direct and periodic components of a spell"],
+        };
+        local main_section = {
+            title = L["Main effect"],
+            tooltip = L["First direct component of a spell, or its first periodic component if it has no direct one"],
+        };
         label_menu = {
             {
                 name = L["Normal hit"],
                 color_tag = "normal",
                 keys = {
+                    total_section,
                     "overlay_display_normal",
+                    "overlay_display_normal_total_min",
+                    "overlay_display_normal_total_max",
+                    main_section,
+                    "overlay_display_normal_avg",
                     "overlay_display_normal_min",
                     "overlay_display_normal_max",
                     "overlay_display_direct_normal",
@@ -200,7 +213,12 @@ local function label_selection_dropdown(pframe, option_key, on_change)
                 name = L["Critical hit"],
                 color_tag = "crit",
                 keys = {
+                    total_section,
                     "overlay_display_crit",
+                    "overlay_display_crit_total_min",
+                    "overlay_display_crit_total_max",
+                    main_section,
+                    "overlay_display_crit_avg",
                     "overlay_display_crit_min",
                     "overlay_display_crit_max",
                     "overlay_display_direct_crit",
@@ -302,7 +320,22 @@ local function label_selection_dropdown(pframe, option_key, on_change)
     libDD:UIDropDownMenu_SetInitializeFunction(dd, function(_, level, menu_list)
         if level == 2 then
             for _, key in ipairs(menu_list) do
-                add_entry(key, 2);
+                if type(key) == "table" then
+                    libDD:UIDropDownMenu_AddButton(
+                        {
+                            text = key.title,
+                            isTitle = true,
+                            notCheckable = true,
+                            tooltipTitle = key.title,
+                            tooltipText = key.tooltip,
+                            tooltipOnButton = true,
+                            tooltipWhileDisabled = true,
+                        },
+                        2
+                    );
+                else
+                    add_entry(key, 2);
+                end
             end
             return;
         end

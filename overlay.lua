@@ -890,23 +890,49 @@ local function refresh_power_curves()
     end
 end
 
-local function first_hit_bound(info, crit, upper)
+local function main_effect(info, crit)
     if info.num_direct_effects > 0 then
         if crit then
             if info.crit1 ~= 0 then
-                return upper and info.max_crit_if_hit1 or info.min_crit_if_hit1;
+                return info.min_crit_if_hit1, info.max_crit_if_hit1;
             end
         elseif info.hit_normal1 ~= 0 then
-            return upper and info.max_noncrit_if_hit1 or info.min_noncrit_if_hit1;
+            return info.min_noncrit_if_hit1, info.max_noncrit_if_hit1;
         end
     elseif info.num_periodic_effects > 0 then
         if crit then
             if info.ot_crit1 ~= 0 then
-                return upper and info.ot_max_crit_if_hit1 or info.ot_min_crit_if_hit1;
+                return info.ot_min_crit_if_hit1, info.ot_max_crit_if_hit1;
             end
         elseif info.ot_hit_normal1 ~= 0 then
-            return upper and info.ot_max_noncrit_if_hit1 or info.ot_min_noncrit_if_hit1;
+            return info.ot_min_noncrit_if_hit1, info.ot_max_noncrit_if_hit1;
         end
+    end
+end
+
+local function total_effect(info, crit)
+    local lo, hi = 0, 0;
+    if info.num_direct_effects > 0 then
+        if crit then
+            lo, hi = info.total_min_crit_if_hit, info.total_max_crit_if_hit;
+        else
+            lo, hi = info.total_min_noncrit_if_hit, info.total_max_noncrit_if_hit;
+        end
+    end
+    if info.num_periodic_effects > 0 then
+        if crit then
+            lo, hi = lo + info.total_ot_min_crit_if_hit, hi + info.total_ot_max_crit_if_hit;
+        else
+            lo, hi = lo + info.total_ot_min_noncrit_if_hit, hi + info.total_ot_max_noncrit_if_hit;
+        end
+    end
+    return lo, hi;
+end
+
+local function total_crit(info, stats)
+    local lo, hi = total_effect(info, true);
+    if stats.crit > 0 and lo + hi > 0 then
+        return lo, hi;
     end
 end
 
@@ -915,66 +941,97 @@ local function init_label_handler()
     overlay_label_handler = {
         overlay_display_normal = {
             value = function(info)
-                local val = 0.0;
-                if info.num_direct_effects > 0 then
-                    val = val + 0.5*(info.total_min_noncrit_if_hit + info.total_max_noncrit_if_hit);
+                local lo, hi = total_effect(info, false);
+                return 0.5*(lo + hi);
+            end,
+            digits = 1,
+            desc = L["Average"],
+            short = L["Hit total avg"],
+            color_tag = "normal",
+            requires_spell_flags = spell_flags.eval,
+        },
+        overlay_display_normal_total_min = {
+            value = function(info) return (total_effect(info, false)); end,
+            desc = L["Minimum"],
+            short = L["Hit total min"],
+            color_tag = "normal",
+            requires_spell_flags = spell_flags.eval,
+        },
+        overlay_display_normal_total_max = {
+            value = function(info)
+                local _, hi = total_effect(info, false);
+                return hi;
+            end,
+            desc = L["Maximum"],
+            short = L["Hit total max"],
+            color_tag = "normal",
+            requires_spell_flags = spell_flags.eval,
+        },
+        overlay_display_normal_avg = {
+            value = function(info)
+                local lo, hi = main_effect(info, false);
+                if lo then
+                    return 0.5*(lo + hi);
                 end
-                if info.num_periodic_effects > 0 then
-                    val = val + 0.5*(info.total_ot_min_noncrit_if_hit + info.total_ot_max_noncrit_if_hit);
-                end
-                return val;
             end,
             digits = 1,
             desc = L["Average"],
             short = L["Hit avg"],
             color_tag = "normal",
             requires_spell_flags = spell_flags.eval,
-            tooltip = L["Average normal hit, all effects of the spell added together"],
         },
         overlay_display_normal_min = {
-            value = function(info) return first_hit_bound(info, false, false); end,
+            value = function(info) return (main_effect(info, false)); end,
             desc = L["Minimum"],
             short = L["Hit min"],
             color_tag = "normal",
             requires_spell_flags = spell_flags.eval,
-            tooltip = L["Smallest normal hit of the first direct effect, or of the whole periodic effect when there is no direct one"],
         },
         overlay_display_normal_max = {
-            value = function(info) return first_hit_bound(info, false, true); end,
+            value = function(info)
+                local _, hi = main_effect(info, false);
+                return hi;
+            end,
             desc = L["Maximum"],
             short = L["Hit max"],
             color_tag = "normal",
             requires_spell_flags = spell_flags.eval,
-            tooltip = L["Largest normal hit of the first direct effect, or of the whole periodic effect when there is no direct one"],
-        },
-        overlay_display_crit_min = {
-            value = function(info) return first_hit_bound(info, true, false); end,
-            desc = L["Minimum"],
-            short = L["Crit min"],
-            color_tag = "crit",
-            requires_spell_flags = spell_flags.eval,
-            tooltip = L["Smallest critical hit of the first direct effect, or of the whole periodic effect when there is no direct one"],
-        },
-        overlay_display_crit_max = {
-            value = function(info) return first_hit_bound(info, true, true); end,
-            desc = L["Maximum"],
-            short = L["Crit max"],
-            color_tag = "crit",
-            requires_spell_flags = spell_flags.eval,
-            tooltip = L["Largest critical hit of the first direct effect, or of the whole periodic effect when there is no direct one"],
         },
         overlay_display_crit = {
             value = function(info, stats)
-                local crit_sum = 0;
-
-                if info.num_direct_effects > 0 then
-                    crit_sum = crit_sum + 0.5*(info.total_min_crit_if_hit + info.total_max_crit_if_hit);
+                local lo, hi = total_crit(info, stats);
+                if lo then
+                    return 0.5*(lo + hi);
                 end
-                if info.num_periodic_effects > 0 then
-                    crit_sum = crit_sum + 0.5*(info.total_ot_min_crit_if_hit + info.total_ot_max_crit_if_hit);
-                end
-                if stats.crit > 0 and crit_sum > 0 then
-                    return crit_sum;
+            end,
+            digits = 1,
+            desc = L["Average"],
+            short = L["Crit total avg"],
+            color_tag = "crit",
+            requires_spell_flags = spell_flags.eval,
+        },
+        overlay_display_crit_total_min = {
+            value = function(info, stats) return (total_crit(info, stats)); end,
+            desc = L["Minimum"],
+            short = L["Crit total min"],
+            color_tag = "crit",
+            requires_spell_flags = spell_flags.eval,
+        },
+        overlay_display_crit_total_max = {
+            value = function(info, stats)
+                local _, hi = total_crit(info, stats);
+                return hi;
+            end,
+            desc = L["Maximum"],
+            short = L["Crit total max"],
+            color_tag = "crit",
+            requires_spell_flags = spell_flags.eval,
+        },
+        overlay_display_crit_avg = {
+            value = function(info)
+                local lo, hi = main_effect(info, true);
+                if lo then
+                    return 0.5*(lo + hi);
                 end
             end,
             digits = 1,
@@ -982,7 +1039,23 @@ local function init_label_handler()
             short = L["Crit avg"],
             color_tag = "crit",
             requires_spell_flags = spell_flags.eval,
-            tooltip = L["Average critical hit, all effects of the spell added together"],
+        },
+        overlay_display_crit_min = {
+            value = function(info) return (main_effect(info, true)); end,
+            desc = L["Minimum"],
+            short = L["Crit min"],
+            color_tag = "crit",
+            requires_spell_flags = spell_flags.eval,
+        },
+        overlay_display_crit_max = {
+            value = function(info)
+                local _, hi = main_effect(info, true);
+                return hi;
+            end,
+            desc = L["Maximum"],
+            short = L["Crit max"],
+            color_tag = "crit",
+            requires_spell_flags = spell_flags.eval,
         },
         overlay_display_expected = {
             value = function(info) return info.expected; end,
@@ -1107,7 +1180,6 @@ local function init_label_handler()
             short = L["Hit chance"],
             color_tag = "normal",
             requires_spell_flags = spell_flags.eval,
-            tooltip = L["Chance to land a hit that is not critical"],
         },
         overlay_display_crit_chance = {
             func = function(frame_overlay, info, stats, spell)
@@ -1127,7 +1199,6 @@ local function init_label_handler()
             short = L["Crit chance"],
             color_tag = "crit",
             requires_spell_flags = spell_flags.eval,
-            tooltip = L["Chance to land a critical hit"],
         },
         overlay_display_miss_chance = {
             func = function(frame_overlay, _, stats, spell)
@@ -1223,7 +1294,6 @@ local function init_label_handler()
             short = L["Hit range"],
             color_tag = "normal",
             requires_spell_flags = spell_flags.eval,
-            tooltip = L["Smallest to largest normal hit of the first direct effect"],
         },
         overlay_display_direct_crit = {
             func = function(frame_overlay, info)
@@ -1245,7 +1315,6 @@ local function init_label_handler()
             short = L["Crit range"],
             color_tag = "crit",
             requires_spell_flags = spell_flags.eval,
-            tooltip = L["Smallest to largest critical hit of the first direct effect"],
         },
         overlay_display_ot_normal = {
             func = function(frame_overlay, info)
@@ -1267,7 +1336,6 @@ local function init_label_handler()
             short = L["Hit ticks"],
             color_tag = "normal",
             requires_spell_flags = spell_flags.eval,
-            tooltip = L["Ticks x smallest to largest normal tick of the first periodic effect"],
         },
         overlay_display_ot_crit = {
             func = function(frame_overlay, info)
@@ -1289,7 +1357,6 @@ local function init_label_handler()
             short = L["Crit ticks"],
             color_tag = "crit",
             requires_spell_flags = spell_flags.eval,
-            tooltip = L["Ticks x smallest to largest critical tick of the first periodic effect"],
         },
         overlay_display_rank = {
             func = function(frame_overlay, _, _, spell)
