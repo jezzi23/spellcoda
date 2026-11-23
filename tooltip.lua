@@ -459,7 +459,7 @@ local function tooltip_spell_id(tooltip)
             id = line.tooltipID;
         end
     end
-    return id;
+    return secret_or(id, nil);
 end
 
 -- Meddles with tooltip and sets its spell id accordingly,
