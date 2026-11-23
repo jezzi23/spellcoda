@@ -251,6 +251,22 @@ local function changing_reads(spell, effects)
     return 0;
 end
 
+-- rage from dealing damage, 3.75 d / c + 1.75 x weapon speed (off hand 0.875, x2 on crits), patch 2.0.10,
+-- c = 274.7 at 70, dodged and parried swings count as hits, unconfirmed (wowsims tbc)
+local function white_swing_rage(stats, dmg, wpn_speed, oh, loadout, effects)
+    local lvl = loadout.lvl;
+    local hit_factor = 1.75;
+    if oh then
+        hit_factor = 0.875;
+    end
+    local avoided = stats.dodge + stats.parry;
+    if stats.hit > 0 then
+        dmg = dmg + avoided * dmg / stats.hit;
+    end
+    return 3.75 * dmg / (0.0091107836 * lvl * lvl + 3.225598133 * lvl + 4.2652911)
+        + hit_factor * wpn_speed * (stats.hit + stats.crit + avoided);
+end
+
 --------------------------------------------------------------------------------
 mechanics.client_class_stats_spell          = class_stats_spell;
 mechanics.client_special_abilities          = special_abilities;
@@ -258,6 +274,7 @@ mechanics.client_class_cast_time           = class_cast_time;
 mechanics.stats_glance                      = stats_glance;
 mechanics.caster_coef_multiplier            = caster_coef_multiplier;
 mechanics.client_changing_reads             = changing_reads;
+mechanics.client_white_swing_rage           = white_swing_rage;
 
 sc.mechanics = mechanics;
 

@@ -379,6 +379,16 @@ local function changing_reads(spell, effects)
     return 0;
 end
 
+-- rage from dealing damage, 7.5 d / c, unconfirmed (warrior compendium from a blue post, wowsims classic, WarriorSim)
+local function white_swing_rage(stats, dmg, wpn_speed, oh, loadout, effects)
+    local lvl = loadout.lvl;
+    if stats.hit > 0 then
+        -- unconfirmed, dodged and parried swings give 75% of a hit's rage (WarriorSim, ClassicSim)
+        dmg = dmg + 0.75 * (stats.dodge + stats.parry) * dmg / stats.hit;
+    end
+    return 7.5 * dmg / (0.0091107836 * lvl * lvl + 3.225598133 * lvl + 4.2652911);
+end
+
 --------------------------------------------------------------------------------
 mechanics.client_class_stats_spell          = class_stats_spell;
 mechanics.client_special_abilities          = special_abilities;
@@ -386,6 +396,7 @@ mechanics.client_class_cast_time           = class_cast_time;
 mechanics.stats_glance                      = stats_glance;
 mechanics.caster_coef_multiplier            = caster_coef_multiplier;
 mechanics.client_changing_reads             = changing_reads;
+mechanics.client_white_swing_rage           = white_swing_rage;
 
 sc.mechanics = mechanics;
 

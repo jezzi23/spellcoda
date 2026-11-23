@@ -1122,12 +1122,15 @@ local function stats_avg_cost(cost, stats, bid, spell, loadout, effects)
         end
     end
     if bit_band(spell.flags, spell_flags.refund_on_miss) ~= 0 then
-        resource_refund = resource_refund + cost*stats.miss;
+        -- unconfirmed, 80% back on a miss, dodge or parry (wowsims classic + tbc, cmangos), combo points stay
+        local refunded = spell.power_type == powers.combopoints and 1.0 or 0.8;
+        resource_refund = resource_refund + refunded*cost*(1.0 - stats.hit);
     end
 
     -- for the tooltip's refund note
     stats.cost_before_refund = cost;
     stats.cost_refund = resource_refund;
+    stats.cost_lost_swing = nil;
 
     cost = cost - resource_refund;
     cost = math_max(cost, 0);
@@ -2204,6 +2207,21 @@ local function add_expectation_ot_st(info, num_to_add)
     info.threat = info.threat + threat_added;
 end
 
+local function direct_effect_expected(info, stats, i)
+    local effect_expected = 0.5 * info[indexed_keys.direct_utilization[i]] *
+        (info[indexed_keys.hit_normal[i]] *
+            (info[indexed_keys.min_noncrit_if_hit[i]] + info[indexed_keys.max_noncrit_if_hit[i]])
+        +
+        info[indexed_keys.crit[i]] *
+            (info[indexed_keys.min_crit_if_hit[i]] + info[indexed_keys.max_crit_if_hit[i]])
+        );
+    -- for two roll table where normal hits and crits can be blocked
+    if bit_band(info[indexed_keys.direct_flags[i]], effect_flags.can_be_blocked) ~= 0 then
+        effect_expected = math_max(0, effect_expected - stats.block * stats.block_amount);
+    end
+    return effect_expected;
+end
+
 local function calc_expectation(info, spell, stats, loadout, num_unbounded_targets)
 
     -- direct
@@ -2211,17 +2229,7 @@ local function calc_expectation(info, spell, stats, loadout, num_unbounded_targe
     local expected_direct_more_targets = 0;
     for i = 1, info.num_direct_effects do
 
-        local effect_expected = 0.5 * info[indexed_keys.direct_utilization[i]] *
-            (info[indexed_keys.hit_normal[i]] *
-                (info[indexed_keys.min_noncrit_if_hit[i]] + info[indexed_keys.max_noncrit_if_hit[i]])
-            +
-            info[indexed_keys.crit[i]] *
-                (info[indexed_keys.min_crit_if_hit[i]] + info[indexed_keys.max_crit_if_hit[i]])
-            );
-            -- for two roll table where normal hits and crits can be blocked
-            if bit_band(info[indexed_keys.direct_flags[i]], effect_flags.can_be_blocked) ~= 0 then
-                effect_expected = math_max(0, effect_expected - stats.block * stats.block_amount);
-            end
+        local effect_expected = direct_effect_expected(info, stats, i);
         expected_direct_sum = expected_direct_sum + effect_expected;
         if bit_band(info[indexed_keys.direct_flags[i]], effect_flags.own_stats) ~= 0 then
             expected_direct_more_targets = expected_direct_more_targets +
@@ -2744,6 +2752,14 @@ local function spell_info(info, spell, stats, loadout, effects, eval_flags, spel
         for _, v in pairs(expectation_variations) do
             info[v] = info[v] - atk[v];
         end
+        -- the replaced swing makes no rage
+        if spell.power_type == powers.rage and atk.rage_per_swing then
+            stats.cost_lost_swing = atk.rage_per_swing;
+            stats.cost = stats.cost + stats.cost_lost_swing;
+            if stats.cast_time ~= 0 then
+                stats.cost_per_sec = stats.cost / stats.cast_time;
+            end
+        end
     end
     if bit_band(spell.flags, spell_flags.no_threat) ~= 0 then
         info.threat = 0;
@@ -2760,6 +2776,29 @@ local function spell_info(info, spell, stats, loadout, effects, eval_flags, spel
     end
 
 
+
+    if spell.base_id == auto_attack_spell_id and (class == classes.warrior or class == classes.druid) then
+        -- the white swing's own damage, without its on hit procs
+        local dmg = 0;
+        for i = 1, info.num_direct_effects do
+            if bit_band(info[indexed_keys.direct_flags[i]], effect_flags.own_stats) == 0 then
+                dmg = dmg + direct_effect_expected(info, stats, i);
+            end
+        end
+        dmg = dmg * (1 - stats.target_avg_resi);
+        local oh = bit_band(eval_flags, evaluation_flags.isolate_oh) ~= 0;
+        local wpn_speed = effects.raw.wpn_delay_oh;
+        if not oh then
+            wpn_speed = select(3, mh_weapon(loadout, effects));
+        end
+        info.rage_per_swing = sc.mechanics.client_white_swing_rage(stats, dmg, wpn_speed, oh, loadout, effects);
+        info.rage_per_sec = 0;
+        if stats.cast_time ~= 0 then
+            info.rage_per_sec = info.rage_per_swing / stats.cast_time;
+        end
+    else
+        info.rage_per_swing, info.rage_per_sec = nil, nil;
+    end
 
     if effects.raw.wpn_delay_oh > 0 and
         bit_band(anycomp.flags, dual_wield_flags) == dual_wield_flags and
@@ -2783,6 +2822,9 @@ local function spell_info(info, spell, stats, loadout, effects, eval_flags, spel
 
         info.effect_per_sec = info.effect_per_sec + info.oh_info.effect_per_sec;
         info.threat_per_sec = info.threat_per_sec + info.oh_info.threat_per_sec;
+        if info.rage_per_sec then
+            info.rage_per_sec = info.rage_per_sec + info.oh_info.rage_per_sec;
+        end
     else
         info.oh_info, info.oh_stats = nil, nil;
     end
@@ -3585,59 +3627,62 @@ for _, spell in pairs(spells) do
         source_alias_views[spell] = {};
     end
 end
-for source_id, source in pairs(spells) do
-    if source.alias_comp then
-        for spell, views in pairs(source_alias_views) do
-            for _, base_id in ipairs(spell.alias_comps) do
-                if base_id == source.base_id then
-                    local view = {};
-                    for k, v in pairs(spell) do
-                        view[k] = v;
-                    end
-                    view.alias_comps = nil;
-                    view.flags = bit_band(spell.flags, bit_bnot(spell_flags.alias));
-                    view.direct = source.alias_comp.direct;
-                    view.periodic = source.alias_comp.periodic;
-                    view.lvl_req = source.lvl_req;
-                    view.lvl_max = source.lvl_max;
-                    view.lvl_outdated = source.lvl_outdated;
-                    view.beneficiary_id = source.alias_comp.beneficiary_id;
-                    views[source_id] = view;
-                    if not views.default or view.lvl_req < views.default.lvl_req then
-                        views.default = view;
+-- in a function, the nested loops would take locals of the main chunk
+(function()
+    for source_id, source in pairs(spells) do
+        if source.alias_comp then
+            for spell, views in pairs(source_alias_views) do
+                for _, base_id in ipairs(spell.alias_comps) do
+                    if base_id == source.base_id then
+                        local view = {};
+                        for k, v in pairs(spell) do
+                            view[k] = v;
+                        end
+                        view.alias_comps = nil;
+                        view.flags = bit_band(spell.flags, bit_bnot(spell_flags.alias));
+                        view.direct = source.alias_comp.direct;
+                        view.periodic = source.alias_comp.periodic;
+                        view.lvl_req = source.lvl_req;
+                        view.lvl_max = source.lvl_max;
+                        view.lvl_outdated = source.lvl_outdated;
+                        view.beneficiary_id = source.alias_comp.beneficiary_id;
+                        views[source_id] = view;
+                        if not views.default or view.lvl_req < views.default.lvl_req then
+                            views.default = view;
+                        end
                     end
                 end
             end
         end
     end
-end
--- zero view for a source aura without alias component, e.g. a seal without Judgement damage
-for _, views in pairs(source_alias_views) do
-    if views.default then
-        local none = {};
-        for k, v in pairs(views.default) do
-            none[k] = v;
-        end
-        for _, kind in ipairs({"direct", "periodic"}) do
-            local comp = views.default[kind];
-            if comp then
-                local zero = {};
-                for k, v in pairs(comp) do
-                    zero[k] = v;
-                end
-                for _, k in ipairs({"min", "max", "base_min", "base_max", "coef", "per_lvl", "per_lvl_sq",
-                                    "coef_ap_min", "coef_ap_max"}) do
-                    if zero[k] then
-                        zero[k] = 0;
-                    end
-                end
-                zero.coef_2h = nil;
-                none[kind] = zero;
+    -- zero view for a source aura without alias component, e.g. a seal without Judgement damage
+    for _, views in pairs(source_alias_views) do
+        if views.default then
+            local none = {};
+            for k, v in pairs(views.default) do
+                none[k] = v;
             end
+            for _, kind in ipairs({"direct", "periodic"}) do
+                local comp = views.default[kind];
+                if comp then
+                    local zero = {};
+                    for k, v in pairs(comp) do
+                        zero[k] = v;
+                    end
+                    for _, k in ipairs({"min", "max", "base_min", "base_max", "coef", "per_lvl", "per_lvl_sq",
+                                        "coef_ap_min", "coef_ap_max"}) do
+                        if zero[k] then
+                            zero[k] = 0;
+                        end
+                    end
+                    zero.coef_2h = nil;
+                    none[kind] = zero;
+                end
+            end
+            views.none = none;
         end
-        views.none = none;
     end
-end
+end)();
 
 local function source_alias_view(spell, loadout)
     local views = source_alias_views[spell];

@@ -258,6 +258,8 @@ local live_spec = {
     effect_per_sec = { value = function(info) return info.effect_per_sec; end, fixed = "%.1f" },
     threat = { value = function(info) return info.threat; end, fixed = "%.1f" },
     threat_per_sec = { value = function(info) return info.threat_per_sec; end, fixed = "%.1f" },
+    rage_per_swing = { value = function(info) return info.rage_per_swing; end, fixed = "%.1f" },
+    rage_per_sec = { value = function(info) return info.rage_per_sec; end, fixed = "%.1f" },
     cost = { value = function(_, stats) return stats.cost; end, fixed = "%.1f" },
     extra_power = { value = function(_, stats) return stats.extra_power; end, fixed = "%.0f" },
     effect_per_cost = {
@@ -1575,6 +1577,18 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             effect_color("effect_per_sec")
         );
     end
+    if info.rage_per_swing and (sc.class == sc.classes.warrior or loadout.shapeshift == 1) then
+        local oh = "";
+        if info.oh_info then
+            oh = string.format(" | %.1f", info.oh_info.rage_per_swing);
+        end
+        add_live_line(
+            tooltip,
+            L["Rage generated"]..":",
+            { live_spec.rage_per_swing, oh .. " " .. L["per swing"] .. ", ", live_spec.rage_per_sec, " " .. L["per sec"] },
+            effect_color("normal")
+        );
+    end
     if config.settings.tooltip_display_threat and info.threat ~= 0 then
         add_live_line(
             tooltip,
@@ -1634,6 +1648,11 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         if (stats.cost_refund or 0) > 0 and (stats.cost_before_refund or 0) > 0 then
             parts[#parts + 1] = open .. string.format("%.1f%% %s",
                 100 * stats.cost_refund / stats.cost_before_refund, L["refunded"]);
+            open = ", ";
+        end
+        if (stats.cost_lost_swing or 0) > 0 then
+            parts[#parts + 1] = open .. string.format("%.1f %s",
+                stats.cost_lost_swing, L["rage not gained from the replaced swing"]);
             open = ", ";
         end
         if open == ", " then

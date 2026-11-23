@@ -338,6 +338,19 @@ local function spell_res(comp, loadout, effects)
     return resi, math.min(0.75, resi / (math.abs(resi) + 8 * loadout.lvl + 19));
 end
 
+-- rage per swing is weapon speed x 3.46 (4.5 two handed, off hand 1.73), none on misses, dodges and parries,
+-- unconfirmed (warrior compendium, pre october beta logs), feral forms assumed one handed; crits +100% (blizzard
+-- dev notes, warrior 2026-10-01, bear 2026-10-08), dual wield specialization no longer adds off hand rage (2026-10-01)
+local function white_swing_rage(stats, dmg, wpn_speed, oh, loadout, effects)
+    local rate = 3.46;
+    if oh then
+        rate = 1.73;
+    elseif loadout.shapeshift_feral_skill == 0 and sc.two_handed_wep_subclasses[effects.raw.wpn_subclass_mh] then
+        rate = 4.5;
+    end
+    return rate * wpn_speed * (stats.hit + stats.crit);
+end
+
 --------------------------------------------------------------------------------
 mechanics.client_class_stats_spell          = class_stats_spell;
 mechanics.client_special_abilities          = special_abilities;
@@ -345,6 +358,7 @@ mechanics.client_class_cast_time           = class_cast_time;
 mechanics.stats_glance                      = stats_glance;
 mechanics.caster_coef_multiplier            = caster_coef_multiplier;
 mechanics.client_changing_reads             = changing_reads;
+mechanics.client_white_swing_rage           = white_swing_rage;
 mechanics.client_spell_res                  = spell_res;
 
 sc.mechanics = mechanics;
