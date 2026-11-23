@@ -3097,11 +3097,8 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
             old_item.link = loadout.item_links[slot];
             old_item.id = loadout.items[slot];
 
-            write_item_info_from_link(old_item, old_item.link);
-            if old_item.link then
-
-                _, _, old_item.quality, old_item.ilvl, _, _, _, _, old_item.inv_type, old_item.tex, _, old_item.class_id, old_item.subclass_id =
-                    C_Item.GetItemInfo(old_item.link);
+            if write_item_info_from_link(old_item, old_item.link) then
+                old_item.tex = select(5, C_Item.GetItemInfoInstant(old_item.link)) or empty_tex;
             else
                 old_item.tex = empty_tex;
             end
@@ -3136,11 +3133,8 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
 
                 knocked_slot_data.link = loadout.item_links[slot_knocked_out];
                 knocked_slot_data.id = loadout.items[slot_knocked_out];
-                write_item_info_from_link(knocked_slot_data, knocked_slot_data.link);
-                if knocked_slot_data.link then
-
-                    _, _, knocked_slot_data.quality, knocked_slot_data.ilvl, _, _, _, _, knocked_slot_data.inv_type, knocked_slot_data.tex, _, knocked_slot_data.class_id, knocked_slot_data.subclass_id =
-                        C_Item.GetItemInfo(knocked_slot_data.link);
+                if write_item_info_from_link(knocked_slot_data, knocked_slot_data.link) then
+                    knocked_slot_data.tex = select(5, C_Item.GetItemInfoInstant(knocked_slot_data.link)) or empty_tex;
                 else
                     knocked_slot_data.tex = empty_tex;
                 end
