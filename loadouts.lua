@@ -268,6 +268,7 @@ local effects_additive = {
         "cost_mod",
         "cost_mod_flat",
         "res_flat",
+        "heal_crit_mod",
     },
     by_attr = {
         "stat_flat",
@@ -348,7 +349,6 @@ local effects_additive = {
         "perc_max_mana_as_mp5",
         "regen_while_casting",
         "healing_power_flat",
-        "heal_crit_mod",
         "phys_dmg_flat",
         "ap_flat",
         "ap_mod",

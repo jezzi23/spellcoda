@@ -403,6 +403,7 @@ local function stats_crit_mod(attack_subclass, bid, comp, spell, loadout, effect
 
     local base_crit_mod = 0.5;
     local crit_mod_extra = 0;
+    local crit_bonus_mod = effects.ability.crit_mod[bid] or 0.0;
     if comp.school1 == schools.physical or
         bit_band(spell.flags, spell_flags.requires_ranged_slot) ~= 0 then
         base_crit_mod = 1.0;
@@ -434,12 +435,12 @@ local function stats_crit_mod(attack_subclass, bid, comp, spell, loadout, effect
             end
         end
     elseif bit_band(spell.flags, spell_flags.heal) ~= 0 then
-        crit_mod_extra = crit_mod_extra + effects.raw.heal_crit_mod;
+        crit_bonus_mod = crit_bonus_mod + effects.by_school.heal_crit_mod[comp.school1];
     end
 
     base_crit_mod = (1.0 + base_crit_mod) * (1.0 + crit_mod_extra) - 1.0;
 
-    local final_crit_mod = 1.0 + base_crit_mod * (1.0 + (effects.ability.crit_mod[bid] or 0.0));
+    local final_crit_mod = 1.0 + base_crit_mod * (1.0 + crit_bonus_mod);
 
     if bit_band(spell.flags, heal_or_absorb_flags) == 0 then
         final_crit_mod = final_crit_mod
