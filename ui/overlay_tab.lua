@@ -174,41 +174,171 @@ local function create_font_dropdown(parent_frame, dropdown_name, font_config_key
     return dropdown_frame;
 end;
 
-local overlay_components_selection_display = {
-    "overlay_display_normal",
-    "overlay_display_direct_normal",
-    "overlay_display_ot_normal",
-    "overlay_display_hit_chance",
+local label_menu;
 
-    "overlay_display_crit",
-    "overlay_display_direct_crit",
-    "overlay_display_ot_crit",
-    "overlay_display_crit_chance",
+local function colored(text, color_tag)
+    local r, g, b = effect_color(color_tag);
+    return CreateColor(r, g, b, 1.0):WrapTextInColorCode(text);
+end
 
-    "overlay_display_expected",
-    "overlay_display_effect_per_sec",
+local function label_selection_dropdown(pframe, option_key, on_change)
+    if not label_menu then
+        label_menu = {
+            {
+                name = L["Normal hit"],
+                color_tag = "normal",
+                keys = {
+                    "overlay_display_normal",
+                    "overlay_display_normal_min",
+                    "overlay_display_normal_max",
+                    "overlay_display_direct_normal",
+                    "overlay_display_ot_normal",
+                    "overlay_display_hit_chance",
+                },
+            },
+            {
+                name = L["Critical hit"],
+                color_tag = "crit",
+                keys = {
+                    "overlay_display_crit",
+                    "overlay_display_crit_min",
+                    "overlay_display_crit_max",
+                    "overlay_display_direct_crit",
+                    "overlay_display_ot_crit",
+                    "overlay_display_crit_chance",
+                },
+            },
+            {
+                name = L["Expected effect"],
+                color_tag = "expectation",
+                keys = {
+                    "overlay_display_expected",
+                    "overlay_display_effect_per_sec",
+                },
+            },
+            {
+                name = L["Threat"],
+                color_tag = "threat",
+                keys = {
+                    "overlay_display_threat",
+                    "overlay_display_threat_per_sec",
+                    "overlay_display_threat_per_cost",
+                },
+            },
+            {
+                name = L["Cost & mana"],
+                color_tag = "cost",
+                keys = {
+                    "overlay_display_avg_cost",
+                    "overlay_display_actual_cost",
+                    "overlay_display_effect_per_cost",
+                    "overlay_display_effect_until_oom",
+                    "overlay_display_casts_until_oom",
+                    "overlay_display_time_until_oom",
+                },
+            },
+            {
+                name = L["Timing"],
+                color_tag = "execution_time",
+                keys = {
+                    "overlay_display_avg_cast",
+                    "overlay_display_actual_cast",
+                },
+            },
+            {
+                name = L["Against target"],
+                color_tag = "avoidance_info",
+                keys = {
+                    "overlay_display_miss_chance",
+                    "overlay_display_avoid_chance",
+                    "overlay_display_mitigation",
+                },
+            },
+            "overlay_display_rank",
+        };
+    end
 
-    "overlay_display_threat",
-    "overlay_display_threat_per_sec",
+    local handlers = sc.overlay.label_handler;
+    local dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_"..option_key, pframe);
+    dd._type = "DropDownMenu";
+    dd._settings_id = option_key;
 
-    "overlay_display_avg_cost",
-    "overlay_display_actual_cost",
-    "overlay_display_effect_per_cost",
-    "overlay_display_threat_per_cost",
+    local function show_selected()
+        local sel = handlers[config.settings[option_key]];
+        libDD:UIDropDownMenu_SetText(dd, sel.short);
+        dd.Text:SetTextColor(effect_color(sel.color_tag));
+        register_text_frame_color(dd.Text, sel.color_tag);
+    end
 
-    "overlay_display_miss_chance",
-    "overlay_display_avoid_chance",
-    "overlay_display_mitigation",
+    dd.init_func = function()
+        if not handlers[config.settings[option_key]] then
+            config.settings[option_key] = next(handlers);
+        end
+        show_selected();
+        on_change();
+    end;
+    libDD:UIDropDownMenu_SetWidth(dd, 120);
 
-    "overlay_display_avg_cast",
-    "overlay_display_actual_cast",
+    local function add_entry(key, level)
+        local h = handlers[key];
+        libDD:UIDropDownMenu_AddButton(
+            {
+                text = colored(h.desc, h.color_tag),
+                checked = function() return config.settings[option_key] == key; end,
+                func = function()
+                    config.settings[option_key] = key;
+                    show_selected();
+                    on_change();
+                    libDD:CloseDropDownMenus();
+                end,
+                tooltipTitle = "",
+                tooltipText = h.tooltip,
+                tooltipOnButton = h.tooltip ~= nil,
+            },
+            level
+        );
+    end
 
-    "overlay_display_effect_until_oom",
-    "overlay_display_time_until_oom",
-    "overlay_display_casts_until_oom",
+    libDD:UIDropDownMenu_SetInitializeFunction(dd, function(_, level, menu_list)
+        if level == 2 then
+            for _, key in ipairs(menu_list) do
+                add_entry(key, 2);
+            end
+            return;
+        end
+        for _, item in ipairs(label_menu) do
+            if type(item) == "string" then
+                add_entry(item, 1);
+            else
+                libDD:UIDropDownMenu_AddButton(
+                    {
+                        text = colored(item.name, item.color_tag),
+                        hasArrow = true,
+                        menuList = item.keys,
+                        keepShownOnClick = true,
+                        noClickSound = true,
+                        checked = function()
+                            local sel = config.settings[option_key];
+                            for _, key in ipairs(item.keys) do
+                                if key == sel then
+                                    return true;
+                                end
+                            end
+                            return false;
+                        end,
+                        func = function()
+                            libDD:UIDropDownMenu_Refresh(dd, nil, 1);
+                            show_selected();
+                        end,
+                    },
+                    1
+                );
+            end
+        end
+    end);
 
-    "overlay_display_rank",
-};
+    return dd;
+end
 
 
 local function create_overlay_spells_frame(pframe)
@@ -506,47 +636,11 @@ local function create_overlay_spells_frame(pframe)
         end
 
         do
-            local option_key = label_frame_setting_subkey.."_selection";
-            local dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_"..option_key, pframe);
-
-            dd._type = "DropDownMenu";
-            dd._settings_id = option_key;
-            dd:SetPoint("TOPLEFT", 300, pframe.y_offset+3);
-            dd.init_func = function()
-                if not sc.overlay.label_handler[config.settings[dd._settings_id]] then
-                    config.settings[dd._settings_id] = next(sc.overlay.label_handler);
-                end
-                local active_sel = sc.overlay.label_handler[config.settings[dd._settings_id]];
+            local dd = label_selection_dropdown(pframe, label_frame_setting_subkey.."_selection", function()
                 sc.core.update_action_bar_needed = true;
                 sc.loadouts.force_update = true;
-
-                libDD:UIDropDownMenu_SetText(dd, active_sel.desc);
-                dd.Text:SetTextColor(effect_color(active_sel.color_tag));
-                register_text_frame_color(dd.Text, active_sel.color_tag);
-            end;
-            libDD:UIDropDownMenu_SetWidth(dd, 120);
-            libDD:UIDropDownMenu_SetInitializeFunction(dd, function(self)
-                for _, sel_k in ipairs(overlay_components_selection_display) do
-                    local sel_v = sc.overlay.label_handler[sel_k];
-                    local r, g, b = effect_color(sel_v.color_tag);
-                    local txt = CreateColor(r, g, b, 1.0):WrapTextInColorCode(sel_v.desc);
-                    libDD:UIDropDownMenu_AddButton(
-                        {
-                            text = txt,
-                            checked = sel_k == config.settings[self._settings_id],
-                            func = function()
-                                config.settings[self._settings_id] = sel_k;
-                                sc.core.update_action_bar_needed = true;
-                                sc.loadouts.force_update = true;
-                                libDD:UIDropDownMenu_SetText(self, txt);
-                            end,
-                            tooltipTitle = "",
-                            tooltipText = sel_v.tooltip,
-                            tooltipOnButton = sel_v.tooltip ~= nil,
-                        }
-                    );
-                end
             end);
+            dd:SetPoint("TOPLEFT", 300, pframe.y_offset+3);
             ofs[#ofs + 1] = dd;
         end
         pframe.y_offset = pframe.y_offset - 20;
@@ -1099,44 +1193,10 @@ local function create_overlay_cast_info_frame(pframe)
         end
 
         do
-            local option_key = label_frame_setting_subkey.."_selection";
-            local dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_"..option_key, pframe);
-
-            dd._type = "DropDownMenu";
-            dd._settings_id = option_key;
-            dd:SetPoint("TOPLEFT", 300, pframe.y_offset+3);
-            dd.init_func = function()
-                if not sc.overlay.label_handler[config.settings[dd._settings_id]] then
-                    config.settings[dd._settings_id] = next(sc.overlay.label_handler);
-                end
-                local active_sel = sc.overlay.label_handler[config.settings[dd._settings_id]];
+            local dd = label_selection_dropdown(pframe, label_frame_setting_subkey.."_selection", function()
                 sc.overlay.ccf_label_reconfig(k);
-                libDD:UIDropDownMenu_SetText(dd, active_sel.desc);
-                dd.Text:SetTextColor(effect_color(active_sel.color_tag));
-                register_text_frame_color(dd.Text, active_sel.color_tag);
-            end;
-            libDD:UIDropDownMenu_SetWidth(dd, 120);
-            libDD:UIDropDownMenu_SetInitializeFunction(dd, function(self)
-                for _, sel_k in ipairs(overlay_components_selection_display) do
-                    local sel_v = sc.overlay.label_handler[sel_k];
-                    local r, g, b = effect_color(sel_v.color_tag);
-                    local txt = CreateColor(r, g, b, 1.0):WrapTextInColorCode(sel_v.desc);
-                    libDD:UIDropDownMenu_AddButton(
-                        {
-                            text = txt,
-                            checked = sel_k == config.settings[self._settings_id],
-                            func = function()
-                                config.settings[self._settings_id] = sel_k;
-                                sc.overlay.ccf_label_reconfig(k);
-                                libDD:UIDropDownMenu_SetText(self, txt);
-                            end,
-                            tooltipTitle = "",
-                            tooltipText = sel_v.tooltip,
-                            tooltipOnButton = sel_v.tooltip ~= nil,
-                        }
-                    );
-                end
             end);
+            dd:SetPoint("TOPLEFT", 300, pframe.y_offset+3);
             cfs[#cfs + 1] = dd;
         end
         pframe.y_offset = pframe.y_offset - 20;

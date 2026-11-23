@@ -890,6 +890,26 @@ local function refresh_power_curves()
     end
 end
 
+local function first_hit_bound(info, crit, upper)
+    if info.num_direct_effects > 0 then
+        if crit then
+            if info.crit1 ~= 0 then
+                return upper and info.max_crit_if_hit1 or info.min_crit_if_hit1;
+            end
+        elseif info.hit_normal1 ~= 0 then
+            return upper and info.max_noncrit_if_hit1 or info.min_noncrit_if_hit1;
+        end
+    elseif info.num_periodic_effects > 0 then
+        if crit then
+            if info.ot_crit1 ~= 0 then
+                return upper and info.ot_max_crit_if_hit1 or info.ot_min_crit_if_hit1;
+            end
+        elseif info.ot_hit_normal1 ~= 0 then
+            return upper and info.ot_max_noncrit_if_hit1 or info.ot_min_noncrit_if_hit1;
+        end
+    end
+end
+
 local function init_label_handler()
     -- delayed init to allow for config based localization
     overlay_label_handler = {
@@ -905,9 +925,43 @@ local function init_label_handler()
                 return val;
             end,
             digits = 1,
-            desc = L["Normal effect aggregate"],
+            desc = L["Average"],
+            short = L["Hit avg"],
             color_tag = "normal",
             requires_spell_flags = spell_flags.eval,
+            tooltip = L["Average normal hit, all effects of the spell added together"],
+        },
+        overlay_display_normal_min = {
+            value = function(info) return first_hit_bound(info, false, false); end,
+            desc = L["Minimum"],
+            short = L["Hit min"],
+            color_tag = "normal",
+            requires_spell_flags = spell_flags.eval,
+            tooltip = L["Smallest normal hit of the first direct effect, or of the whole periodic effect when there is no direct one"],
+        },
+        overlay_display_normal_max = {
+            value = function(info) return first_hit_bound(info, false, true); end,
+            desc = L["Maximum"],
+            short = L["Hit max"],
+            color_tag = "normal",
+            requires_spell_flags = spell_flags.eval,
+            tooltip = L["Largest normal hit of the first direct effect, or of the whole periodic effect when there is no direct one"],
+        },
+        overlay_display_crit_min = {
+            value = function(info) return first_hit_bound(info, true, false); end,
+            desc = L["Minimum"],
+            short = L["Crit min"],
+            color_tag = "crit",
+            requires_spell_flags = spell_flags.eval,
+            tooltip = L["Smallest critical hit of the first direct effect, or of the whole periodic effect when there is no direct one"],
+        },
+        overlay_display_crit_max = {
+            value = function(info) return first_hit_bound(info, true, true); end,
+            desc = L["Maximum"],
+            short = L["Crit max"],
+            color_tag = "crit",
+            requires_spell_flags = spell_flags.eval,
+            tooltip = L["Largest critical hit of the first direct effect, or of the whole periodic effect when there is no direct one"],
         },
         overlay_display_crit = {
             value = function(info, stats)
@@ -924,14 +978,17 @@ local function init_label_handler()
                 end
             end,
             digits = 1,
-            desc = L["Critical effect aggregate"],
+            desc = L["Average"],
+            short = L["Crit avg"],
             color_tag = "crit",
             requires_spell_flags = spell_flags.eval,
+            tooltip = L["Average critical hit, all effects of the spell added together"],
         },
         overlay_display_expected = {
             value = function(info) return info.expected; end,
             digits = 1,
-            desc = L["Effect expectation"],
+            desc = L["Per cast"],
+            short = L["Expected"],
             color_tag = "expectation",
             requires_spell_flags = spell_flags.eval,
             tooltip = L["Effect for a single cast considering all possible outcomes such as failed/diminished attacks, critical hits etc."],
@@ -939,7 +996,8 @@ local function init_label_handler()
         overlay_display_effect_per_sec = {
             value = function(info) return info.effect_per_sec; end,
             digits = 1,
-            desc = L["Effect per sec"],
+            desc = L["Per second"],
+            short = L["Effect/sec"],
             color_tag = "effect_per_sec",
             requires_spell_flags = spell_flags.eval,
             tooltip = L["Expected effect divided by expected execution time"],
@@ -950,6 +1008,7 @@ local function init_label_handler()
             den = function(_, stats) return stats.cost; end,
             digits = 2,
             desc = L["Effect per cost"],
+            short = L["Effect/cost"],
             color_tag = "effect_per_cost",
             requires_spell_flags = spell_flags.eval,
             tooltip = L["Expected effect divided by expected cost"],
@@ -957,25 +1016,31 @@ local function init_label_handler()
         overlay_display_threat = {
             value = function(info) return info.threat; end,
             digits = 1,
-            desc = L["Threat expectation"],
+            desc = L["Per cast"],
+            short = L["Threat"],
             color_tag = "threat",
             requires_spell_flags = bit.bor(spell_flags.eval, spell_flags.only_threat),
+            tooltip = L["Expected threat of one cast"],
         },
         overlay_display_threat_per_sec = {
             value = function(info) return info.threat_per_sec; end,
             digits = 1,
-            desc = L["Threat per sec"],
+            desc = L["Per second"],
+            short = L["Threat/sec"],
             color_tag = "threat",
             requires_spell_flags = bit.bor(spell_flags.eval, spell_flags.only_threat),
+            tooltip = L["Expected threat divided by expected execution time"],
         },
         overlay_display_threat_per_cost = {
             value = function(info) return info.threat_per_cost; end,
             num = function(info) return info.threat; end,
             den = function(_, stats) return stats.cost; end,
             digits = 2,
-            desc = L["Threat per cost"],
+            desc = L["Per cost"],
+            short = L["Threat/cost"],
             color_tag = "effect_per_cost",
             requires_spell_flags = bit.bor(spell_flags.eval, spell_flags.only_threat),
+            tooltip = L["Expected threat divided by expected cost"],
         },
         overlay_display_avg_cost = {
             value = function(_, stats)
@@ -984,9 +1049,11 @@ local function init_label_handler()
                 end
             end,
             digits = 1,
-            desc = L["Cost expected"],
+            desc = L["Expected cost"],
+            short = L["Cost"],
             color_tag = "cost",
             requires_spell_flags = spell_flags.eval,
+            tooltip = L["Calculated cost of one cast"],
         },
         overlay_display_avg_cast = {
             func = function(frame_overlay, _, stats)
@@ -996,9 +1063,11 @@ local function init_label_handler()
                     frame_overlay:SetText("");
                 end
             end,
-            desc = L["Execution time expected"],
+            desc = L["Expected cast time"],
+            short = L["Cast time"],
             color_tag = "execution_time",
             requires_spell_flags = spell_flags.eval,
+            tooltip = L["Calculated execution time of one cast"],
         },
         overlay_display_actual_cost = {
             func = function(frame_overlay, _, _, _, spell_id)
@@ -1006,6 +1075,7 @@ local function init_label_handler()
             end,
             queries_game = true,
             desc = L["Actual cost"],
+            short = L["Cost (game)"],
             color_tag = "cost",
             tooltip = L["Not computed but queried through game API"],
         },
@@ -1015,6 +1085,7 @@ local function init_label_handler()
             end,
             queries_game = true,
             desc = L["Actual cast time"],
+            short = L["Cast (game)"],
             color_tag = "execution_time",
             tooltip = L["Not computed but queried through game API and GCD capped"],
         },
@@ -1032,9 +1103,11 @@ local function init_label_handler()
                     frame_overlay:SetText("");
                 end
             end,
-            desc = L["Normal hit chance"],
+            desc = L["Chance"],
+            short = L["Hit chance"],
             color_tag = "normal",
             requires_spell_flags = spell_flags.eval,
+            tooltip = L["Chance to land a hit that is not critical"],
         },
         overlay_display_crit_chance = {
             func = function(frame_overlay, info, stats, spell)
@@ -1050,9 +1123,11 @@ local function init_label_handler()
                     frame_overlay:SetText("");
                 end
             end,
-            desc = L["Critical hit chance"],
+            desc = L["Chance"],
+            short = L["Crit chance"],
             color_tag = "crit",
             requires_spell_flags = spell_flags.eval,
+            tooltip = L["Chance to land a critical hit"],
         },
         overlay_display_miss_chance = {
             func = function(frame_overlay, _, stats, spell)
@@ -1069,8 +1144,10 @@ local function init_label_handler()
                 end
             end,
             desc = L["Miss chance"],
+            short = L["Miss chance"],
             color_tag = "avoidance_info",
             requires_spell_flags = spell_flags.eval,
+            tooltip = L["Chance to miss"],
         },
         overlay_display_avoid_chance = {
             func = function(frame_overlay, _, stats, spell)
@@ -1092,6 +1169,7 @@ local function init_label_handler()
                 end
             end,
             desc = L["Avoid chance"],
+            short = L["Avoid chance"],
             color_tag = "avoidance_info",
             requires_spell_flags = spell_flags.eval,
             tooltip = L["Chance to miss, parry or dodge"]
@@ -1101,15 +1179,19 @@ local function init_label_handler()
             digits = 0,
             uses_until_oom = true,
             desc = L["Effect until OOM"],
+            short = L["Effect to OOM"],
             color_tag = "effect_until_oom",
             requires_spell_flags = spell_flags.eval,
+            tooltip = L["Total expected effect of casting the spell until out of mana"],
         },
         overlay_display_time_until_oom = {
             value = function(info) return info.time_until_oom; end,
             dur = true,
             uses_until_oom = true,
             desc = L["Time until OOM"],
+            short = L["Time to OOM"],
             color_tag = "time_until_oom",
+            tooltip = L["Time spent casting the spell until out of mana"],
         },
         overlay_display_casts_until_oom = {
             value = function(info) return info.num_casts_until_oom; end,
@@ -1117,7 +1199,9 @@ local function init_label_handler()
             round_down = true,
             uses_until_oom = true,
             desc = L["Casts until OOM"],
+            short = L["Casts to OOM"],
             color_tag = "casts_until_oom",
+            tooltip = L["Number of casts until out of mana"],
         },
         overlay_display_direct_normal = {
             func = function(frame_overlay, info)
@@ -1135,9 +1219,11 @@ local function init_label_handler()
                     );
                 end
             end,
-            desc = L["Direct normal effect component 1"],
+            desc = L["Direct range"],
+            short = L["Hit range"],
             color_tag = "normal",
             requires_spell_flags = spell_flags.eval,
+            tooltip = L["Smallest to largest normal hit of the first direct effect"],
         },
         overlay_display_direct_crit = {
             func = function(frame_overlay, info)
@@ -1155,9 +1241,11 @@ local function init_label_handler()
                     );
                 end
             end,
-            desc = L["Direct critical effect component 1"],
+            desc = L["Direct range"],
+            short = L["Crit range"],
             color_tag = "crit",
             requires_spell_flags = spell_flags.eval,
+            tooltip = L["Smallest to largest critical hit of the first direct effect"],
         },
         overlay_display_ot_normal = {
             func = function(frame_overlay, info)
@@ -1175,9 +1263,11 @@ local function init_label_handler()
                     );
                 end
             end,
-            desc = L["Periodic normal effect component 1"],
+            desc = L["Periodic ticks"],
+            short = L["Hit ticks"],
             color_tag = "normal",
             requires_spell_flags = spell_flags.eval,
+            tooltip = L["Ticks x smallest to largest normal tick of the first periodic effect"],
         },
         overlay_display_ot_crit = {
             func = function(frame_overlay, info)
@@ -1195,9 +1285,11 @@ local function init_label_handler()
                     );
                 end
             end,
-            desc = L["Periodic critical effect component 1"],
+            desc = L["Periodic ticks"],
+            short = L["Crit ticks"],
             color_tag = "crit",
             requires_spell_flags = spell_flags.eval,
+            tooltip = L["Ticks x smallest to largest critical tick of the first periodic effect"],
         },
         overlay_display_rank = {
             func = function(frame_overlay, _, _, spell)
@@ -1208,6 +1300,7 @@ local function init_label_handler()
                end
             end,
             desc = L["Rank"],
+            short = L["Rank"],
             color_tag = "spell_rank",
         },
         overlay_display_mitigation = {
@@ -1235,6 +1328,7 @@ local function init_label_handler()
                 end
             end,
             desc = L["Mitigation"],
+            short = L["Mitigation"],
             color_tag = "avoidance_info",
             requires_spell_flags = spell_flags.eval,
             tooltip = L["Through armor or resistance"],
