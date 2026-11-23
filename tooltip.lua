@@ -1604,18 +1604,6 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             effect_color("effect_per_sec")
         );
     end
-    if info.rage_per_swing and (sc.class == sc.classes.warrior or loadout.shapeshift == 1) then
-        local oh = "";
-        if info.oh_info then
-            oh = string.format(" | %.1f", info.oh_info.rage_per_swing);
-        end
-        add_live_line(
-            tooltip,
-            L["Rage generated"]..":",
-            { live_spec.rage_per_swing, oh .. " " .. L["per swing"] .. ", ", live_spec.rage_per_sec, " " .. L["per sec"] },
-            effect_color("normal")
-        );
-    end
     if config.settings.tooltip_display_threat and info.threat ~= 0 then
         add_live_line(
             tooltip,
@@ -1660,7 +1648,21 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         end
     end
     local tooltip_cost = spell_cost(spell_id);
-    if config.settings.tooltip_display_avg_cost and
+    local rage_generated = info.rage_per_swing and (sc.class == sc.classes.warrior or loadout.shapeshift == 1);
+    if rage_generated then
+        if config.settings.tooltip_display_avg_cost then
+            local oh = "";
+            if info.oh_info then
+                oh = string.format(" | %.1f", info.oh_info.rage_per_swing);
+            end
+            add_live_line(
+                tooltip,
+                L["Expected rage generated"]..":",
+                { live_spec.rage_per_swing, oh },
+                effect_color("cost")
+            );
+        end
+    elseif config.settings.tooltip_display_avg_cost and
         (not tooltip_cost or
             (spell.power_type == sc.powers.mana and math.abs(tooltip_cost - stats.cost) > 1.0) or
             (spell.power_type ~= sc.powers.mana and math.abs(tooltip_cost - stats.cost) > 0.1)) then
@@ -1677,9 +1679,9 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 100 * stats.cost_refund / stats.cost_before_refund, L["refunded"]);
             open = ", ";
         end
-        if (stats.cost_lost_swing or 0) > 0 then
-            parts[#parts + 1] = open .. string.format("%.1f %s",
-                stats.cost_lost_swing, L["rage not gained from the replaced swing"]);
+        if (stats.cost_lost_swing or 0) > 0 and (stats.cost_before_refund or 0) > 0 then
+            parts[#parts + 1] = open .. string.format("%.1f%% %s",
+                100 * stats.cost_lost_swing / stats.cost_before_refund, L["lost swing"]);
             open = ", ";
         end
         if open == ", " then
@@ -1715,6 +1717,14 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             tooltip,
             string.format("%s:", cost_per_sec),
             string.format("- %.1f %s | + %.1f %s", info.cost_per_sec, L["out"], info.mp1, L["in"]),
+            effect_color("cost_per_sec")
+        );
+    end
+    if config.settings.tooltip_display_cost_per_sec and rage_generated and stats.cast_time ~= 0 then
+        add_live_line(
+            tooltip,
+            L["Rage"] .. " " .. L["per sec"] .. ":",
+            { "+ ", live_spec.rage_per_sec, " " .. L["in"] },
             effect_color("cost_per_sec")
         );
     end
