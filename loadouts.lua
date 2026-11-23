@@ -2807,9 +2807,14 @@ local diffed_finalized = {};
 empty_effects(diffed);
 empty_effects(diffed_finalized);
 local diffed_has_changes = false;
+local plan_weapon_change = false;
 
 local function calculator_has_changes()
     return diffed_has_changes;
+end
+
+local function calculator_changes_weapon()
+    return plan_weapon_change;
 end
 
 local last_ui_diff_update_id = 0;
@@ -2830,6 +2835,12 @@ local function update_loadout_and_effects_diffed_from_ui()
 
         stats_diff_last = sc.ui.effects_from_ui_stats_diff();
         item_plan_slot_ui_diffs(loadout, old_items_buffer, new_items_buffer);
+        plan_weapon_change = false;
+        for _, item in pairs(new_items_buffer) do
+            if item.class_id == 2 then
+                plan_weapon_change = true;
+            end
+        end
         buffs_cfg = calc_frame.buffs.working;
         talents_cfg = calc_frame.talents.working;
 
@@ -2945,6 +2956,7 @@ loadouts.update_loadout_and_effects                   = update_loadout_and_effec
 loadouts.loadout_read_id                              = function() return loadout_read_id; end;
 loadouts.update_loadout_and_effects_diffed_from_ui    = update_loadout_and_effects_diffed_from_ui;
 loadouts.calculator_has_changes                       = calculator_has_changes;
+loadouts.calculator_changes_weapon                    = calculator_changes_weapon;
 loadouts.loadout_flags                                = loadout_flags;
 loadouts.apply_effect                                 = apply_effect;
 loadouts.apply_flat_scaled                            = apply_flat_scaled;

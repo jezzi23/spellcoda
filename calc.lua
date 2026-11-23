@@ -310,8 +310,7 @@ local function stats_attack_skill(comp, spell, loadout, effects, eval_flags)
     if loadout.shapeshift_feral_skill ~= 0 then
         subclass = nil;
     elseif bit_band(eval_flags, evaluation_flags.fix_weapon_skill_to_level) ~= 0 then
-
-        skill = loadout.lvl * 5;
+        skill = skill - wpn_skill + loadout.lvl * 5;
     end
     return skill, sheet_skill, subclass;
 end

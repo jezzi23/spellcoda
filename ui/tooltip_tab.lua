@@ -883,6 +883,9 @@ local function create_tooltip_items_frame(pframe)
             id = "tooltip_item_leveling_skill_normalize",
             txt = L["Use skill as clvl*5 for weapon comparisons when not at maximum level"],
             tooltip = L["More intuitive weapon upgrade results when leveling since lower weapon skill type is not punished"],
+            func = function()
+                sc.loadouts.force_update = true;
+            end,
         },
     }, 1);
 

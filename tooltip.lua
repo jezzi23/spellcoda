@@ -24,6 +24,7 @@ local is_secret                                 = sc.utils.is_secret;
 local update_loadout_and_effects                = sc.loadouts.update_loadout_and_effects;
 local update_loadout_and_effects_diffed_from_ui = sc.loadouts.update_loadout_and_effects_diffed_from_ui;
 local calculator_has_changes                    = sc.loadouts.calculator_has_changes;
+local calculator_changes_weapon                 = sc.loadouts.calculator_changes_weapon;
 local effects_finalize_forced                   = sc.loadouts.effects_finalize_forced;
 local cpy_effects                               = sc.loadouts.cpy_effects;
 local empty_effects                             = sc.loadouts.empty_effects;
@@ -2156,7 +2157,20 @@ local function append_tooltip_ehp(tooltip, info, loadout)
     end
 end
 
-local function write_tooltip_spell_info(tooltip, spell, spell_id, loadout, effects, effects_finalized)
+local function fixes_weapon_skill(weapon_compared, loadout)
+    return weapon_compared and
+        loadout.lvl ~= sc.max_lvl and
+        config.settings.tooltip_item_leveling_skill_normalize;
+end
+
+local function plan_weapon_skill_flag(loadout)
+    if fixes_weapon_skill(calculator_changes_weapon(), loadout) then
+        return evaluation_flags.fix_weapon_skill_to_level;
+    end
+    return 0;
+end
+
+local function write_tooltip_spell_info(tooltip, spell, spell_id, loadout, effects, effects_finalized, eval_flags_plan)
     -- Set gray spell rank in upper-right corner again after custom SetSpellByID clears it
     if spell.rank ~= 0 or spell_id == spids.dodge then
         local txt_right = getglobal("GameTooltipTextRight1");
@@ -2189,7 +2203,7 @@ local function write_tooltip_spell_info(tooltip, spell, spell_id, loadout, effec
         end
     end
 
-    local eval_flags = 0;
+    local eval_flags = eval_flags_plan or 0;
     if config.settings.tooltip_display_stat_weights_effect or
         config.settings.tooltip_display_stat_weights_effect_per_sec or
         config.settings.tooltip_display_stat_weights_effect_until_oom then
@@ -2540,13 +2554,15 @@ local function write_spell_tooltip()
         before.valid = false;
         after.valid = false;
 
+        local eval_flags_plan = plan_weapon_skill_flag(spell_tooltip_cached.loadout);
         write_tooltip_spell_info(
             GameTooltip,
             spell,
             spell_id,
             spell_tooltip_cached.loadout,
             spell_tooltip_cached.diffed,
-            spell_tooltip_cached.diffed_finalized
+            spell_tooltip_cached.diffed_finalized,
+            eval_flags_plan
         );
 
         if config.settings.general_calc_secondary_tooltip and calculator_has_changes() then
@@ -2562,7 +2578,8 @@ local function write_spell_tooltip()
                 spell_id,
                 spell_tooltip_cached.loadout,
                 spell_tooltip_cached.effects,
-                spell_tooltip_cached.effects_finalized
+                spell_tooltip_cached.effects_finalized,
+                eval_flags_plan
             );
 
             local show_diff = before.valid and after.valid;
@@ -3067,10 +3084,7 @@ local function write_item_tooltip(tooltip, mod, mod_change, item_link)
 
     -- "On next attack" spells eval the entire attack instead of net gain
     local eval_flags = bit.bor(sc.overlay.overlay_eval_flags(), evaluation_flags.expectation_of_self);
-    local should_fix_wpn_skill =
-        tt.new_item.class_id == 2 and -- weapon type
-        loadout.lvl ~= sc.max_lvl and
-        config.settings.tooltip_item_leveling_skill_normalize;
+    local should_fix_wpn_skill = fixes_weapon_skill(tt.new_item.class_id == 2, loadout);
 
     if should_fix_wpn_skill then
         eval_flags = bit.bor(eval_flags, evaluation_flags.fix_weapon_skill_to_level);
@@ -3269,6 +3283,7 @@ end
 
 local function fill_plan_cmp(fight_type, loadout, effects_before, effects_after, eval_flags)
     local view = plan_cmp_views[fight_type];
+    eval_flags = bit.bor(eval_flags, plan_weapon_skill_flag(loadout));
     spells_cmp_list(view.cmps[1], 0, GameTooltip, fight_type, loadout, effects_before, effects_after, eval_flags, false);
     view.generation = plan_cmp_generation;
     return view;

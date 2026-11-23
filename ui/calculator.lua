@@ -1180,6 +1180,28 @@ local function create_calculator_items_subframe(pframe)
     -- the top of the weapons' planned item boxes; the camera leaves about 40 empty below the feet and above the head,
     -- the model starts at the top of the subframe (higher would cover the subtabs)
     local weapons_plan_top = bottom_strip_height + cancel_size + 4 + slot_size + plan_gap + 2 * slot_size + 1;
+    local function plan_cursor_item()
+        local kind, _, link = GetCursorInfo();
+        if kind ~= "item" or not link or not item_planner_add_slot(link) then
+            return false;
+        end
+        ClearCursor();
+        update_calculator_item_planner();
+        return true;
+    end
+    local items_area = pframe.items;
+    items_area:EnableMouse(true);
+    items_area:SetScript("OnReceiveDrag", plan_cursor_item);
+    items_area:SetScript("OnMouseDown", plan_cursor_item);
+    -- the area covers the window's background, it still moves the window
+    items_area:RegisterForDrag("LeftButton");
+    items_area:SetScript("OnDragStart", function()
+        __sc_frame:StartMoving();
+    end);
+    items_area:SetScript("OnDragStop", function()
+        __sc_frame:StopMovingOrSizing();
+    end);
+
     local model = CreateFrame("DressUpModel", nil, pframe.items);
     model:SetPoint("TOPLEFT", model_inset, 0);
     model:SetPoint("BOTTOMRIGHT", -model_inset, weapons_plan_top - 24);
@@ -1187,6 +1209,9 @@ local function create_calculator_items_subframe(pframe)
     model.rotation = 0;
     model:EnableMouse(true);
     model:SetScript("OnMouseDown", function(self, btn)
+        if plan_cursor_item() then
+            return;
+        end
         if btn == "LeftButton" then
             self.drag_x = GetCursorPosition();
             self.drag_rotation = self.rotation;
@@ -1203,6 +1228,7 @@ local function create_calculator_items_subframe(pframe)
         self.rotation = self.drag_rotation + (GetCursorPosition() - self.drag_x) * 0.02;
         self:SetRotation(self.rotation);
     end);
+    model:SetScript("OnReceiveDrag", plan_cursor_item);
     model:Hide();
     pframe.items.plan_model = model;
 
@@ -1279,7 +1305,11 @@ local function create_calculator_items_subframe(pframe)
             GameTooltip:Hide();
         end);
 
+        slotf:SetScript("OnReceiveDrag", plan_cursor_item);
         slotf:SetScript("OnMouseDown", function(self, btn)
+            if plan_cursor_item() then
+                return;
+            end
             if not self.link or not IsModifiedClick("CHATLINK") or btn ~= "LeftButton" then
                 return;
             end
@@ -1408,6 +1438,8 @@ local function create_calculator_items_subframe(pframe)
         new_itemf:SetScript("OnLeave", function(self)
             GameTooltip:Hide();
         end);
+        new_itemf:SetScript("OnReceiveDrag", plan_cursor_item);
+        new_itemf:SetScript("OnMouseDown", plan_cursor_item);
 
         local plus_tex = "Interface\\Buttons\\UI-PlusButton-Up";
         -- Gem slot frames
@@ -1456,8 +1488,9 @@ local function create_calculator_items_subframe(pframe)
             gemf:SetScript("OnLeave", function(self)
                 GameTooltip:Hide();
             end);
+            gemf:SetScript("OnReceiveDrag", plan_cursor_item);
             gemf:SetScript("OnMouseDown", function(self, btn)
-                if btn ~= "LeftButton" then
+                if plan_cursor_item() or btn ~= "LeftButton" then
                     return;
                 end
                 if not working_item_plan[self.slot_id] or not working_item_plan[self.slot_id].link then
@@ -1556,8 +1589,9 @@ local function create_calculator_items_subframe(pframe)
         enchantf:SetScript("OnLeave", function(self)
             GameTooltip:Hide();
         end);
+        enchantf:SetScript("OnReceiveDrag", plan_cursor_item);
         enchantf:SetScript("OnMouseDown", function(self, btn)
-            if btn ~= "LeftButton" then
+            if plan_cursor_item() or btn ~= "LeftButton" then
                 return;
             end
             if not working_item_plan[self.slot_id] or not working_item_plan[self.slot_id].link then
@@ -1568,6 +1602,7 @@ local function create_calculator_items_subframe(pframe)
         enchantf.slot_id = slot_id;
 
         local cancelf = CreateFrame("Button", nil, slotf, "UIPanelButtonTemplate");
+        cancelf:SetScript("OnReceiveDrag", plan_cursor_item);
         cancelf:SetScript("OnClick", function(self)
             if working_item_plan[self.slot_id] then
                 working_item_plan[self.slot_id] = nil;
@@ -2576,7 +2611,6 @@ local function create_sw_ui_calculator_frame(pframe)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
         GameTooltip:SetText(L["Spells"]);
         write_plan_spells_tooltip(GameTooltip, self.tooltip_mod);
-        GameTooltip:AddLine(L["Right click to edit the compared spells list"], 0.6, 0.6, 0.6);
         GameTooltip:Show();
     end);
     -- the shown tooltip calls its owner's UpdateTooltip every 0.2 s: redrawn when a modifier key changed,
@@ -2586,11 +2620,7 @@ local function create_sw_ui_calculator_frame(pframe)
             self:GetScript("OnEnter")(self);
         end
     end;
-    spells_area:SetScript("OnMouseDown", function(self, button)
-        if button == "RightButton" then
-            open_compared_spells_list();
-            return;
-        end
+    spells_area:SetScript("OnMouseDown", function(self)
         dump_text(
             L["Spells"],
             plan_spells_text(sc.core.key_mod_flags()),
@@ -2599,7 +2629,7 @@ local function create_sw_ui_calculator_frame(pframe)
         );
     end);
     local edit_list_button = CreateFrame("Button", nil, spells_area);
-    edit_list_button:SetSize(13, 13);
+    edit_list_button:SetSize(11, 11);
     edit_list_button:SetPoint("TOPRIGHT", -3, -3);
     -- the counts grow the text towards the button
     spells_area.fontstr:SetPoint("CENTER", -6, 0);
