@@ -28,13 +28,14 @@ local write_plan_spells_tooltip       = sc.tooltip.write_plan_spells_tooltip;
 local config                          = sc.config;
 
 local ui = sc.ui;
-local buff_categories_colors = ui.buff_categories_colors;
-local create_subtabs         = ui.create_subtabs;
-local dump_text              = ui.dump_text;
-local editbox_config         = ui.editbox_config;
-local font                   = ui.font;
-local libDD                  = ui.libDD;
-local make_divider           = ui.make_divider;
+local buff_categories_colors    = ui.buff_categories_colors;
+local create_subtabs            = ui.create_subtabs;
+local dump_text                 = ui.dump_text;
+local editbox_config            = ui.editbox_config;
+local font                      = ui.font;
+local libDD                     = ui.libDD;
+local make_divider              = ui.make_divider;
+local open_compared_spells_list = ui.open_compared_spells_list;
 
 
 local default_talents_plan = {
@@ -2575,6 +2576,8 @@ local function create_sw_ui_calculator_frame(pframe)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
         GameTooltip:SetText(L["Spells"]);
         write_plan_spells_tooltip(GameTooltip, self.tooltip_mod);
+        GameTooltip:AddLine(L["Right click to edit the compared spells list"], 0.6, 0.6, 0.6);
+        GameTooltip:Show();
     end);
     -- the shown tooltip calls its owner's UpdateTooltip every 0.2 s: redrawn when a modifier key changed,
     -- update_calc_list redraws it when the numbers change
@@ -2583,13 +2586,37 @@ local function create_sw_ui_calculator_frame(pframe)
             self:GetScript("OnEnter")(self);
         end
     end;
-    spells_area:SetScript("OnMouseDown", function(self)
+    spells_area:SetScript("OnMouseDown", function(self, button)
+        if button == "RightButton" then
+            open_compared_spells_list();
+            return;
+        end
         dump_text(
             L["Spells"],
             plan_spells_text(sc.core.key_mod_flags()),
             400,
             400
         );
+    end);
+    local edit_list_button = CreateFrame("Button", nil, spells_area);
+    edit_list_button:SetSize(13, 13);
+    edit_list_button:SetPoint("TOPRIGHT", -3, -3);
+    -- the counts grow the text towards the button
+    spells_area.fontstr:SetPoint("CENTER", -6, 0);
+    edit_list_button:SetNormalTexture("Interface\\Buttons\\UI-OptionsButton");
+    edit_list_button:SetHighlightTexture("Interface\\Buttons\\UI-OptionsButton", "ADD");
+    edit_list_button:GetHighlightTexture():SetAlpha(0.5);
+    edit_list_button:SetScript("OnClick", function()
+        open_compared_spells_list();
+    end);
+    edit_list_button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+        GameTooltip:SetText(L["Edit compared spells list"]);
+        GameTooltip:AddLine(L["Tooltip"].." -> "..L["Items"], 0.6, 0.6, 0.6);
+        GameTooltip:Show();
+    end);
+    edit_list_button:SetScript("OnLeave", function()
+        GameTooltip:Hide();
     end);
     pframe.spells_area = spells_area;
     pframe.spells_fontstr = spells_area.fontstr;

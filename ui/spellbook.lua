@@ -11,22 +11,21 @@ local active_loadout    = sc.loadouts.active_loadout
 local config            = sc.config;
 
 local ui = sc.ui;
-local compared_spells_changed = ui.compared_spells_changed;
-local create_arrow_button     = ui.create_arrow_button;
-local ehp_tex                 = ui.ehp_tex;
-local eval_spell_view_entry   = ui.eval_spell_view_entry;
-local missing_requirement     = ui.missing_requirement;
-local new_spell_catalogue     = ui.new_spell_catalogue;
-local pickup_known_spell      = ui.pickup_known_spell;
-local role_icons              = ui.role_icons;
-local spell_browser_sort_keys = ui.spell_browser_sort_keys;
-local spell_filters           = ui.spell_filters;
-local spell_ignore_text       = ui.spell_ignore_text;
-local spells_known_changed    = ui.spells_known_changed;
-local sw_activate_frame       = ui.sw_activate_frame;
-local toggle_spell_ignored    = ui.toggle_spell_ignored;
-local training                = ui.training;
-local update_spell_catalogue  = ui.update_spell_catalogue;
+local create_arrow_button       = ui.create_arrow_button;
+local ehp_tex                   = ui.ehp_tex;
+local eval_spell_view_entry     = ui.eval_spell_view_entry;
+local missing_requirement       = ui.missing_requirement;
+local new_spell_catalogue       = ui.new_spell_catalogue;
+local open_compared_spells_list = ui.open_compared_spells_list;
+local pickup_known_spell        = ui.pickup_known_spell;
+local role_icons                = ui.role_icons;
+local spell_browser_sort_keys   = ui.spell_browser_sort_keys;
+local spell_filters             = ui.spell_filters;
+local spell_menu_entries        = ui.spell_menu_entries;
+local spells_known_changed      = ui.spells_known_changed;
+local sw_activate_frame         = ui.sw_activate_frame;
+local training                  = ui.training;
+local update_spell_catalogue    = ui.update_spell_catalogue;
 
 -- spell catalogue on the spellbook's pages (forever)
 local function create_book_catalogue(sb, container, open_sc_tab)
@@ -192,19 +191,20 @@ local function create_book_catalogue(sb, container, open_sc_tab)
         update_spell_catalogue(cat, nil, nil, nil, true);
     end
 
+    local function open_compared_list()
+        open_compared_spells_list(open_sc_tab);
+    end
+
     local function spell_menu(owner, spell_id)
         MenuUtil.CreateContextMenu(owner, function(_, root)
             root:CreateTitle(training.spell_title(spell_id));
-            if bit.band(spells[spell_id].flags, bit.bor(spell_flags.eval, spell_flags.ehp)) ~= 0 then
-                root:CreateButton(L["Add to comparison list"], function()
-                    config.add_compared_spell(spell_id);
-                    compared_spells_changed();
-                end);
-                root:CreateSpacer();
+            for _, e in ipairs(spell_menu_entries(spell_id, open_compared_list)) do
+                if e then
+                    root:CreateButton(e.text, e.func):SetEnabled(e.enabled);
+                else
+                    root:CreateSpacer();
+                end
             end
-            root:CreateButton(spell_ignore_text(spell_id), function()
-                toggle_spell_ignored(spell_id);
-            end);
         end);
     end
 

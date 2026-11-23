@@ -175,6 +175,7 @@ local function create_subtabs(parent, tabs, height, on_select)
         parent[v[1]] = subframe;
         parent[v[1].."_tab"] = tab;
     end
+    parent.subtabs = tabs;
     local row = {};
     for _, v in ipairs(tabs) do
         row[#row + 1] = parent[v[1].."_tab"];
@@ -205,8 +206,55 @@ local function sw_activate_tab(tab_window)
     select_tab(tab_window, true);
 end
 
-local function sw_activate_frame(frame_name)
+local function starts_with(str, prefix)
+    return string.sub(str, 1, #prefix) == prefix;
+end
+
+-- the subtab button whose key, label or a word of the label starts with name, case, spaces and _ ignored
+local function find_subtab(frame, name)
+    name = string.gsub(string.lower(name), "[%s_]", "");
+    if name == "" or not frame.subtabs then
+        return nil;
+    end
+    for _, v in ipairs(frame.subtabs) do
+        local label = string.lower(v[2]);
+        local found = starts_with((string.gsub(v[1], "_", "")), name) or
+            starts_with((string.gsub(label, "%s", "")), name);
+        for word in string.gmatch(label, "%S+") do
+            found = found or starts_with(word, name);
+        end
+        if found then
+            return frame[v[1].."_tab"];
+        end
+    end
+    return nil;
+end
+
+-- subtab_name optional, see find_subtab; an unknown one prints the frame's subtabs
+local function sw_activate_frame(frame_name, subtab_name)
     sw_activate_tab(__sc_frame.tabs[ui_tabs_idx[frame_name]]);
+    if not subtab_name or subtab_name == "" then
+        return;
+    end
+    local frame = __sc_frame[frame_name];
+    local tab = find_subtab(frame, subtab_name);
+    if tab then
+        tab:Click();
+    elseif frame.subtabs then
+        local keys = {};
+        for i, v in ipairs(frame.subtabs) do
+            keys[i] = v[1];
+        end
+        print(sc.core.addon_name..": "..L["Unknown subtab"].." \""..subtab_name.."\", "..table.concat(keys, ", "));
+    end
+end
+
+-- Tooltip -> Items with its compared spells list flashing; open_tab(frame_name) defaults to sw_activate_frame
+local function open_compared_spells_list(open_tab)
+    (open_tab or sw_activate_frame)("tooltip_frame");
+    local tooltip_frame = __sc_frame.tooltip_frame;
+    tooltip_frame.items_tab:Click();
+    tooltip_frame.items.compared_list.flash();
 end
 
 local function create_sw_spell_id_viewer()
@@ -555,6 +603,7 @@ ui.layout_tabs               = layout_tabs;
 ui.make_divider              = make_divider;
 ui.make_frame_scrollable     = make_frame_scrollable;
 ui.multi_row_checkbutton     = multi_row_checkbutton;
+ui.open_compared_spells_list = open_compared_spells_list;
 ui.select_tab                = select_tab;
 ui.set_tab_icon              = set_tab_icon;
 ui.sw_activate_frame         = sw_activate_frame;

@@ -356,6 +356,25 @@ local function create_compared_spells_list(pframe)
     bg:SetPoint("BOTTOMRIGHT", 0, 0);
     bg:SetColorTexture(0, 0, 0, 0.3);
 
+    -- area.flash(): a gold glow pulsing twice, where links to the list land
+    local glow = area:CreateTexture(nil, "OVERLAY");
+    glow:SetAllPoints(bg);
+    glow:SetColorTexture(1, 0.8, 0, 1);
+    glow:SetBlendMode("ADD");
+    glow:SetAlpha(0);
+    local flash = glow:CreateAnimationGroup();
+    for i, v in ipairs({ { 0, 0.25, 0.15 }, { 0.25, 0, 0.35 }, { 0, 0.25, 0.15 }, { 0.25, 0, 0.5 } }) do
+        local a = flash:CreateAnimation("Alpha");
+        a:SetFromAlpha(v[1]);
+        a:SetToAlpha(v[2]);
+        a:SetDuration(v[3]);
+        a:SetOrder(i);
+    end
+    area.flash = function()
+        flash:Stop();
+        flash:Play();
+    end;
+
     local slider = CreateFrame("Slider", nil, area, "UIPanelScrollBarTrimTemplate");
     slider:SetOrientation('VERTICAL');
     slider:SetPoint("TOPLEFT", area, "TOPRIGHT", 0, -16);
@@ -879,6 +898,7 @@ local function create_tooltip_items_frame(pframe)
     local list_area;
     list_area, refresh_list = create_compared_spells_list(pframe);
     tifs[#tifs + 1] = list_area;
+    pframe.compared_list = list_area;
     ui.refresh_compared_spells = refresh_list;
 
     make_frame_scrollable(pframe);

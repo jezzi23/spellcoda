@@ -17,6 +17,7 @@ local buff_category                             = sc.buffs.buff_category;
 local config                                    = sc.config;
 
 local ui = sc.ui;
+local compared_spells_changed = ui.compared_spells_changed;
 
 local buff_categories_colors = {
     [buff_category.class]       = {0/255,   204/255, 255/255},
@@ -827,11 +828,7 @@ local function render_spells_frame(cat)
     local view = cat.view;
 
     frame.footer_cost:SetText(spell_catalogue_cost_str(cat));
-    if cat.sort_key == spell_browser_sort_keys.lvl then
-        frame.header_level:Hide();
-    else
-        frame.header_level:Show();
-    end
+    frame.update_headers(cat.sort_key);
 
     frame.slider:SetMinMaxValues(
         1,
@@ -919,6 +916,46 @@ local function toggle_spell_ignored(id)
     update_spell_catalogues(nil, nil, nil, true);
 end
 
+-- the row menu of both catalogues in one layout for every spell, false is a space; disabled entries stay greyed
+local function spell_menu_entries(id, open_compared_list)
+    local comparable = bit.band(spells[id].flags, bit.bor(spell_flags.eval, spell_flags.ehp)) ~= 0;
+    local compared = comparable and config.compared_spells_contains(id);
+    return {
+        {
+            text = L["Add to compared spells list"],
+            enabled = comparable and not compared,
+            func = function()
+                config.add_compared_spell(id);
+                compared_spells_changed();
+            end,
+        },
+        {
+            text = L["Remove from compared spells list"],
+            enabled = compared,
+            func = function()
+                config.remove_compared_spell(id);
+                compared_spells_changed();
+            end,
+        },
+        false,
+        {
+            text = L["Edit compared spells list"],
+            enabled = true,
+            func = function()
+                open_compared_list();
+            end,
+        },
+        false,
+        {
+            text = spell_ignore_text(id),
+            enabled = true,
+            func = function()
+                toggle_spell_ignored(id);
+            end,
+        },
+    };
+end
+
 local spells_catalogue = new_spell_catalogue(
     "spells_filter_",
     function()
@@ -942,10 +979,9 @@ ui.populate_scrollable_spell_view = populate_scrollable_spell_view;
 ui.spell_browser_sort_keys        = spell_browser_sort_keys;
 ui.spell_catalogue_visible        = spell_catalogue_visible;
 ui.spell_filters                  = spell_filters;
-ui.spell_ignore_text              = spell_ignore_text;
+ui.spell_menu_entries             = spell_menu_entries;
 ui.spells_catalogue               = spells_catalogue;
 ui.spells_known_changed           = spells_known_changed;
-ui.toggle_spell_ignored           = toggle_spell_ignored;
 ui.training                       = training;
 ui.update_spell_catalogue         = update_spell_catalogue;
 ui.update_spell_catalogues        = update_spell_catalogues;

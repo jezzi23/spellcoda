@@ -657,9 +657,19 @@ local function compared_spell_list()
     return list;
 end
 
+-- with the highest learned rank compared, every rank of a spell is the same entry
+local function compared_entry_matches(k, spell_id)
+    if k == spell_id then
+        return true;
+    end
+    return config.settings.calc_list_use_highest_rank and
+        sc.spells[k] ~= nil and sc.spells[spell_id] ~= nil and
+        sc.spells[k].base_id == sc.spells[spell_id].base_id;
+end
+
 local function compared_spells_contains(spell_id)
     for _, k in ipairs(compared_spell_list()) do
-        if k == spell_id then
+        if compared_entry_matches(k, spell_id) then
             return true;
         end
     end
@@ -673,10 +683,20 @@ local function add_compared_spell(spell_id)
     end
 end
 
+local function remove_compared_spell(spell_id)
+    local list = compared_spell_list();
+    for i = #list, 1, -1 do
+        if compared_entry_matches(list[i], spell_id) then
+            table.remove(list, i);
+        end
+    end
+end
+
 --------------------------------------------------------------------------------
 config.compared_spell_list = compared_spell_list;
 config.compared_spells_contains = compared_spells_contains;
 config.add_compared_spell = add_compared_spell;
+config.remove_compared_spell = remove_compared_spell;
 config.delete_profile = delete_profile;
 config.reset_profile = reset_profile;
 config.new_profile_from_default = new_profile_from_default;

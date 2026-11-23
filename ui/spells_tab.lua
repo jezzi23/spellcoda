@@ -1,22 +1,20 @@
 local _, sc = ...;
 
-local L           = sc.L;
-local spells      = sc.spells;
-local spell_flags = sc.spell_flags;
-local config      = sc.config;
+local L      = sc.L;
+local config = sc.config;
 
 local ui = sc.ui;
-local compared_spells_changed        = ui.compared_spells_changed;
 local create_arrow_button            = ui.create_arrow_button;
 local font                           = ui.font;
 local libDD                          = ui.libDD;
+local open_compared_spells_list      = ui.open_compared_spells_list;
 local pickup_known_spell             = ui.pickup_known_spell;
 local populate_scrollable_spell_view = ui.populate_scrollable_spell_view;
 local register_text_frame_color      = ui.register_text_frame_color;
 local role_icons                     = ui.role_icons;
-local spell_ignore_text              = ui.spell_ignore_text;
+local spell_browser_sort_keys        = ui.spell_browser_sort_keys;
+local spell_menu_entries             = ui.spell_menu_entries;
 local spells_catalogue               = ui.spells_catalogue;
-local toggle_spell_ignored           = ui.toggle_spell_ignored;
 local training                       = ui.training;
 local update_spells_frame            = ui.update_spells_frame;
 
@@ -129,6 +127,12 @@ local function create_sw_ui_spells_frame(pframe)
         --CreateFrame("Button", "pframe_sort_by", pframe, "UIDropDownMenuTemplate");
         libDD:Create_UIDropDownMenu("pframe_sort_by", pframe);
     pframe.sort_by:SetPoint("TOPLEFT", 150, pframe.y_offset+6);
+    local function set_sort(key)
+        libDD:UIDropDownMenu_SetText(pframe.sort_by, L["Order by "]..spell_browser_sort_options[key]);
+        spells_catalogue.sort_key = key;
+        update_spells_frame(nil, nil, nil, true);
+        pframe.slider:SetValue(1);
+    end
     pframe.sort_by.init_func = function()
 
         libDD:UIDropDownMenu_SetText(pframe.sort_by, L["Order by "]..spell_browser_sort_options[spells_catalogue.sort_key]);
@@ -141,10 +145,7 @@ local function create_sw_ui_spells_frame(pframe)
                         text = v;
                         checked = k == spells_catalogue.sort_key;
                         func = function()
-                            libDD:UIDropDownMenu_SetText(pframe.sort_by, L["Order by "]..spell_browser_sort_options[k]);
-                            spells_catalogue.sort_key = k;
-                            update_spells_frame(nil, nil, nil, true);
-                            pframe.slider:SetValue(1);
+                            set_sort(k);
                         end
                     }
                 );
@@ -217,35 +218,79 @@ local function create_sw_ui_spells_frame(pframe)
     f:SetText(L["Spell name"]);
     f:SetPoint("TOPLEFT", name_x_offset, pframe.y_offset);
 
-    local f = pframe:CreateFontString(nil, "OVERLAY");
-    f:SetFontObject(font);
-    f:SetText(L["Level"]);
-    f:SetPoint("TOPLEFT", lvl_x_offset, pframe.y_offset);
-    pframe.header_level = f;
+    -- sort by a click like the spellbook's catalogue, the text stays at its column's x inside the padding
+    local header_pad = 3;
+    local function header_button(text, on_click)
+        local btn = CreateFrame("Button", nil, pframe);
+        btn.text = btn:CreateFontString(nil, "OVERLAY");
+        btn.text:SetFontObject(font);
+        btn.text:SetText(text);
+        btn.text:SetPoint("TOPLEFT", header_pad, -header_pad);
+        btn:SetSize(math.ceil(btn.text:GetStringWidth()) + 2 * header_pad, 16);
+        local hl = btn:CreateTexture(nil, "HIGHLIGHT");
+        hl:SetAllPoints();
+        hl:SetColorTexture(1, 1, 1, 0.08);
+        btn:SetScript("OnClick", on_click);
+        return btn;
+    end
+    local function place_header(btn, x)
+        btn:SetPoint("TOPLEFT", x - header_pad, pframe.y_offset + header_pad);
+    end
+    local sort_keys = spell_browser_sort_keys;
 
-    local f = pframe:CreateFontString(nil, "OVERLAY");
-    f:SetFontObject(font);
-    f:SetText(L["Per second"]);
-    f:SetPoint("TOPLEFT", per_sec_x_offset, pframe.y_offset);
-    register_text_frame_color(f, "effect_per_sec");
+    pframe.header_level = header_button(L["Level"], function()
+        set_sort(sort_keys.lvl);
+    end);
+    place_header(pframe.header_level, lvl_x_offset);
 
-    local per_sec_header = f;
+    local per_sec_header = header_button(L["Per second"], function()
+        set_sort(spells_catalogue.sort_key == sort_keys.dps and sort_keys.hps or sort_keys.dps);
+    end);
+    place_header(per_sec_header, per_sec_x_offset);
+    register_text_frame_color(per_sec_header.text, "effect_per_sec");
 
-    local f = pframe:CreateFontString(nil, "OVERLAY");
-    f:SetFontObject(font);
-    f:SetText(L["Per cost"]);
-    register_text_frame_color(f, "effect_per_cost");
-    local per_cost_header = f;
+    local per_cost_header = header_button(L["Per cost"], function()
+        set_sort(spells_catalogue.sort_key == sort_keys.dpc and sort_keys.hpc or sort_keys.dpc);
+    end);
+    register_text_frame_color(per_cost_header.text, "effect_per_cost");
 
     local f = pframe:CreateFontString(nil, "OVERLAY");
     f:SetFontObject(font);
     f:SetText(L["Acquisition"]);
     f:SetPoint("TOPRIGHT", pframe, "TOPLEFT", acquisition_r, pframe.y_offset);
 
-    local free_l = per_sec_x_offset + per_sec_header:GetStringWidth();
+    local free_l = per_sec_x_offset + per_sec_header.text:GetStringWidth();
     local free_r = acquisition_r - f:GetStringWidth();
-    per_cost_x_offset = math.floor(free_l + (free_r - free_l - per_cost_header:GetStringWidth()) / 2);
-    per_cost_header:SetPoint("TOPLEFT", per_cost_x_offset, pframe.y_offset);
+    per_cost_x_offset = math.floor(free_l + (free_r - free_l - per_cost_header.text:GetStringWidth()) / 2);
+    place_header(per_cost_header, per_cost_x_offset);
+
+    local sort_icon = pframe:CreateTexture(nil, "ARTWORK");
+    sort_icon:SetSize(15, 15);
+    sort_icon:SetTexture(role_icons);
+    sort_icon:Hide();
+    pframe.update_headers = function(key)
+        pframe.header_level:SetShown(key ~= sort_keys.lvl);
+        local active, heal;
+        if key == sort_keys.dps or key == sort_keys.hps then
+            active = per_sec_header;
+            heal = key == sort_keys.hps;
+        elseif key == sort_keys.dpc or key == sort_keys.hpc then
+            active = per_cost_header;
+            heal = key == sort_keys.hpc;
+        end
+        if not active then
+            sort_icon:Hide();
+            return;
+        end
+        if heal then
+            sort_icon:SetTexCoord(0.25, 0.5, 0.0, 0.25);
+        else
+            sort_icon:SetTexCoord(0.25, 0.5, 0.25, 0.5);
+        end
+        sort_icon:ClearAllPoints();
+        sort_icon:SetPoint("RIGHT", active.text, "LEFT", -1, 0);
+        sort_icon:Show();
+    end;
 
     pframe.y_offset = pframe.y_offset - 23;
     local num_view_list_entries = 29;
@@ -431,26 +476,19 @@ local function create_sw_ui_spells_frame(pframe)
                     return;
                 end
                 libDD:UIDropDownMenu_AddButton({text = training.spell_title(id), isTitle = true, notCheckable = true});
-                if bit.band(spells[id].flags, bit.bor(spell_flags.eval, spell_flags.ehp)) ~= 0 then
-                    libDD:UIDropDownMenu_AddButton({
-                            text = L["Add to comparison list"],
-                            notCheckable = true,
-                            func = function()
-                                config.add_compared_spell(id);
-                                compared_spells_changed();
-                            end,
-                        }
-                    );
-                    libDD:UIDropDownMenu_AddSpace();
+                for _, e in ipairs(spell_menu_entries(id, open_compared_spells_list)) do
+                    if e then
+                        libDD:UIDropDownMenu_AddButton({
+                                text = e.text,
+                                notCheckable = true,
+                                disabled = not e.enabled,
+                                func = e.func,
+                            }
+                        );
+                    else
+                        libDD:UIDropDownMenu_AddSpace();
+                    end
                 end
-                libDD:UIDropDownMenu_AddButton({
-                        text = spell_ignore_text(id),
-                        notCheckable = true,
-                        func = function()
-                            toggle_spell_ignored(id);
-                        end,
-                    }
-                );
             end);
         end;
         spell_options.init_func();

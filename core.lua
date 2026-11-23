@@ -375,6 +375,13 @@ function core.deactivate_tooltip_refresh()
     end
 end
 
+local function learned_spells_changed()
+    sc.spells_feed.external_feed_highest_ranks_update();
+    sc.ui.spells_known_changed();
+    core.old_ranks_checks_needed = true;
+    sc.loadouts.force_update = true;
+end
+
 local event_dispatch = {
     ["ADDON_LOADED"] = function(_, arg)
         if arg == "SpellCoda" then
@@ -542,18 +549,10 @@ local event_dispatch = {
         core.old_ranks_checks_needed = true;
         sc.loadouts.force_update = true;
     end,
-    ["LEARNED_SPELL_IN_SKILL_LINE"] = function()
-        sc.spells_feed.external_feed_highest_ranks_update();
-        sc.ui.spells_known_changed();
-        core.old_ranks_checks_needed = true;
-        sc.loadouts.force_update = true;
-    end,
-    ["SPELLS_CHANGED"] = function()
-        sc.spells_feed.external_feed_highest_ranks_update();
-        sc.ui.spells_known_changed();
-        core.old_ranks_checks_needed = true;
-        sc.loadouts.force_update = true;
-    end,
+    ["LEARNED_SPELL_IN_SKILL_LINE"] = learned_spells_changed,
+    ["SPELLS_CHANGED"] = learned_spells_changed,
+    -- also after a purchase, in case the learned state shows up after the spell events
+    ["TRAINER_UPDATE"] = learned_spells_changed,
     ["SOCKET_INFO_UPDATE"] = function()
         core.equipment_update_needed = true;
         sc.loadouts.force_update = true;
@@ -707,23 +706,24 @@ GameTooltip:HookScript("OnShow", function(self)
 end);
 
 local function command(arg)
-    arg = string.lower(arg);
+    -- a second word picks a subtab: /sc tooltip items
+    local tab, subtab = string.match(string.lower(arg), "^%s*(%S*)%s*(.-)%s*$");
 
-    if arg == "spell" or arg == "spells" then
+    if tab == "spell" or tab == "spells" then
         sw_activate_frame("spells_frame");
-    elseif arg == "compare" or arg == "stat" or arg == "calc" or arg == "calculator" then
-        sw_activate_frame("calculator_frame");
-    elseif arg == "tooltip" then
-        sw_activate_frame("tooltip_frame");
-    elseif arg == "overlay" then
-        sw_activate_frame("overlay_frame");
-    elseif arg == "profile" or arg == "profiles" then
-        sw_activate_frame("profile_frame");
-    elseif arg == "loadout" or arg == "loadouts" then
-        sw_activate_frame("loadout_frame");
-    elseif arg == "settings" or arg == "opt" or arg == "options" or arg == "conf" or arg == "config" or arg == "configure" then
-        sw_activate_frame("settings_frame");
-    elseif arg == "reset" then
+    elseif tab == "compare" or tab == "stat" or tab == "calc" or tab == "calculator" then
+        sw_activate_frame("calculator_frame", subtab);
+    elseif tab == "tooltip" then
+        sw_activate_frame("tooltip_frame", subtab);
+    elseif tab == "overlay" then
+        sw_activate_frame("overlay_frame", subtab);
+    elseif tab == "profile" or tab == "profiles" then
+        sw_activate_frame("profile_frame", subtab);
+    elseif tab == "loadout" or tab == "loadouts" then
+        sw_activate_frame("loadout_frame", subtab);
+    elseif tab == "settings" or tab == "opt" or tab == "options" or tab == "conf" or tab == "config" or tab == "configure" then
+        sw_activate_frame("settings_frame", subtab);
+    elseif tab == "reset" then
         core.use_char_defaults = 1;
         core.use_acc_defaults = 1;
         ReloadUI();
