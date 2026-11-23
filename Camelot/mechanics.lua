@@ -24,6 +24,7 @@ local talent_idx                                    = sc.talent_idx;
 
 local effect_flags                                  = sc.calc.effect_flags;
 local add_extra_effect                              = sc.calc.add_extra_effect;
+local add_extra_effect_own                          = sc.calc.add_extra_effect_own;
 local get_buff                                      = sc.buffs.get_buff;
 local get_buff_by_lname                             = sc.buffs.get_buff_by_lname;
 
@@ -159,7 +160,46 @@ local class_stats_spell = (function()
             end
         end
     elseif class == classes.warlock then
+        -- Demonic Brand: the Imp's brand is Fire, every other demon's Shadow (in game knowledge, 2026-11-23);
+        -- Master Demonologist adds its Fire % to the Imp's, its Shadow % to the Succubus / Incubus' (vars 1017 / 1018)
+        local imp_family, succubus_family = 23, 17;
+        local brand_flags = bit.bor(effect_flags.optimistic, effect_flags.no_threat, effect_flags.scales_with_hit);
         return function(anycomp, bid, stats, spell, loadout, effects)
+            if bid ~= spids.searing_pain or loadout.pet_family == 0 then
+                return;
+            end
+            local pts = talent_pts(effects, talent_idx.demonic_brand);
+            if pts == 0 then
+                return;
+            end
+            local brand_id, md_iid = lookups.demonic_brand_shadow, 2;
+            if loadout.pet_family == imp_family then
+                brand_id, md_iid = lookups.demonic_brand_fire, 0;
+            end
+            local brand = sc.desc_damage[brand_id];
+            local school = brand.school;
+
+            local mul = effects.mul.by_school.vuln_mod[school];
+            local unholy_pts = talent_pts(effects, talent_idx.unholy_power);
+            if unholy_pts ~= 0 then
+                mul = mul * (1 + 0.01 * dummy_value(lookups.unholy_power, 0, unholy_pts));
+            end
+            local md_pts = talent_pts(effects, talent_idx.master_demonologist);
+            if md_pts ~= 0 and (loadout.pet_family == imp_family or loadout.pet_family == succubus_family) then
+                mul = mul * (1 + 0.01 * dummy_value(lookups.master_demonologist, md_iid, md_pts));
+            end
+
+            local sp = loadout.spell_dmg_by_school[school] + effects.by_school.sp_dmg_flat[school];
+            local lvl = math.max(brand.lvl_min, math.min(loadout.lvl, brand.lvl_max));
+            local scaled = brand.per_lvl * lvl + brand.coef * sp;
+            -- no hit roll: the brand's damage always hits and a missed pet attack keeps its charge;
+            -- crit is the warlock's baseline school crit, which pets are meant to inherit, for 150% -- unconfirmed
+            local _, crit, avg_resi = sc.calc.school_stats(school, loadout, effects);
+            local min = (brand.min + scaled) * mul * (1 - avg_resi);
+            local max = (brand.max + scaled) * mul * (1 - avg_resi);
+            add_extra_effect_own(stats, 1.0, spell_lname(lookups.demonic_brand), min, max, 1.5 * min, 1.5 * max,
+                                 1.0 - crit, crit, school, 1.0, 0, 1.0,
+                                 dummy_value(lookups.demonic_brand, 1, pts), brand_flags);
         end
     elseif class == classes.druid then
         return function(anycomp, bid, stats, spell, loadout, effects)

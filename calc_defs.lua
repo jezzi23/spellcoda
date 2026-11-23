@@ -19,8 +19,12 @@ local effect_flags = {
     -- with use_flat, a crit multiplies the flat value by the spell's crit mod
     flat_crits              = bit.lshift(1, 11),
     own_stats               = bit.lshift(1, 12),
-    -- counts in the expectation, not shown
-    hidden                  = bit.lshift(1, 13),
+    -- counted and shown only in the optimistic expectation, never in the single effect one
+    optimistic              = bit.lshift(1, 13),
+    -- adds no threat to the caster (another unit's damage)
+    no_threat               = bit.lshift(1, 14),
+    -- own stats line whose utilization is also the spell's chance to land (applied once it is known)
+    scales_with_hit         = bit.lshift(1, 15),
 };
 
 -- indexed_keys.x[i] is "x"..i, built once
@@ -48,6 +52,7 @@ local function add_extra_effect(stats, flags,  utilization, description, value, 
     stats[indexed_keys.extra_effect_val[i]] = value;
     stats[indexed_keys.extra_effect_desc[i]] = description;
     stats[indexed_keys.extra_effect_util[i]] = utilization;
+    stats[indexed_keys.extra_effect_count[i]] = 1;
     if bit.band(flags, effect_flags.is_periodic) ~= 0 then
         stats[indexed_keys.extra_effect_ticks[i]] = ticks;
         stats[indexed_keys.extra_effect_tick_time[i]] = freq;
@@ -58,9 +63,12 @@ local function add_extra_effect(stats, flags,  utilization, description, value, 
     end
 end
 
+-- school: sc.schools index, shown after the value
 -- targets: expectation over all targets relative to one, counted only when not evaluated as a single effect
+-- count: times the effect happens per cast, shown as one line
+-- flags: effect_flags added to own_stats (optimistic, no_threat)
 local function add_extra_effect_own(stats, utilization, description, min, max, crit_min, crit_max, hit_normal, crit,
-                                    school, targets, jumps, jump_amp, hidden)
+                                    school, targets, jumps, jump_amp, count, flags)
     stats.num_extra_effects = stats.num_extra_effects + 1;
     local i = stats.num_extra_effects;
 
@@ -68,9 +76,9 @@ local function add_extra_effect_own(stats, utilization, description, min, max, c
     stats[indexed_keys.extra_effect_targets[i]] = targets;
     stats[indexed_keys.extra_effect_jumps[i]] = jumps;
     stats[indexed_keys.extra_effect_jump_amp[i]] = jump_amp;
+    stats[indexed_keys.extra_effect_count[i]] = count;
 
-    stats[indexed_keys.extra_effect_flags[i]] =
-        (hidden and bit.bor(effect_flags.own_stats, effect_flags.hidden)) or effect_flags.own_stats;
+    stats[indexed_keys.extra_effect_flags[i]] = bit.bor(effect_flags.own_stats, flags);
     stats[indexed_keys.extra_effect_val[i]] = min;
     stats[indexed_keys.extra_effect_max[i]] = max;
     stats[indexed_keys.extra_effect_crit_min[i]] = crit_min;

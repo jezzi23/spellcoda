@@ -3,6 +3,7 @@ local _, sc               = ...;
 local apply_effect        = sc.loadouts.apply_effect;
 local apply_proc          = sc.loadouts.apply_proc;
 local apply_procs         = sc.loadouts.apply_procs;
+local apply_enchant       = sc.equipment.apply_enchant;
 local is_secret           = sc.utils.is_secret;
 local any_secret          = sc.utils.any_secret;
 local client_matches      = sc.utils.client_matches;
@@ -804,6 +805,17 @@ local function apply_snapshot_deltas(loadout, effects)
     end
 end
 
+-- an assumed weapon enchant (Windfury Weapon) as if on the main hand; a weapon enchant is no aura, the real one is
+-- read from the weapon (equipment.lua), so the same enchant there is not added again
+local function apply_assumed_temp_enchant(loadout, effects, spell_id, forced, undo)
+    local enchant_id = sc.temp_enchant_spells[spell_id];
+    if not enchant_id or enchant_id == loadout.temp_enchant_mh then
+        return;
+    end
+    apply_enchant(effects, enchant_id, forced, undo, nil);
+    apply_procs(effects, sc.enchant_procs[enchant_id], "mh", undo);
+end
+
 local function apply_buffs(loadout, effects, forced, undo)
 
     if __spellcoda_test_all_data__ then
@@ -838,6 +850,7 @@ local function apply_buffs(loadout, effects, forced, undo)
             if proc and (sc.spells[k] or proc.aura) and not sc.temp_enchant_spells[k] then
                 apply_proc(effects, k, proc.aura or "any", undo);
             end
+            apply_assumed_temp_enchant(loadout, effects, k, forced, undo);
         end
         for k, v in pairs(loadout.dynamic_buffs[loadout.friendly_towards]) do
             if sc.friendly_buffs[k] then
@@ -883,7 +896,7 @@ local function apply_fake_buffs(loadout, effects, buffs_cfg)
                 apply_effect(effects, k, sc.enchant_effects[k], true, cnt, false, true);
             end
             if sc.temp_enchant_spells[k] then
-                apply_procs(effects, sc.enchant_procs[sc.temp_enchant_spells[k]], "mh", false);
+                apply_assumed_temp_enchant(loadout, effects, k, true, false);
             elseif sc.procs[k] and (sc.spells[k] or sc.procs[k].aura) then
                 apply_proc(effects, k, sc.procs[k].aura or "any", false);
             end

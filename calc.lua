@@ -1396,7 +1396,6 @@ end
 local spell_stats_info;
 
 on_hit.eval_flags = bit_bor(evaluation_flags.assume_single_effect, evaluation_flags.fix_weapon_skill_to_level);
-on_hit.school_lnames = {L["Physical"], L["Holy"], L["Fire"], L["Nature"], L["Frost"], L["Shadow"], L["Arcane"]};
 
 function on_hit.cache_of(hand, loadout, effects, flags)
     if effects ~= sc.loadouts.live_effects() then
@@ -1426,7 +1425,7 @@ function on_hit.damage_entry(e, spell_id, loadout, effects, flags)
     end
     local scale = 1.0 - stats.target_avg_resi;
     e.desc = spell_lname(spell_id) or "";
-    e.school = on_hit.school_lnames[spell.direct.school1];
+    e.school = spell.direct.school1;
     e.targets = info.expected_direct / info.expected_direct_st;
     e.jumps = stats.direct_jumps;
     e.jump_amp = stats.direct_jump_amp;
@@ -1463,9 +1462,6 @@ function on_hit.extra_entry(e, proc, proc_id, hand, loadout, effects, flags)
     on_hit.extra_ap = 0;
 
     local name = spell_lname(proc_id) or "";
-    if proc.extra_attacks > 1 then
-        name = string.format("%s %dx", name, proc.extra_attacks);
-    end
     e.landed = stats.hit;
     e.num_lines = info.num_direct_effects;
     e.lines = e.lines or {};
@@ -1504,7 +1500,7 @@ function on_hit.per_swing_entry(e, spell_id, loadout, effects, flags)
     -- periodic values are totals over all ticks
     local scale = (1.0 - stats.target_avg_resi_ot) / info.ot_ticks1;
     e.desc = spell_lname(spell_id) or "";
-    e.school = on_hit.school_lnames[spell.periodic.school1];
+    e.school = spell.periodic.school1;
     e.targets = 1.0;
     e.jumps = 0;
     e.jump_amp = 1.0;
@@ -1578,13 +1574,11 @@ function on_hit.pass(counts, is_any, pass, ctx, loadout, effects)
                 local cache = (proc.extra_special and ctx.cache_hand) or ctx.cache_mh;
                 local e = on_hit.entry(cache, id, proc, id, hand, loadout, effects, ctx.flags);
                 local u = ctx.landed * p;
-                for hit = 1, proc.extra_attacks do
-                    for i = 1, e.num_lines do
-                        local l = e.lines[i];
-                        add_extra_effect_own(stats, u * l.util, l.desc, l.min, l.max, l.crit_min, l.crit_max,
-                                             l.hit_normal, l.crit, on_hit.school_lnames[schools.physical], 1.0, 0, 1.0,
-                                             hit > 1);
-                    end
+                for i = 1, e.num_lines do
+                    local l = e.lines[i];
+                    add_extra_effect_own(stats, u * l.util, l.desc, l.min, l.max, l.crit_min, l.crit_max,
+                                         l.hit_normal, l.crit, schools.physical, 1.0, 0, 1.0,
+                                         proc.extra_attacks, 0);
                 end
                 if proc.extra_special then
                     ctx.extra_special = ctx.extra_special + u * proc.extra_attacks * e.landed;
@@ -1603,7 +1597,7 @@ function on_hit.pass(counts, is_any, pass, ctx, loadout, effects)
                     end
                     add_extra_effect_own(stats, ctx.landed * p * events,
                                          e.desc, e.min, e.max, e.crit_min, e.crit_max, e.hit_normal, e.crit,
-                                         e.school, e.targets, e.jumps, e.jump_amp);
+                                         e.school, e.targets, e.jumps, e.jump_amp, 1, 0);
                 end
             end
         end
@@ -2014,7 +2008,7 @@ local function stats_for_spell(stats, spell, loadout, effects, eval_flags)
     end
 end
 
-local function resolve_extra_spell_effects(info, stats)
+local function resolve_extra_spell_effects(info, stats, eval_flags)
 
     info.glance_index = -1;
     for k = 1, stats.num_extra_effects do
@@ -2050,6 +2044,10 @@ local function resolve_extra_spell_effects(info, stats)
             info[indexed_keys.direct_flags[i]] = flags;
             info[indexed_keys.direct_description[i]] = stats[indexed_keys.extra_effect_desc[k]];
             info[indexed_keys.direct_utilization[i]] = stats[indexed_keys.extra_effect_util[k]];
+            if bit_band(flags, effect_flags.scales_with_hit) ~= 0 then
+                info[indexed_keys.direct_utilization[i]] = info[indexed_keys.direct_utilization[i]] * stats.hit;
+            end
+            info[indexed_keys.direct_count[i]] = stats[indexed_keys.extra_effect_count[k]];
             info[indexed_keys.hit_normal[i]] = stats[indexed_keys.extra_effect_hit[k]];
             info[indexed_keys.crit[i]] = stats[indexed_keys.extra_effect_crit[k]];
             info[indexed_keys.min_noncrit_if_hit[i]] = stats[indexed_keys.extra_effect_val[k]];
@@ -2105,6 +2103,7 @@ local function resolve_extra_spell_effects(info, stats)
             info[indexed_keys.ot_description[i]] = stats[indexed_keys.extra_effect_desc[k]];
             info[indexed_keys.ot_crit[i]] = math_min(stats.crit, crit_cap);
             info[indexed_keys.ot_utilization[i]] = stats[indexed_keys.extra_effect_util[k]];
+            info[indexed_keys.ot_count[i]] = stats[indexed_keys.extra_effect_count[k]];
             if bit_band(flags, effect_flags.triggers_on_crit) ~= 0 then
                 info[indexed_keys.ot_min_noncrit_if_hit[i]] = 0;
                 info[indexed_keys.ot_max_noncrit_if_hit[i]] = 0;
@@ -2121,6 +2120,7 @@ local function resolve_extra_spell_effects(info, stats)
             info[indexed_keys.direct_flags[i]] = flags;
             info[indexed_keys.direct_description[i]] = stats[indexed_keys.extra_effect_desc[k]];
             info[indexed_keys.direct_utilization[i]] = stats[indexed_keys.extra_effect_util[k]];
+            info[indexed_keys.direct_count[i]] = stats[indexed_keys.extra_effect_count[k]];
 
             info[indexed_keys.crit[i]] = math_min(stats.crit, crit_cap);
 
@@ -2156,13 +2156,21 @@ local function resolve_extra_spell_effects(info, stats)
         end
     end
 
+    local skipped_flags = 0;
+    if bit_band(eval_flags, evaluation_flags.assume_single_effect) ~= 0 then
+        skipped_flags = effect_flags.optimistic;
+    end
+
     -- accumulate periodics 
     info.total_ot_min_noncrit_if_hit = 0;
     info.total_ot_max_noncrit_if_hit = 0;
     info.total_ot_min_crit_if_hit = 0;
     info.total_ot_max_crit_if_hit = 0;
     for i = 1, info.num_periodic_effects do
-        local p                   = info[indexed_keys.ot_utilization[i]];
+        local p                   = info[indexed_keys.ot_utilization[i]] * info[indexed_keys.ot_count[i]];
+        if bit_band(info[indexed_keys.ot_flags[i]], skipped_flags) ~= 0 then
+            p = 0;
+        end
         info.total_ot_min_noncrit_if_hit = info.total_ot_min_noncrit_if_hit + p * info[indexed_keys.ot_min_noncrit_if_hit[i]];
         info.total_ot_max_noncrit_if_hit = info.total_ot_max_noncrit_if_hit + p * info[indexed_keys.ot_max_noncrit_if_hit[i]];
         if info[indexed_keys.ot_crit[i]] ~= 0 then
@@ -2177,7 +2185,10 @@ local function resolve_extra_spell_effects(info, stats)
     info.total_min_crit_if_hit    = 0;
     info.total_max_crit_if_hit    = 0;
     for i = 1, info.num_direct_effects do
-        local p                       = info[indexed_keys.direct_utilization[i]];
+        local p                       = info[indexed_keys.direct_utilization[i]] * info[indexed_keys.direct_count[i]];
+        if bit_band(info[indexed_keys.direct_flags[i]], skipped_flags) ~= 0 then
+            p = 0;
+        end
         info.total_min_noncrit_if_hit = info.total_min_noncrit_if_hit + p * info[indexed_keys.min_noncrit_if_hit[i]];
         info.total_max_noncrit_if_hit = info.total_max_noncrit_if_hit + p * info[indexed_keys.max_noncrit_if_hit[i]];
         if info[indexed_keys.crit[i]] ~= 0 then
@@ -2225,21 +2236,45 @@ end
 local function calc_expectation(info, spell, stats, loadout, num_unbounded_targets)
 
     -- direct
-    local expected_direct_sum = 0;
-    local expected_direct_more_targets = 0;
+    -- optimistic lines and the other targets of own stats lines go to the optimistic sums only,
+    -- no_threat lines are left out of the threat; own stats lines have their resistance folded in already,
+    -- the spell's is not applied to them (index 1 the spell's lines, 2 own stats lines)
+    local direct_sum = {0, 0};
+    local more_targets = {0, 0};
+    local threat_more_targets = {0, 0};
+    local no_threat_sum = {0, 0};
     for i = 1, info.num_direct_effects do
 
-        local effect_expected = direct_effect_expected(info, stats, i);
-        expected_direct_sum = expected_direct_sum + effect_expected;
-        if bit_band(info[indexed_keys.direct_flags[i]], effect_flags.own_stats) ~= 0 then
-            expected_direct_more_targets = expected_direct_more_targets +
-                effect_expected * (info[indexed_keys.direct_targets[i]] - 1.0);
+        local flags = info[indexed_keys.direct_flags[i]];
+        local effect_expected = direct_effect_expected(info, stats, i) * info[indexed_keys.direct_count[i]];
+        local own = bit_band(flags, effect_flags.own_stats) ~= 0;
+        local k = own and 2 or 1;
+        local more = 0;
+        if bit_band(flags, effect_flags.optimistic) ~= 0 then
+            more = effect_expected;
+            if own then
+                more = effect_expected * info[indexed_keys.direct_targets[i]];
+            end
+        else
+            direct_sum[k] = direct_sum[k] + effect_expected;
+            if bit_band(flags, effect_flags.no_threat) ~= 0 then
+                no_threat_sum[k] = no_threat_sum[k] + effect_expected;
+            end
+            if own then
+                more = effect_expected * (info[indexed_keys.direct_targets[i]] - 1.0);
+            end
+        end
+        more_targets[k] = more_targets[k] + more;
+        if bit_band(flags, effect_flags.no_threat) == 0 then
+            threat_more_targets[k] = threat_more_targets[k] + more;
         end
     end
+    local resisted = 1 - stats.target_avg_resi;
+    local expected_direct_more_targets = more_targets[1] * resisted + more_targets[2];
 
     if info.num_direct_effects > 0 then
         --info.expected_direct_st = stats.hit * expected_direct_if_hit * (1 - stats.target_avg_resi);
-        info.expected_direct_st = expected_direct_sum * (1 - stats.target_avg_resi);
+        info.expected_direct_st = direct_sum[1] * resisted + direct_sum[2];
         info.expected_direct = info.expected_direct_st;
 
         local flat_threat = stats.threat_mod_flat;
@@ -2249,7 +2284,8 @@ local function calc_expectation(info, spell, stats, loadout, num_unbounded_targe
             threat_mod_of_expected = threat_mod_of_expected + (spell.direct.threat_mod or 0.0);
         end
         info.threat_direct_st = (1.0 + stats.threat_mod) *
-            ((info.expected_direct_st * threat_mod_of_expected) + ((1.0 - stats.miss) * flat_threat));
+            (((info.expected_direct_st - (no_threat_sum[1] * resisted + no_threat_sum[2])) * threat_mod_of_expected)
+             + ((1.0 - stats.miss) * flat_threat));
         info.threat_direct = info.threat_direct_st;
 
         if spell.direct and bit_band(spell.direct.flags, comp_flags.unbounded_aoe) ~= 0 then
@@ -2258,9 +2294,9 @@ local function calc_expectation(info, spell, stats, loadout, num_unbounded_targe
             info.threat_direct = info.threat_direct_st * num_unbounded_targets;
         end
         if expected_direct_more_targets ~= 0 then
-            local added = expected_direct_more_targets * (1 - stats.target_avg_resi);
-            info.expected_direct = info.expected_direct + added;
-            info.threat_direct = info.threat_direct + (1.0 + stats.threat_mod) * added * threat_mod_of_expected;
+            info.expected_direct = info.expected_direct + expected_direct_more_targets;
+            local added_threat = threat_more_targets[1] * resisted + threat_more_targets[2];
+            info.threat_direct = info.threat_direct + (1.0 + stats.threat_mod) * added_threat * threat_mod_of_expected;
         end
     else
         info.expected_direct_st = 0;
@@ -2272,20 +2308,34 @@ local function calc_expectation(info, spell, stats, loadout, num_unbounded_targe
 
     -- over time
     local expected_ot_sum = 0;
+    local expected_ot_optimistic = 0;
+    local threat_ot_optimistic = 0;
+    local no_threat_ot_sum = 0;
     for i = 1, info.num_periodic_effects do
 
-        local effect_expected = 0.5 * info[indexed_keys.ot_utilization[i]] *
+        local flags = info[indexed_keys.ot_flags[i]];
+        local effect_expected = 0.5 * info[indexed_keys.ot_utilization[i]] * info[indexed_keys.ot_count[i]] *
             (info[indexed_keys.ot_hit_normal[i]] *
                 (info[indexed_keys.ot_min_noncrit_if_hit[i]] + info[indexed_keys.ot_max_noncrit_if_hit[i]])
             +
             info[indexed_keys.ot_crit[i]] *
                 (info[indexed_keys.ot_min_crit_if_hit[i]] + info[indexed_keys.ot_max_crit_if_hit[i]])
             );
-            if bit_band(info[indexed_keys.ot_flags[i]], effect_flags.can_be_blocked) ~= 0 then
+            if bit_band(flags, effect_flags.can_be_blocked) ~= 0 then
                 effect_expected = effect_expected - stats.block_ot * stats.block_amount_ot;
             end
 
-        expected_ot_sum = expected_ot_sum + effect_expected;
+        if bit_band(flags, effect_flags.optimistic) ~= 0 then
+            expected_ot_optimistic = expected_ot_optimistic + effect_expected;
+            if bit_band(flags, effect_flags.no_threat) == 0 then
+                threat_ot_optimistic = threat_ot_optimistic + effect_expected;
+            end
+        else
+            expected_ot_sum = expected_ot_sum + effect_expected;
+            if bit_band(flags, effect_flags.no_threat) ~= 0 then
+                no_threat_ot_sum = no_threat_ot_sum + effect_expected;
+            end
+        end
     end
 
     if info.num_periodic_effects > 0 then
@@ -2300,12 +2350,18 @@ local function calc_expectation(info, spell, stats, loadout, num_unbounded_targe
         end
 
         info.threat_ot_st = (1.0 + stats.threat_mod_ot) *
-            ((info.expected_ot_st * threat_mod_of_expected) + ((1.0 - stats.miss_ot) * flat_threat));
+            (((info.expected_ot_st - no_threat_ot_sum * (1 - stats.target_avg_resi_ot)) * threat_mod_of_expected)
+             + ((1.0 - stats.miss_ot) * flat_threat));
         info.threat_ot = info.threat_ot_st;
 
         if spell.periodic and bit_band(spell.periodic.flags, comp_flags.unbounded_aoe) ~= 0 then
             info.expected_ot = info.expected_ot_st * num_unbounded_targets;
             info.threat_ot = info.threat_ot_st * num_unbounded_targets;
+        end
+        if expected_ot_optimistic ~= 0 then
+            info.expected_ot = info.expected_ot + expected_ot_optimistic * (1 - stats.target_avg_resi_ot);
+            local added_threat = threat_ot_optimistic * (1 - stats.target_avg_resi_ot);
+            info.threat_ot = info.threat_ot + (1.0 + stats.threat_mod_ot) * added_threat * threat_mod_of_expected;
         end
     else
         info.expected_ot_st = 0;
@@ -2454,6 +2510,7 @@ local function direct_info(info, spell, loadout, stats, effects, eval_flags)
         info.direct_flags1 = bit_bor(info.direct_flags1, effect_flags.can_be_blocked);
     end
     info.direct_utilization1 = 1.0;
+    info.direct_count1 = 1;
 
     info.num_direct_effects = info.num_direct_effects + 1;
 end
@@ -2616,6 +2673,7 @@ local function periodic_info(info, spell, loadout, stats, effects, eval_flags)
     info.ot_hit_normal1 = stats.hit_normal_ot;
     info.ot_flags1 = 0;
     info.ot_utilization1 = 1.0;
+    info.ot_count1 = 1;
     info.ot_flags1 = bit_bor(info.ot_flags1, effect_flags.can_be_blocked);
 
     info.num_periodic_effects = info.num_periodic_effects + 1;
@@ -2648,7 +2706,7 @@ local function spell_info(info, spell, stats, loadout, effects, eval_flags, spel
 
     local num_unbounded_targets = config.settings.loadout_unbounded_aoe_targets;
 
-    resolve_extra_spell_effects(info, stats);
+    resolve_extra_spell_effects(info, stats, eval_flags);
 
     calc_expectation(info, spell, stats, loadout, num_unbounded_targets);
 
@@ -3921,6 +3979,20 @@ local function ehp_diff(out, loadout, effects_finalized, effects_d, eval_flags)
 end
 
 --------------------------------------------------------------------------------
+-- a bare spell of one magic school, for lines that act as their own spell (Demonic Brand): the player's baseline
+-- hit, crit and the target's average resistance there, without the modifiers of the spell that adds the line
+calc.school_stats = (function()
+    local comp = { school1 = 0, flags = 0 };
+    local spell = { flags = 0 };
+    return function(school, loadout, effects)
+        comp.school1 = school;
+        local _, avg_resi = stats_res(comp, spell, loadout, effects);
+        local miss, _, res = stats_hit(avg_resi, nil, nil, 0, comp, spell, loadout, effects);
+        local crit = stats_crit(0, nil, nil, nil, 0, comp, spell, loadout, effects);
+        return 1.0 - miss, crit, res;
+    end;
+end)();
+
 calc.fight_types                        = fight_types;
 calc.evaluation_flags                   = evaluation_flags;
 calc.stats_for_spell                    = stats_for_spell;

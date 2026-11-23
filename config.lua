@@ -339,6 +339,8 @@ local default_settings     = {
     loadout_assume_buffs_only_combat                            = false,
     loadout_assume_buffs_only_raid                              = false,
     loadout_assumed_buffs                                       = { player_buffs = {}, target_buffs = {} },
+    -- class token -> creature family id of the pet assumed while none is out, missing means none
+    loadout_assumed_pet                                         = {},
     loadout_behind_target                                       = false,
 
     libstub_icon_conf                                           = { hide = false },

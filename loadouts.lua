@@ -96,6 +96,7 @@ local loadout_numbers = {
     "shapeshift",
     "shapeshift_feral_skill",
     "shapeshift_no_weapon",
+    "pet_family",
     "target_defense",
     "target_creature_mask",
     "target_res",
@@ -2184,6 +2185,17 @@ local function dynamic_loadout(loadout, prev)
     else
         loadout.shapeshift_feral_skill = 0;
         loadout.shapeshift_no_weapon = 0;
+    end
+
+    loadout.pet_family = 0;
+    if sc.pet_families then
+        local family = select(2, UnitCreatureFamily("pet"));
+        if is_secret(family) then
+            family = prev.pet_family;
+        elseif sc.pet_family_alias and sc.pet_family_alias[family] then
+            family = sc.pet_family_alias[family];
+        end
+        loadout.pet_family = family or config.settings.loadout_assumed_pet[class] or 0;
     end
 
     -- npc names can be secret, the unit token stands in since it never equals a name

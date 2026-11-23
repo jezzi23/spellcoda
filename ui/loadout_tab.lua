@@ -119,6 +119,67 @@ local function create_sw_ui_loadout_frame(pframe)
     end)
     pframe.max_mana_checkbutton = f;
 
+    if sc.pet_families then
+        pframe.y_offset = pframe.y_offset - 25;
+
+        f_txt = pframe:CreateFontString(nil, "OVERLAY");
+        f_txt:SetFontObject(GameFontNormal);
+        f_txt:SetPoint("TOPLEFT", pframe, x_pad+5, pframe.y_offset);
+        f_txt:SetText(L["Default pet when none is out:"]);
+        f_txt:SetTextColor(1.0,  1.0,  1.0);
+
+        local function family_name(id)
+            if id == 0 then
+                return L["None"];
+            end
+            local info = C_CreatureInfo.GetCreatureFamilyInfo(id);
+            local name = info and info.name or tostring(id);
+            for alias, same_as in pairs(sc.pet_family_alias or {}) do
+                local alias_info = same_as == id and C_CreatureInfo.GetCreatureFamilyInfo(alias);
+                if alias_info then
+                    name = name .. " / " .. alias_info.name;
+                end
+            end
+            return name;
+        end
+        local families = {};
+        for _, id in ipairs(sc.pet_families) do
+            if C_CreatureInfo.GetCreatureFamilyInfo(id) then
+                families[#families + 1] = id;
+            end
+        end
+        table.sort(families, function(a, b) return family_name(a) < family_name(b); end);
+        table.insert(families, 1, 0);
+
+        local dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_loadout_assumed_pet", pframe);
+        dd._type = "DropDownMenu";
+        dd:SetPoint("LEFT", f_txt, "RIGHT", -5, -3);
+        libDD:UIDropDownMenu_SetWidth(dd, 130);
+        dd.init_func = function()
+            libDD:UIDropDownMenu_SetText(dd, family_name(config.settings.loadout_assumed_pet[sc.class] or 0));
+        end;
+        libDD:UIDropDownMenu_SetInitializeFunction(dd, function()
+            local current = config.settings.loadout_assumed_pet[sc.class] or 0;
+            for _, id in ipairs(families) do
+                libDD:UIDropDownMenu_AddButton({
+                        text = family_name(id),
+                        checked = current == id,
+                        func = function()
+                            sc.loadouts.force_update = true;
+                            config.settings.loadout_assumed_pet[sc.class] = id ~= 0 and id or nil;
+                            tab_frame.update_indicators();
+                            libDD:UIDropDownMenu_SetText(dd, family_name(id));
+                        end
+                    }
+                );
+            end
+        end);
+        dd.init_func();
+
+        local help_icon = make_help_icon_tooltip(nil, pframe, L["Pet effects use this pet while none is summoned"]);
+        help_icon:SetPoint("LEFT", dd, "RIGHT", 0, 3);
+    end
+
 
 
     pframe.y_offset = pframe.y_offset - 30;
@@ -659,7 +720,7 @@ local function create_sw_ui_loadout_frame(pframe)
     tab_frame.update_indicators = function()
         local settings = config.settings;
         local defaults = config.default_settings;
-        local changed = false;
+        local changed = (settings.loadout_assumed_pet[sc.class] or 0) ~= 0;
         for _, k in ipairs(result_keys) do
             if settings[k] ~= defaults[k] then
                 changed = true;

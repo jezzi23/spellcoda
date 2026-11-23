@@ -861,6 +861,7 @@ end
 
 ---------------------------------------------------------------------------------------------------
 equipment.num_set_pieces                = num_set_pieces;
+equipment.apply_enchant                 = apply_enchant;
 equipment.has_enchant                   = has_enchant;
 equipment.apply_equipment               = apply_equipment;
 equipment.apply_items_cmp               = apply_items_cmp;

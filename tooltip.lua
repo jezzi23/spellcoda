@@ -292,8 +292,29 @@ local function sort_stat_weights(weights, sort_by_field)
     end
 end
 
+-- built on first use: the localized strings are filled in at ADDON_LOADED
+local school_lnames;
 local function school_suffix(school)
-    return (school and " (" .. school .. ")") or "";
+    if not school then
+        return "";
+    end
+    school_lnames = school_lnames or
+        {L["Physical"], L["Holy"], L["Fire"], L["Nature"], L["Frost"], L["Shadow"], L["Arcane"]};
+    return " (" .. school_lnames[school] .. ")";
+end
+
+-- effect line i of the direct ("direct_description", "direct_count") or periodic ("ot_...") lines
+local function effect_line_desc(info, desc_key, count_key, i)
+    local count = info[count_key .. i];
+    if count ~= 1 then
+        return string.format("%s %gx", info[desc_key .. i], count);
+    end
+    return info[desc_key .. i];
+end
+
+local function effect_line_shown(flags, eval_flags)
+    return bit.band(flags, effect_flags.optimistic) == 0 or
+        bit.band(eval_flags, evaluation_flags.assume_single_effect) == 0;
 end
 
 local function format_bounce_spell(min_hit, max_hit, bounces, falloff)
@@ -843,7 +864,11 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             end
         end
 
-        if info.expected_st ~= 0 and info.aoe_to_single_ratio > 1 then
+        -- while ALT is held the hint would name the mode releasing it shows, so it is left out; an empty line
+        -- keeps the tooltip from shifting
+        local alt_held = bit.band(sc.tooltip_mod, sc.tooltip_mod_flags.ALT) ~= 0;
+        local alt_hint = info.expected_st ~= 0 and info.aoe_to_single_ratio > 1;
+        if alt_hint and not alt_held then
             if info.expected ~= info.expected_st then
                 evaluation_options = append_to_txt_delimitered(evaluation_options, L["ALT for 1.00x effect"]);
             else
@@ -854,6 +879,8 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
 
         if evaluation_options ~= "" then
             add_line(tooltip, L["Use"]..":", evaluation_options, 1.0, 1.0, 1.0);
+        elseif alt_hint then
+            add_line(tooltip, " ", " ", 1.0, 1.0, 1.0);
         end
     end
 
@@ -1024,7 +1051,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         end
 
         for i = 1, info.num_direct_effects do
-            if (i ~= 1 or not spell.direct) and bit.band(info["direct_flags" .. i], effect_flags.hidden) == 0 then
+            if (i ~= 1 or not spell.direct) and effect_line_shown(info["direct_flags" .. i], eval_flags) then
                 local oh = "";
                 if info.oh_info then
                     oh = " | ...";
@@ -1034,7 +1061,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                     add_line(
                         tooltip,
                         string.format("%s (%.2f%%|%.2fx to %.2fx):",
-                            info["direct_description" .. i],
+                            effect_line_desc(info, "direct_description", "direct_count", i),
                             100 * info["hit_normal" .. i] * info["direct_utilization" .. i],
                             stats.glance_min,
                             stats.glance_max
@@ -1052,7 +1079,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                     add_line(
                         tooltip,
                         string.format("%s (%.2f%%):",
-                            info["direct_description" .. i],
+                            effect_line_desc(info, "direct_description", "direct_count", i),
                             100 * info["hit_normal" .. i] * info["direct_utilization" .. i]),
                         string.format("%.0f to %.0f%s%s",
                             math.floor(info["min_noncrit_if_hit" .. i]),
@@ -1065,7 +1092,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                     add_line(
                         tooltip,
                         string.format("%s (%.2f%%):",
-                            info["direct_description" .. i],
+                            effect_line_desc(info, "direct_description", "direct_count", i),
                             100 * info["hit_normal" .. i] * info["direct_utilization" .. i]),
                         string.format("%.1f%s%s",
                             info["min_noncrit_if_hit" .. i],
@@ -1168,13 +1195,13 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         end
 
         for i = 1, info.num_direct_effects do
-            if (i ~= 1 or not spell.direct) and bit.band(info["direct_flags" .. i], effect_flags.hidden) == 0 then
+            if (i ~= 1 or not spell.direct) and effect_line_shown(info["direct_flags" .. i], eval_flags) then
                 if info["crit" .. i] ~= 0 then
                     if info["min_crit_if_hit" .. i] ~= info["max_crit_if_hit" .. i] then
                         add_line(
                             tooltip,
                             string.format("%s (%.2f%%):",
-                                info["direct_description" .. i],
+                                effect_line_desc(info, "direct_description", "direct_count", i),
                                 100 * info["crit" .. i] * info["direct_utilization" .. i]),
                             string.format("%.0f to %.0f%s",
                                 math.floor(info["min_crit_if_hit" .. i]),
@@ -1186,7 +1213,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                         add_line(
                             tooltip,
                             string.format("%s (%.2f%%):",
-                                info["direct_description" .. i],
+                                effect_line_desc(info, "direct_description", "direct_count", i),
                                 100 * info["crit" .. i] * info["direct_utilization" .. i]),
                             string.format("%.1f%s",
                                 info["min_crit_if_hit" .. i],
@@ -1339,13 +1366,13 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             end
         end
         for i = 1, info.num_periodic_effects do
-            if i ~= 1 or not spell.periodic then
+            if (i ~= 1 or not spell.periodic) and effect_line_shown(info["ot_flags" .. i], eval_flags) then
                 if info["ot_min_noncrit_if_hit" .. i] ~= 0.0 then
                     if info["ot_min_noncrit_if_hit" .. i] ~= info["ot_max_noncrit_if_hit" .. i] then
                         add_line(
                             tooltip,
                             string.format("%s (%.2f%%):",
-                                info["ot_description" .. i],
+                                effect_line_desc(info, "ot_description", "ot_count", i),
                                 100 * info["ot_hit_normal" .. i] * info["ot_utilization" .. i]),
                             string.format("%.0f %s %.0f %s %.1fs (%.0f %s %.0f %s %.1fs x %.0f)",
                                 math.floor(info["ot_min_noncrit_if_hit" .. i]),
@@ -1365,7 +1392,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                         add_line(
                             tooltip,
                             string.format("%s (%.2f%%):",
-                                info["ot_description" .. i],
+                                effect_line_desc(info, "ot_description", "ot_count", i),
                                 100 * info["ot_hit_normal" .. i] * info["ot_utilization" .. i]),
                             string.format("%.1f %s %.1fs (%.1f %s %.1fs x %.0f)",
                                 info["ot_min_noncrit_if_hit" .. i],
@@ -1454,13 +1481,13 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
             end
 
             for i = 1, info.num_periodic_effects do
-                if i ~= 1 or not spell.periodic then
+                if (i ~= 1 or not spell.periodic) and effect_line_shown(info["ot_flags" .. i], eval_flags) then
                     if info["ot_crit" .. i] ~= 0.0 then
                         if info["ot_min_crit_if_hit" .. i] ~= info["ot_max_crit_if_hit" .. i] then
                             add_line(
                                 tooltip,
                                 string.format("%s (%.2f%%):",
-                                    info["ot_description" .. i],
+                                    effect_line_desc(info, "ot_description", "ot_count", i),
                                     100 * (info["ot_crit" .. i] * info["ot_utilization" .. i])),
                                 string.format("%.0f %s %.0f %s %.1fs (%.0f %s %.0f %s %.1fs x %.0f)",
                                     math.floor(info["ot_min_crit_if_hit" .. i]),
@@ -1480,7 +1507,7 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                             add_line(
                                 tooltip,
                                 string.format("%s (%.2f%%):",
-                                    info["ot_description" .. i],
+                                    effect_line_desc(info, "ot_description", "ot_count", i),
                                     100 * info["ot_crit" .. i] * info["ot_utilization" .. i]),
                                 string.format("%.1f %s %.1fs (%.1f %s %.1fs x %.0f)",
                                     info["ot_min_crit_if_hit" .. i],
