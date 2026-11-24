@@ -55,6 +55,10 @@ local class_stats_spell = (function()
         end
     elseif class == classes.rogue then
         return function(anycomp, bid, stats, spell, loadout, effects)
+            if bid == spids.mutilate and effects.raw.class_misc ~= 0 then
+                -- class_misc counts poisons on the target
+                stats.target_vuln_mod_mul = stats.target_vuln_mod_mul * (1 + 0.01 * dummy_value(bid, 3));
+            end
             if effects.raw.wpn_subclass_mh == 15 then
                 if bid == spids.ghostly_strike then
                     stats.base_mod = stats.base_mod * dummy_value(bid, 3) / dummy_value(bid, 0);

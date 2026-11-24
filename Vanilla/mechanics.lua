@@ -96,7 +96,11 @@ local class_stats_spell = (function()
         return function(anycomp, bid, stats, spell, loadout, effects)
         end
     elseif class == classes.rogue then
-        return function(stats, spell, loadout, effects)
+        return function(anycomp, bid, stats, spell, loadout, effects)
+            if bid == spids.mutilate and effects.raw.class_misc ~= 0 then
+                -- class_misc counts poisons on the target, 20% from the rune's tooltip
+                stats.target_vuln_mod_mul = stats.target_vuln_mod_mul * 1.2;
+            end
         end
     elseif class == classes.priest then
         return function(anycomp, bid, stats, spell, loadout, effects)
