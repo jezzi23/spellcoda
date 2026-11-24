@@ -2680,7 +2680,7 @@ local function periodic_info(info, spell, loadout, stats, effects, eval_flags)
 end
 
 local expectation_variations = {
-    "expected", "expected_st", "expected_ot", "expected_ot_st", "expected_direct", "expected_direct_st", "threat", "threat_st", "threat_ot", "threat_ot_st", "threat_direct", "threat_direct_st"
+    "expected", "expected_st", "expected_ot", "expected_ot_st", "expected_direct", "expected_direct_st", "threat", "threat_st", "threat_ot", "threat_ot_st", "threat_direct", "threat_direct_st", "expected_optimistic"
 };
 
 local function spell_info(info, spell, stats, loadout, effects, eval_flags, spell_id)
@@ -2773,11 +2773,8 @@ local function spell_info(info, spell, stats, loadout, effects, eval_flags, spel
         info.threat_ot = 0;
     end
 
-    if info.expected_st == 0 then
-        info.aoe_to_single_ratio = math.huge;
-    else
-        info.aoe_to_single_ratio = info.expected/info.expected_st;
-    end
+    -- kept apart from expected, which single effect mode lowers, so the ratio holds after the hands are combined
+    info.expected_optimistic = math_max(info.expected, info.expected_st);
     if info.expected < info.expected_st or
         bit_band(eval_flags, evaluation_flags.assume_single_effect) ~= 0 then
 
@@ -2885,6 +2882,12 @@ local function spell_info(info, spell, stats, loadout, effects, eval_flags, spel
         end
     else
         info.oh_info, info.oh_stats = nil, nil;
+    end
+
+    if info.expected_st == 0 then
+        info.aoe_to_single_ratio = math.huge;
+    else
+        info.aoe_to_single_ratio = info.expected_optimistic/info.expected_st;
     end
 
     if stats.cost == 0 then
