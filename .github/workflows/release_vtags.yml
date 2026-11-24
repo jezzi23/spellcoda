@@ -4,6 +4,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build-and-notify:
     runs-on: ubuntu-latest
@@ -67,23 +70,8 @@ jobs:
             ${{ steps.get_tag.outputs.TAG_NAME }}.zip
 
       - name: Notify Discord via Webhook
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: |
-          curl -X POST \
-            -H "Content-Type: application/json" \
-            -d '{
-              "content": "A new release has been published!",
-              "embeds": [
-                {
-                  "title": "Release ${{ steps.get_tag.outputs.TAG_NAME }}",
-                  "url": "https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_tag.outputs.TAG_NAME }}",
-                  "description": "Check out the latest release",
-                  "color": 2105893,
-                  "footer": {
-                    "text": "Release Notification",
-                    "icon_url": "https://cdn.discordapp.com/avatars/487431320314576937/bd64361e4ba6313d561d54e78c9e7171.png"
-                  },
-                  "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
-                }
-              ]
-            }' \
-            ${{ secrets.WEBHOOK_URL }}
+          bash SpellCoda/.github/discord_release.sh "${{ steps.get_tag.outputs.TAG_NAME }}" "${{ github.repository }}" new

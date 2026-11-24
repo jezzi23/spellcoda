@@ -1,0 +1,30 @@
+name: Release Notes to Discord
+on:
+  release:
+    types: [edited]
+  # releases tagged before this workflow existed do not trigger it, run it by hand for those
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, e.g. v0.20.3031
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  update-discord:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Update the Discord post
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          bash .github/discord_release.sh "$TAG" "${{ github.repository }}" edited
