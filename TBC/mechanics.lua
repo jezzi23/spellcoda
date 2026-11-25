@@ -35,6 +35,7 @@ local mechanics = {};
 mechanics.gcd = 1.5;
 mechanics.gcd_min = 1.0;
 mechanics.haste_reduces_gcd = true;
+mechanics.gcd_uses_cast_haste = false;
 
 local class_stats_spell = (function()
     if class == classes.warrior then

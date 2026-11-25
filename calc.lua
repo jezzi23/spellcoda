@@ -73,6 +73,7 @@ local talent_idx                                    = sc.talent_idx;
 local gcd_max                                       = sc.mechanics.gcd;
 local gcd_min                                       = sc.mechanics.gcd_min;
 local haste_reduces_gcd                             = sc.mechanics.haste_reduces_gcd;
+local gcd_uses_cast_haste                           = sc.mechanics.gcd_uses_cast_haste;
 local client_class_stats_spell                      = sc.mechanics.client_class_stats_spell;
 local client_special_abilities                      = sc.mechanics.client_special_abilities;
 local client_class_cast_time                       = sc.mechanics.client_class_cast_time;
@@ -1014,9 +1015,13 @@ local function stats_cast_time(stats, bid, comp, spell, loadout, effects, eval_f
             (loadout.cr_scaling * cr_weights[CR_HASTE_SPELL]);
 
     if comp.school1 ~= schools.physical or bit_band(comp.flags, comp_flags.no_attack) ~= 0 then
-        -- spell haste rating may reduce gcd of spells that don't involve physical attack
         if haste_reduces_gcd then
-            gcd = gcd/spell_haste_mul_from_rating;
+            if gcd_uses_cast_haste then
+                gcd = gcd/
+                    (effects.mul.raw.cast_haste * (effects.mul.ability.cast_haste[bid] or 1) * spell_haste_mul_from_rating);
+            else
+                gcd = gcd/spell_haste_mul_from_rating;
+            end
         end
         gcd = math_max(gcd_min, gcd);
     end
