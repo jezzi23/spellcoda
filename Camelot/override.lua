@@ -36,6 +36,25 @@ sc.friendly_mouseover_healer =
     sc.class == sc.classes.shaman or
     (sc.class == sc.classes.mage and bit.band(sc.game_mode, sc.game_modes.season_of_discovery) ~= 0);
 
+-- Procs per minute (ppm) of item chance on hit effects, by item id. This data is not available in the client, and
+-- is set to 1 ppm (1.5 for extra attacks) as a placeholder. Override it here when a more accurate ppm is known.
+for item, ppm in pairs({
+    [811]   = 0.8, -- Axe of the Deep Woods
+    [871]   = 1.8, -- Flurry Axe
+    [11684] = 0.8, -- Ironfoe
+    [17068] = 0.8, -- Deathbringer
+    [17075] = 0.6, -- Vis'kag the Bloodletter
+    [17705] = 1.0, -- Thrash Blade
+    [19918] = 4.0, -- Jeklik's Crusher
+}) do
+    for _, id in pairs(sc.item_procs[item] or {}) do
+        local proc = sc.procs[id];
+        if proc and not proc.chance then
+            proc.ppm = ppm; -- unconfirmed
+            proc.assumed = nil;
+        end
+    end
+end
 
 -- Threat data for special abilities needs some fixing
 

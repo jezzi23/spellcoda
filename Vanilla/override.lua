@@ -63,6 +63,26 @@ sc.npc_armor_by_lvl = {
 --  10033, 10338, 10643,                                                            -- npc level 81-90
 };
 
+-- Procs per minute (ppm) of item chance on hit effects, by item id. This data is not available in the client, and
+-- is set to 1 ppm (1.5 for extra attacks) as a placeholder. Override it here when a more accurate ppm is known.
+for item, ppm in pairs({
+    [811]   = 0.8, -- Axe of the Deep Woods
+    [871]   = 1.8, -- Flurry Axe
+    [11684] = 0.8, -- Ironfoe
+    [17068] = 0.8, -- Deathbringer
+    [17075] = 0.6, -- Vis'kag the Bloodletter
+    [17705] = 1.0, -- Thrash Blade
+    [19918] = 4.0, -- Jeklik's Crusher
+}) do
+    for _, id in pairs(sc.item_procs[item] or {}) do
+        local proc = sc.procs[id];
+        if proc and not proc.chance then
+            proc.ppm = ppm; -- unconfirmed
+            proc.assumed = nil;
+        end
+    end
+end
+
 -- Threat data for special abilities needs some fixing
 
 if sc.class == sc.classes.mage then
