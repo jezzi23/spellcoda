@@ -41,7 +41,7 @@ local cr_weights = {
     [combat_ratings.CR_HASTE_RANGED]                   = 10,
     [combat_ratings.CR_EXPERTISE]                      = 2.5,
 
-    [combat_ratings.CR_HIT_SPELL]                      = 8,
+    [combat_ratings.CR_HIT_SPELL]                      = 10,
     [combat_ratings.CR_CRIT_SPELL]                     = 14,
     [combat_ratings.CR_HASTE_SPELL]                    = 10,
 

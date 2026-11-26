@@ -838,6 +838,26 @@ local function init_lnames()
         ratings[k][4] =  rating_lnames[ratings[k][1]][2]; -- stat_diff_flags
         ratings[k][5] =  rating_lnames[ratings[k][1]][3]; -- is percentage
     end
+
+    -- shown as one line when every member has the same rating and weight
+    local rating_groups = {
+        {L["Hit rating"],       {combat_ratings.CR_HIT_MELEE, combat_ratings.CR_HIT_RANGED, combat_ratings.CR_HIT_SPELL}},
+        {L["Critical rating"],  {combat_ratings.CR_CRIT_MELEE, combat_ratings.CR_CRIT_RANGED, combat_ratings.CR_CRIT_SPELL}},
+        {L["Haste rating"],     {combat_ratings.CR_HASTE_MELEE, combat_ratings.CR_HASTE_RANGED, combat_ratings.CR_HASTE_SPELL}},
+    };
+    local rating_by_type = {};
+    for _, v in ipairs(ratings) do
+        rating_by_type[v[1]] = v;
+    end
+    lnames.rating_group_of = {};
+    for _, g in ipairs(rating_groups) do
+        local group = {lname = g[1], members = {}, flags = 0};
+        for _, cr in ipairs(g[2]) do
+            group.members[#group.members + 1] = rating_by_type[cr];
+            group.flags = bit.bor(group.flags, rating_by_type[cr][4]);
+            lnames.rating_group_of[cr] = group;
+        end
+    end
 end
 
 local stat_diff_flag_options = {
@@ -904,21 +924,40 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
     --- Ratings
     ---------------------------------
+    local function rating_val(v)
+        return ((loadout and loadout[v[2]]) or 0) + effects.raw[v[2].."_flat"];
+    end
+    local function add_rating_line(val, rating_type, lname, is_percentage)
+        local val_resolved = val/(cr_scaling * cr_weights[rating_type]);
+        if is_percentage then
+            add_field_line(info, val, string.format("(%s%%) %s",string.format("%.2f", val_resolved):gsub("%.?0+$", ""), lname), is_diff, nil, nil, nil, true);
+        else
+            add_field_line(info, val, string.format("(%.1f) %s", val_resolved, lname), is_diff, nil, nil, nil, true);
+        end
+    end
+    local groups_done = {};
     for _, v in ipairs(ratings) do
-        local req_flags = v[4];
-        if bit.band(stat_flags, req_flags) ~= 0 then
-            local val = ((loadout and loadout[v[2]]) or 0)
-                +
-                effects.raw[v[2].."_flat"];
-            local is_percentage = not v[5];
-            local rating_type = v[1];
-            local val_resolved = val/(cr_scaling * cr_weights[rating_type]);
-
-            if is_percentage then
-                add_field_line(info, val, string.format("(%s%%) %s",string.format("%.2f", val_resolved):gsub("%.?0+$", ""), v[3]), is_diff, nil, nil, nil, true);
-            else
-                add_field_line(info, val, string.format("(%.1f) %s", val_resolved, v[3]), is_diff, nil, nil, nil, true);
+        local group = lnames.rating_group_of[v[1]];
+        local merged = false;
+        if group and not groups_done[group] then
+            local first = group.members[1];
+            local val = rating_val(first);
+            merged = true;
+            for _, m in ipairs(group.members) do
+                if rating_val(m) ~= val or cr_weights[m[1]] ~= cr_weights[first[1]] then
+                    merged = false;
+                    break;
+                end
             end
+            if merged then
+                groups_done[group] = true;
+                if bit.band(stat_flags, group.flags) ~= 0 then
+                    add_rating_line(val, first[1], group.lname, not first[5]);
+                end
+            end
+        end
+        if not merged and not groups_done[group or 0] and bit.band(stat_flags, v[4]) ~= 0 then
+            add_rating_line(rating_val(v), v[1], v[3], not v[5]);
         end
     end
 
