@@ -353,6 +353,11 @@ elseif sc.class == sc.classes.rogue then
 
 elseif sc.class == sc.classes.paladin then
 
+    if spids.shield_of_righteousness and spells[spids.shield_of_righteousness] then
+        spells[spids.shield_of_righteousness].direct.coef = 2.2; -- unconfirmed
+        spells[spids.shield_of_righteousness].direct.coef_block_value = true;
+    end
+
     for _, v in pairs(rank_seqs[spids.seal_of_command]) do
         if sc.procs[v] then
             sc.procs[v].ppm = 7; -- unconfirmed
@@ -429,8 +434,8 @@ elseif sc.class == sc.classes.warrior then
     }
 
     for _, v in pairs(rank_seqs[spids.shield_slam]) do
-        spells[v].direct.coef = 0.05;
-        spells[v].direct.coef_attr = attr.strength;
+        spells[v].direct.coef = 1;
+        spells[v].direct.coef_block_value = true;
     end
     -- THREAT
     add_threat_mod_all_ranks({

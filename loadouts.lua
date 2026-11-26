@@ -27,6 +27,7 @@ local ap_per_agi                        = sc.ap_per_agi;
 local rap_per_agi                       = sc.rap_per_agi;
 local cat_form_ap_per_agi               = sc.cat_form_ap_per_agi;
 local armor_per_agi                     = sc.scaling.armor_per_agi;
+local block_value_per_str               = sc.scaling.block_value_per_str;
 local cr_weights                        = sc.scaling.cr_weights;
 local spirit_mana_regen                 = sc.scaling.spirit_mana_regen;
 
@@ -74,6 +75,7 @@ local loadout_numbers = {
     "melee_crit",
     "ranged_crit",
     "block",
+    "block_value",
     "dodge",
     "parry",
     "expertise_mh",
@@ -374,6 +376,7 @@ local effects_additive = {
         "base_phys_res_flat",
         "phys_res_flat",
         "block",
+        "block_value_flat",
         "dodge",
         "parry",
         "can_block",
@@ -433,6 +436,8 @@ local effects_multiplicative = {
         "ranged_haste_forced",
         "cast_haste",
         "vuln_bleed",
+        "block_value_mod",
+        "block_value_mod_forced",
 
         "player_vuln_phys",
     },
@@ -1303,7 +1308,8 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
     ---------------------------------
 
     if bit.band(stat_flags, stat_diff_flags.tank) ~= 0 then
-        if effects.raw.can_block > 0 then
+        -- the diff's own can_block is the change, 0 when both sides have a shield
+        if effects_after.raw.can_block > 0 then
 
             local val = ((loadout and loadout.block) or 0)
                 +
@@ -1316,6 +1322,8 @@ local function human_friendly_fields(loadout, effects, is_diff, loadout_data, ef
             if loadout_data.block then
                 add_field_line(info, val, L["Block"], is_diff, true);
             end
+            add_field_line(info, ((loadout and loadout.block_value) or 0) + effects.raw.block_value_flat,
+                L["Block value"], is_diff);
         end
     end
 
@@ -1986,12 +1994,21 @@ local function effects_finalize_forced(loadout, effects)
 
     effects.raw.phys_crit_forced = effects.raw.phys_crit_forced + crit_from_agi;
 
+    local bv_mod = effects.mul.raw.block_value_mod;
+    effects.raw.block_value_flat =
+        (loadout.block_value/bv_mod + effects.raw.block_value_flat
+            + effects.by_attr.stat_flat[attr.strength]*block_value_per_str)
+        * bv_mod * effects.mul.raw.block_value_mod_forced
+        -
+        loadout.block_value;
+
     effects.finalized = true;
 end
 
 -- every field effects_add_manual_diff and effects_finalize_forced write, restored by value
 local diff_written_raw = {
     "healing_power_flat", "mp5_flat", "mana", "hp_flat", "dodge", "ap_flat", "rap_flat", "phys_crit_forced",
+    "block_value_flat",
 };
 for _, targets in pairs(manual_diff_ratings) do
     for _, target in ipairs(targets) do
@@ -2043,7 +2060,7 @@ local should_auras_be_secret = C_Secrets and C_Secrets.ShouldAurasBeSecret;
 
 -- the sheet stats, secret all together while restricted
 local sheet_stats_values = {
-    "healing_power", "spell_power", "ap", "rap", "melee_crit", "ranged_crit", "block", "dodge", "parry", "defense",
+    "healing_power", "spell_power", "ap", "rap", "melee_crit", "ranged_crit", "block", "block_value", "dodge", "parry", "defense",
     "attack_min_mh", "attack_max_mh", "attack_pos", "attack_neg", "attack_mod", "swing_time_mh", "swing_time_oh",
     "base_armor", "armor", "expertise_mh", "expertise_oh",
 };
@@ -2122,6 +2139,7 @@ local function read_sheet_stats(loadout)
     loadout.melee_crit = 0.01*GetCritChance();
     loadout.ranged_crit = 0.01*GetRangedCritChance();
     loadout.block = 0.01*GetBlockChance();
+    loadout.block_value = GetShieldBlock();
 
     --loadout.r_speed, loadout.r_min, loadout.r_max, loadout.r_pos, loadout.r_neg, loadout.r_mod = UnitRangedDamage("player");
 

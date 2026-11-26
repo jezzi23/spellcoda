@@ -359,10 +359,10 @@ elseif sc.class == sc.classes.warrior then
         [3] = {7381}, -- berserker
     }
 
-    -- ?
-    --for _, v in pairs(rank_seqs[spids.shield_slam]) do
-    --    spells[v].direct.per_resource = 0.05; -- hacked in as per strength
-    --end
+    for _, v in pairs(rank_seqs[spids.shield_slam]) do
+        spells[v].direct.coef = 1;
+        spells[v].direct.coef_block_value = true;
+    end
     for _, v in pairs(rank_seqs[spids.rend]) do
         spells[v].periodic.flags =
             bit.bor(spells[v].periodic.flags, comp_flags.coef_applied_to_avg_weapon_dmg);

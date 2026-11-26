@@ -266,6 +266,47 @@ local function weapon_from_tooltip(link)
     end
 end
 
+local shield_block_pattern;
+
+local function shield_block_from_tooltip(link)
+    local data = link and C_TooltipInfo and C_TooltipInfo.GetHyperlink(link);
+    if not data or not data.lines then
+        return;
+    end
+    if not shield_block_pattern then
+        local template = SHIELD_BLOCK_TEMPLATE;
+        if type(template) ~= "string" or string.find(template, "|", 1, true) then
+            return;
+        end
+        local escaped = template:gsub("([%%%^%$%(%)%.%[%]%*%+%-%?])", "%%%1");
+        shield_block_pattern = "^"..escaped:gsub("%%%%[sd]", "(%%d+)").."$";
+    end
+    for _, line in ipairs(data.lines) do
+        local left = line.leftText;
+        if is_secret(left) then
+            return;
+        end
+        local block = left and left:match(shield_block_pattern);
+        if block then
+            return tonumber(block);
+        end
+    end
+end
+
+-- the shield's own block value
+local function shield_block(item_info)
+    local block = sc.shield_block[item_info.id];
+    if block then
+        return block;
+    end
+    local by_quality = item_info.ilvl and sc.shield_block_by_ilvl[item_info.ilvl];
+    block = by_quality and item_info.quality and by_quality[item_info.quality];
+    if block then
+        return block;
+    end
+    return shield_block_from_tooltip(item_info.link) or 0;
+end
+
 local function weapon_min_max(avg, variance)
     local lo, hi = 1 - 0.5 * variance, 1 + 0.5 * variance;
     local sum = math.floor(2 * avg + 0.5);
@@ -530,8 +571,10 @@ local function apply_item_cmp(effects, item_info, slot, undo, should_apply_gems,
         -- shields
         if undo then
             effects.raw.can_block = effects.raw.can_block - 1;
+            effects.raw.block_value_flat = effects.raw.block_value_flat - shield_block(item_info);
         else
             effects.raw.can_block = effects.raw.can_block + 1;
+            effects.raw.block_value_flat = effects.raw.block_value_flat + shield_block(item_info);
         end
     end
 

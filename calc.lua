@@ -659,12 +659,27 @@ local function creature_flat(effects, loadout, effect)
     return sum;
 end
 
+local function block_value(loadout, effects)
+    if effects.raw.can_block <= 0 then
+        return 0;
+    end
+    return math_max(0, loadout.block_value + effects.raw.block_value_flat);
+end
+
+-- the value a component with coef_attr or coef_block_value scales with
+local function stats_scaling_value(comp, loadout, effects)
+    if comp.coef_block_value then
+        return block_value(loadout, effects);
+    end
+    return loadout.stats[comp.coef_attr] + effects.by_attr.stat_flat[comp.coef_attr];
+end
+
 local function stats_sp(sp_extra, bid, comp, spell, loadout, effects)
 
     local sp;
 
-    if comp.coef_attr then
-        return loadout.stats[comp.coef_attr] + effects.by_attr.stat_flat[comp.coef_attr];
+    if comp.coef_attr or comp.coef_block_value then
+        return stats_scaling_value(comp, loadout, effects);
     end
 
     if bit_band(spell.flags, heal_or_absorb_flags) ~= 0 and
@@ -710,7 +725,7 @@ local function stats_coef(stats, bid, comp, spell, loadout, effects, eval_flags)
     local coef, coef_max;
     if bid == auto_wand_spell_id or bit_band(comp.flags, comp_flags.no_coef) ~= 0 then
         coef = 0;
-    elseif comp.coef_attr then
+    elseif comp.coef_attr or comp.coef_block_value then
         coef = comp.coef;
     elseif comp.school1 == schools.physical or
         bit_band(comp.flags, comp_flags.magic_scaling_as_ap) ~= 0 then
@@ -3038,8 +3053,8 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, eval
             min = direct.min * (direct.base_min + added_effect);
         end
         local added = 0;
-        if direct.coef_attr then
-            min = min + direct.coef * (loadout.stats[direct.coef_attr] + effects.by_attr.stat_flat[direct.coef_attr]);
+        if direct.coef_attr or direct.coef_block_value then
+            min = min + direct.coef * stats_scaling_value(direct, loadout, effects);
         elseif direct.coef ~= 0 then
             added = stats_sp(0, bid, direct, spell, loadout, effects);
         end
@@ -3072,8 +3087,8 @@ local function resource_regen_info(info, spell, spell_id, loadout, effects, eval
             min = periodic.min * (periodic.base_min + added_effect);
         end
         local added = 0;
-        if periodic.coef_attr then
-            min = min + periodic.coef * (loadout.stats[periodic.coef_attr] + effects.by_attr.stat_flat[periodic.coef_attr]);
+        if periodic.coef_attr or periodic.coef_block_value then
+            min = min + periodic.coef * stats_scaling_value(periodic, loadout, effects);
         elseif periodic.coef ~= 0 then
             added = stats_sp(0, bid, periodic, spell, loadout, effects);
         end

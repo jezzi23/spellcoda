@@ -9,6 +9,7 @@ local dps_per_ap = 1/14;
 local mana_per_int = 15;
 local hp_per_stam = 10;
 local armor_per_agi = 2;
+local block_value_per_str = 0.05;
 
 local function spirit_mana_regen(spirit, intellect)
     -- src: https://www.wowhead.com/tbc/guide/classic-the-burning-crusade-stats-overview
@@ -84,6 +85,7 @@ scaling.spirit_mana_regen                = spirit_mana_regen;
 scaling.mana_per_int                     = mana_per_int;
 scaling.hp_per_stam                      = hp_per_stam;
 scaling.armor_per_agi                    = armor_per_agi;
+scaling.block_value_per_str              = block_value_per_str;
 scaling.cr_weights                       = cr_weights;
 
 sc.scaling = scaling;
