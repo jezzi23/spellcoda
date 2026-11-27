@@ -56,6 +56,36 @@ for item, ppm in pairs({
     end
 end
 
+-- partial resist exceptions to the generated dot_resi_pen (spell_res in mechanics.lua)
+local function each_periodic(names, fn)
+    for _, name in pairs(names) do
+        for _, id in pairs(rank_seqs[spids[name]] or {}) do
+            if spells[id] and spells[id].periodic then
+                fn(spells[id].periodic);
+            end
+        end
+    end
+end
+-- ticks at the full share
+each_periodic({ "mind_flay", "insect_swarm", "devouring_plague", "starshards", "pyroblast" }, function(comp)
+    comp.flags = bit.band(comp.flags, bit.bnot(comp_flags.dot_resi_pen));
+end);
+-- area hits at a tenth
+each_periodic({ "flamestrike", "rain_of_fire" }, function(comp)
+    comp.flags = bit.bor(comp.flags, comp_flags.dot_resi_pen);
+end);
+-- no partial resist or bonus
+each_periodic({ "hurricane" }, function(comp)
+    comp.flags = bit.bor(comp.flags, comp_flags.ignores_mitigation);
+end);
+-- totems without the caster's Spell Piercing
+sc.no_spell_piercing = {};
+for _, name in pairs({ "magma_totem", "searing_totem" }) do
+    if spids[name] then
+        sc.no_spell_piercing[spids[name]] = true;
+    end
+end
+
 -- Threat data for special abilities needs some fixing
 
 if sc.class == sc.classes.mage then

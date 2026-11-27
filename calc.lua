@@ -452,7 +452,8 @@ local function stats_crit_mod(attack_subclass, bid, comp, spell, loadout, effect
     return final_crit_mod;
 end
 
-local function stats_res(comp, spell, loadout, effects)
+-- terms (tooltip only) gets the parts of the resistance
+local function stats_res(comp, spell, loadout, effects, terms)
 
     local target_resi = 0;
     local target_avg_mitigated = 0;
@@ -464,11 +465,7 @@ local function stats_res(comp, spell, loadout, effects)
     end
 
     if client_spell_res then
-        target_resi, target_avg_mitigated = client_spell_res(comp, loadout, effects);
-        if bit_band(comp.flags, comp_flags.dot_resi_pen) ~= 0 then
-            target_avg_mitigated = target_avg_mitigated * 0.1;
-        end
-        return target_resi, target_avg_mitigated;
+        return client_spell_res(comp, spell, loadout, effects, terms);
     end
 
     local base_resi = 0;
@@ -496,8 +493,37 @@ local function stats_res(comp, spell, loadout, effects)
         target_avg_mitigated = target_avg_magical_mitigation_non_binary(loadout.lvl, target_resi);
     end
     if bit_band(comp.flags, comp_flags.dot_resi_pen) ~= 0 then
-        -- some dots penetrate 9/10th of resi
-        target_avg_mitigated = target_avg_mitigated * 0.1;
+        -- ticks roll against a tenth of the resistance, the curve's linear part
+        target_avg_mitigated = 0.1 * target_avg_magical_res_binary(loadout.lvl, target_resi);
+    end
+
+    if terms then
+        local school = comp.school1;
+        i = 2;
+        while (comp[school_keys[i]]) do
+            local s = comp[school_keys[i]];
+            if by_school.target_res_flat[s] + by_school.pierce_flat[s] >
+                by_school.target_res_flat[school] + by_school.pierce_flat[school] then
+                school = s;
+            end
+            i = i + 1;
+        end
+        terms.res = loadout.target_res;
+        terms.debuff = by_school.target_res_flat[school];
+        terms.pierce = by_school.pierce_flat[school];
+        terms.scale = 1.0 + by_school.target_res[comp.school1];
+        terms.pierce_after_floor = false;
+        terms.lvl_res = 0;
+        if bit_band(spell.flags, spell_flags.binary) == 0 then
+            terms.lvl_res = base_resi;
+        end
+        terms.roll = target_resi / math_max(loadout.lvl * 5, 100);
+        terms.tenth = bit_band(comp.flags, comp_flags.dot_resi_pen) ~= 0;
+        terms.dead_zone = 0;
+        terms.no_bonus = false;
+        if terms.tenth then
+            terms.roll = terms.roll * 0.1;
+        end
     end
 
     return target_resi, target_avg_mitigated;
@@ -4015,6 +4041,68 @@ calc.school_stats = (function()
         return 1.0 - miss, crit, res;
     end;
 end)();
+
+-- tooltip only: the parts of the resistance, its share, a binary spell's added miss and the partial resist steps;
+-- nil when the share is 0, the table is reused
+calc.res_details = (function()
+    local terms = { chances = {}, muls = {} };
+    -- @src: https://royalgiraffe.github.io/partial-resist-table, chances of 0 / 25 / 50 / 75% resisted at 0, 1/3, 2/3
+    -- and all of the resistance cap
+    local table_points = {
+        { 1.0, 0.0, 0.0, 0.0 },
+        { 0.24, 0.55, 0.18, 0.03 },
+        { 0.0, 0.22, 0.56, 0.22 },
+        { 0.0, 0.04, 0.16, 0.8 },
+    };
+    local function table_steps(c, chances, muls)
+        c = math_max(0, math_min(1, c));
+        local seg = math_min(2, math_floor(3 * c));
+        local f = 3 * c - seg;
+        local n = 0;
+        for k = 2, 4 do
+            local p = table_points[seg + 1][k] * (1 - f) + table_points[seg + 2][k] * f;
+            if p > 0 then
+                n = n + 1;
+                chances[n] = p;
+                muls[n] = 1.25 - 0.25 * k;
+            end
+        end
+        return n;
+    end
+    local resist_steps = sc.mechanics.client_resist_steps or table_steps;
+
+    return function(comp, spell, loadout, effects, extra_hit)
+        if comp.school1 == schools.physical or bit_band(spell.flags, heal_or_absorb_flags) ~= 0 or
+            bit_band(comp.flags, unmitigated_comp_flags) ~= 0 then
+            return nil;
+        end
+        terms.dead_zone = 0;
+        terms.no_bonus = false;
+        local resi, share = stats_res(comp, spell, loadout, effects, terms);
+        if share == 0 and terms.dead_zone == 0 and not terms.no_bonus then
+            return nil;
+        end
+        terms.final = resi;
+        terms.share = share;
+        terms.binary = bit_band(spell.flags, spell_flags.binary) ~= 0;
+        terms.miss_added = 0;
+        terms.num_steps = 0;
+        if terms.binary and share > 0 then
+            local pvp = bit_band(loadout.flags, loadout_flags.target_pvp) ~= 0;
+            local base_miss = spell_miss(loadout.lvl, loadout.target_lvl, 0.0, pvp);
+            terms.miss_added = math_max(min_spell_miss, base_miss + (1.0 - base_miss) * share - extra_hit)
+                - spell_miss(loadout.lvl, loadout.target_lvl, extra_hit, pvp);
+        else
+            terms.num_steps = resist_steps(terms.roll, terms.chances, terms.muls);
+        end
+        return terms;
+    end;
+end)();
+
+-- tooltip only: the target's armor against an attack
+function calc.armor_details(attack_subclass, loadout, effects)
+    return stats_target_armor(attack_subclass, loadout, effects);
+end
 
 calc.fight_types                        = fight_types;
 calc.evaluation_flags                   = evaluation_flags;

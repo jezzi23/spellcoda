@@ -106,6 +106,16 @@ local function create_tooltip_spells_frame(pframe)
             tooltip = L["Avoidance based on weapon skill & target level. Mitigation based on target armor or resistance."]
         },
         {
+            id = "tooltip_display_res_details",
+            txt = L["Resistance & armor details"],
+            color_tag = "avoidance_info"
+        },
+        {
+            id = "tooltip_display_partial_resists",
+            txt = L["Partial resists & pierce"],
+            color_tag = "avoidance_info"
+        },
+        {
             id = "tooltip_display_normal",
             txt = L["Normal effect"],
             color_tag = "normal"
@@ -283,6 +293,8 @@ local function create_tooltip_spells_frame(pframe)
         getglobal("__sc_frame_setting_tooltip_display_spell_rank"):Click();
         getglobal("__sc_frame_setting_tooltip_display_normal"):Click();
         getglobal("__sc_frame_setting_tooltip_display_crit"):Click();
+        getglobal("__sc_frame_setting_tooltip_display_res_details"):Click();
+        getglobal("__sc_frame_setting_tooltip_display_partial_resists"):Click();
         getglobal("__sc_frame_setting_tooltip_display_avg_cost"):Click();
         getglobal("__sc_frame_setting_tooltip_display_avg_cast"):Click();
         getglobal("__sc_frame_setting_tooltip_display_expected"):Click();
@@ -330,9 +342,29 @@ local function create_tooltip_spells_frame(pframe)
     tsfs[#tsfs + 1] = pframe.preset_default_button;
     tsfs[#tsfs + 1] = pframe.preset_detailed_button;
 
+    -- the last two (resource restoration, effective health) are not about a spell's effect, they go below a divider
+    local num_separate = 2;
+    local groups = { {}, {} };
+    for i, v in ipairs(tooltip_components) do
+        local g = groups[1];
+        if i > #tooltip_components - num_separate then
+            g = groups[2];
+        end
+        g[#g + 1] = v;
+    end
     pframe.y_offset = pframe.y_offset - 10;
-    for _, v in pairs(multi_row_checkbutton(tooltip_components, pframe, 2, tooltip_toggle)) do
-        tsfs[#tsfs + 1] = v;
+    for k, group in ipairs(groups) do
+        if k > 1 then
+            if #groups[k - 1] % 2 == 1 then
+                pframe.y_offset = pframe.y_offset - 20;
+            end
+            pframe.y_offset = pframe.y_offset - 5;
+            make_divider(pframe);
+            pframe.y_offset = pframe.y_offset - 8;
+        end
+        for _, v in pairs(multi_row_checkbutton(group, pframe, 2, tooltip_toggle)) do
+            tsfs[#tsfs + 1] = v;
+        end
     end
     pframe.y_offset = pframe.y_offset - 25;
 

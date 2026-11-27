@@ -354,34 +354,141 @@ local function changing_reads(spell, effects)
     return 0;
 end
 
--- unconfirmed: fit to community combat logs (levels 20 to 50): no level based resistance, debuffs stop at 0,
--- piercing takes creatures below 0 into a damage bonus, holy is never resisted
+-- Spell resistance after wowsims forever (sim/core/spell_resistances.go, fit to combat logs, unconfirmed): no level
+-- based resistance, debuffs stop at 0, Spell Piercing (creatures only) takes the resistance below 0 for a bonus but
+-- none under 1%, dot_resi_pen parts take a tenth of a positive share and no bonus, binary spells miss instead
 local school_keys = sc.calc.indexed_keys.school;
 local target_pvp_flag = sc.loadouts.loadout_flags.target_pvp;
+local no_spell_piercing = sc.no_spell_piercing;
 
-local function school_res(school, res_scale, loadout, by_school)
-    return math.max(0, res_scale * (loadout.target_res + by_school.target_res_flat[school]))
-        + by_school.pierce_flat[school];
+local function school_res(school, res_scale, pierces, loadout, by_school)
+    local resi = math.max(0, res_scale * (loadout.target_res + by_school.target_res_flat[school]));
+    if pierces then
+        resi = resi + by_school.pierce_flat[school];
+    end
+    return resi;
 end
 
--- resistance against the component and the average share of its damage resisted, negative is a bonus
-local function spell_res(comp, loadout, effects)
+-- chance of t tenths resisted around a share of size x (a bonus rolls the same steps), 8 to 10 tenths take 75%
+local function tenth_chance(t, x)
+    if x <= 0.1 then
+        if t == 1 then
+            return 5 * x;
+        elseif t == 2 then
+            return 2.5 * x;
+        end
+        return 0;
+    elseif x >= 0.9 then
+        if t == 10 then
+            return 1 - 7.5 * (1 - x);
+        elseif t == 9 then
+            return 5 * (1 - x);
+        elseif t == 8 then
+            return 2.5 * (1 - x);
+        end
+        return 0;
+    end
+    return math.max(0, 0.5 - 2.5 * math.abs(0.1 * t - x));
+end
+
+-- the steps other than none: chances and damage multipliers, returns their count
+local function resist_steps(a, chances, muls)
+    local x = math.abs(a);
+    local sign = -1;
+    if a < 0 then
+        sign = 1;
+    end
+    local n = 0;
+    local capped = 0;
+    for t = 1, 10 do
+        local p = tenth_chance(t, x);
+        if t >= 8 then
+            capped = capped + p;
+        elseif p > 0 then
+            n = n + 1;
+            chances[n] = p;
+            muls[n] = 1 + sign * 0.1 * t;
+        end
+    end
+    if capped > 0 then
+        n = n + 1;
+        chances[n] = capped;
+        muls[n] = 1 + sign * 0.75;
+    end
+    return n;
+end
+
+-- the roll's mean, below the share once steps above 75% can come up (share over 0.6)
+local function roll_mean(a)
+    local x = math.abs(a);
+    if x <= 0.6 then
+        return a;
+    end
+    local mean = 0;
+    for t = 1, 10 do
+        mean = mean + tenth_chance(t, x) * math.min(0.1 * t, 0.75);
+    end
+    if a < 0 then
+        return -mean;
+    end
+    return mean;
+end
+
+-- resistance against the component and the average share resisted (negative: a bonus), terms gets its parts
+local function spell_res(comp, spell, loadout, effects, terms)
     if comp.school1 == schools.holy then
         return 0, 0;
     end
+    local pierces = not no_spell_piercing[spell.base_id] and bit.band(loadout.flags, target_pvp_flag) == 0;
     local by_school = effects.by_school;
     local res_scale = 1.0 + by_school.target_res[comp.school1];
-    local resi = school_res(comp.school1, res_scale, loadout, by_school);
+    local resi = school_res(comp.school1, res_scale, pierces, loadout, by_school);
+    local school = comp.school1;
     local i = 2;
     while comp[school_keys[i]] do
-        resi = math.max(resi, school_res(comp[school_keys[i]], res_scale, loadout, by_school));
+        local r = school_res(comp[school_keys[i]], res_scale, pierces, loadout, by_school);
+        if r > resi then
+            resi = r;
+            school = comp[school_keys[i]];
+        end
         i = i + 1;
     end
-    if bit.band(loadout.flags, target_pvp_flag) ~= 0 then
-        resi = math.max(0, resi);
+    local share = resi / (math.abs(resi) + 8 * loadout.lvl + 19);
+    local dead_zone = 0;
+    if share < 0 and share > -0.01 then
+        dead_zone = share;
+        share = 0;
     end
-    return resi, math.min(0.75, resi / (math.abs(resi) + 8 * loadout.lvl + 19));
+    local tenth = bit.band(comp.flags, comp_flags.dot_resi_pen) ~= 0;
+    local no_bonus = false;
+    if bit.band(spell.flags, spell_flags.binary) ~= 0 then
+        if share < 0 and tenth then
+            no_bonus = true;
+            share = 0;
+        end
+        tenth = false;
+    elseif tenth then
+        no_bonus = share < 0;
+        share = math.max(0, share) * 0.1;
+    end
+    if terms then
+        terms.res = loadout.target_res;
+        terms.debuff = by_school.target_res_flat[school];
+        terms.pierce = 0;
+        if pierces then
+            terms.pierce = by_school.pierce_flat[school];
+        end
+        terms.scale = res_scale;
+        terms.pierce_after_floor = true;
+        terms.lvl_res = 0;
+        terms.roll = share;
+        terms.tenth = tenth;
+        terms.dead_zone = dead_zone;
+        terms.no_bonus = no_bonus;
+    end
+    return resi, roll_mean(share);
 end
+
 
 -- rage per swing is weapon speed x 3.46 (4.5 two handed, off hand 1.73), none on misses, dodges and parries,
 -- unconfirmed (warrior compendium, pre october beta logs), feral forms assumed one handed; crits +100% (blizzard
@@ -405,6 +512,7 @@ mechanics.caster_coef_multiplier            = caster_coef_multiplier;
 mechanics.client_changing_reads             = changing_reads;
 mechanics.client_white_swing_rage           = white_swing_rage;
 mechanics.client_spell_res                  = spell_res;
+mechanics.client_resist_steps               = resist_steps;
 
 sc.mechanics = mechanics;
 

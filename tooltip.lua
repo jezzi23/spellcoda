@@ -337,6 +337,130 @@ local function format_bounce_spell(min_hit, max_hit, bounces, falloff)
     return bounce_str;
 end
 
+-- a component's Resistance / Armor and Partial / Pierce lines, returns its resistance and share to compare ticks with
+local add_mitigation_lines = (function()
+    local res_details = sc.calc.res_details;
+    local armor_details = sc.calc.armor_details;
+    local step_strs = {};
+
+    local function num(v)
+        if v == math.floor(v) then
+            return string.format("%d", v);
+        end
+        return string.format("%.1f", v);
+    end
+    local function term(v)
+        if v < 0 then
+            return " - " .. num(-v);
+        end
+        return " + " .. num(v);
+    end
+
+    -- ticks: the periodic component, left out when equal to the direct one (same_res, same_share)
+    return function(tooltip, comp, spell, loadout, effects, stats, ticks, same_res, same_share)
+        local label_suffix = ":";
+        if ticks then
+            label_suffix = " (" .. L["ticks"] .. "):";
+        end
+
+        if comp.school1 == sc.schools.physical then
+            local dr = (ticks and stats.target_dr_ot) or stats.target_dr;
+            if dr == 0 then
+                return nil;
+            end
+            local armor = armor_details((ticks and stats.attack_subclass_ot) or stats.attack_subclass, loadout, effects);
+            if ticks and armor == same_res and dr == same_share then
+                return armor, dr;
+            end
+            if config.settings.tooltip_display_res_details then
+                local s = num(loadout.target_armor);
+                if armor ~= loadout.target_armor then
+                    s = s .. term(armor - loadout.target_armor) .. " = " .. num(armor);
+                end
+                add_line(tooltip,
+                    L["Armor"] .. label_suffix,
+                    string.format("%s -> %.1f%% %s", s, 100 * dr, L["mitigated"]),
+                    effect_color("avoidance_info")
+                );
+            end
+            return armor, dr;
+        end
+
+        local t = res_details(comp, spell, loadout, effects, (ticks and stats.extra_hit_ot) or stats.extra_hit);
+        if not t then
+            return nil;
+        end
+        if ticks and t.final == same_res and t.share == same_share then
+            return t.final, t.share;
+        end
+        if config.settings.tooltip_display_res_details then
+            -- base (with level resistance), modifiers, piercing: each as much as it changed the result
+            local modded = math.max(0, t.scale * (t.res + t.debuff));
+            local pierced;
+            if t.pierce_after_floor then
+                pierced = t.final;
+            else
+                pierced = math.max(0, t.scale * (t.res + t.debuff + t.pierce));
+            end
+            local base = t.res + t.lvl_res;
+            local s = num(base);
+            if modded ~= t.res then
+                s = s .. term(modded - t.res);
+            end
+            if pierced ~= modded then
+                s = s .. term(pierced - modded);
+            end
+            local sum = t.lvl_res + pierced;
+            if sum ~= t.final then
+                s = s .. " = " .. num(t.final) .. " (" .. L["cap"] .. ")";
+            elseif sum ~= base then
+                s = s .. " = " .. num(sum);
+            end
+            local share;
+            if t.dead_zone ~= 0 then
+                share = L["no bonus"] .. " (" .. L["deadzone threshold"] .. ")";
+            elseif t.no_bonus then
+                share = L["no bonus"];
+            elseif t.binary and t.share > 0 then
+                share = string.format("+%.1f%% %s", 100 * t.miss_added, L["binary miss"]);
+            elseif t.share > 0 then
+                share = string.format("%.1f%% %s", 100 * t.share, L["average resisted"]);
+            else
+                share = string.format("%.1f%% %s", -100 * t.share, L["average bonus"]);
+            end
+            if t.tenth and t.share > 0 then
+                share = share .. " (1/10)";
+            end
+            add_line(tooltip, L["Resistance"] .. label_suffix, s .. " -> " .. share, effect_color("avoidance_info"));
+        end
+        if config.settings.tooltip_display_partial_resists and t.num_steps > 0 then
+            local sum = 0;
+            for i = 1, t.num_steps do
+                sum = sum + t.chances[i];
+                step_strs[i] = string.format("(%.1f%%|%.2fx)", 100 * t.chances[i], t.muls[i]);
+            end
+            for i = t.num_steps + 1, #step_strs do
+                step_strs[i] = nil;
+            end
+            local label = L["Partial"];
+            if t.share < 0 then
+                label = L["Pierce"];
+            end
+            if ticks then
+                label = label .. " (" .. L["ticks"] .. ", ";
+            else
+                label = label .. " (";
+            end
+            add_line(tooltip,
+                string.format("%s%.1f%%):", label, 100 * sum),
+                table.concat(step_strs, " "),
+                effect_color("avoidance_info")
+            );
+        end
+        return t.final, t.share;
+    end;
+end)();
+
 local starshards_ramps = sc.utils.client_matches(bit.bnot(sc.client_flags.tbc));
 
 local function format_ramped_ticks(spell, total, base, ticks, tick_time)
@@ -1226,6 +1350,14 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
         end
     end
 
+    local mitigation_details = config.settings.tooltip_display_res_details or
+        config.settings.tooltip_display_partial_resists;
+    local direct_res, direct_share;
+    if mitigation_details and display_direct_avoidance then
+        direct_res, direct_share =
+            add_mitigation_lines(tooltip, spell.direct, spell, loadout, effects_finalized, stats, false);
+    end
+
     if config.settings.tooltip_display_avoidance_info and
         bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb, spell_flags.alias)) == 0 and
         spell.periodic and
@@ -1524,6 +1656,14 @@ local function append_tooltip_spell_eval(tooltip, spell, spell_id, loadout, effe
                 end
             end
         end
+    end
+
+    if mitigation_details and
+        spell.periodic and
+        bit.band(spell.flags, bit.bor(spell_flags.heal, spell_flags.absorb, spell_flags.alias)) == 0 and
+        bit.band(eval_flags, evaluation_flags.isolate_direct) == 0 then
+        add_mitigation_lines(tooltip, spell.periodic, spell, loadout, effects_finalized, stats, true,
+            direct_res, direct_share);
     end
 
     if config.settings.tooltip_display_expected then
