@@ -73,10 +73,6 @@ local function external_spells_update(feed, relaxed_dt)
 
     local feed_data = external_feeds[feed];
 
-    if feed_data.paused then
-        return false;
-    end
-
     local loadout, _, effects, _ = update_loadout_and_effects(relaxed_dt);
 
     --local updated = update_id > feed_update_id;

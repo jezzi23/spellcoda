@@ -151,7 +151,7 @@ end
 ---
 --- **Update control**
 --- * `feed:Update()`  
----   Updates all tracked spells and populates their calculated data.
+---   Updates all tracked spells and populates their calculated data, also while paused.
 ---
 --- * `feed:UpdateRelaxed()`  
 ---   Same as `Update`, but may use slightly outdated data from potential previous overlay updates.
@@ -167,7 +167,8 @@ end
 ---
 --- **Lifecycle**
 --- * `feed:Pause()`  
----   Prevents further automatic or manual updates.
+---   Stops the automatic updates that come with SpellCoda's overlay updates.
+---   `Update` and `UpdateRelaxed` still update the feed when called.
 ---
 --- * `feed:Resume()`
 --- * `feed:IsPaused(): boolean`
@@ -317,12 +318,11 @@ frame:SetScript("OnEvent", function(_, _, unit_target, _, new_spell_id)
       
       -- bad idea to call this Update very frequently, use for major events like
       -- spell cast changes / target switch etc
-      local did_update = my_feed:Update()
-      if did_update then
+      -- a paused feed still updates when asked, so skip it here while the overlay is muted
+      if not my_feed:IsPaused() then
+         my_feed:Update()
          print("Feed has been updated directly")
          print_spell_feed(my_feed)
-      else
-         print("Feed not updated")
       end
       -- or my_feed:UpdateRelaxed() which may use a previous update from overlay but could be outdated
       
