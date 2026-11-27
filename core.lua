@@ -5,6 +5,8 @@ local L                                     = sc.L;
 local load_localization                     = sc.loc.load_localization;
 
 local client_matches                        = sc.utils.client_matches;
+local compare_builds                        = sc.utils.compare_builds;
+local client_age_days                       = sc.utils.client_age_days;
 local client_flags                          = sc.client_flags;
 
 local load_sw_ui                            = sc.ui.load_sw_ui;
@@ -67,44 +69,9 @@ core.rescan_action_bar_needed   = false;
 
 
 local function generated_data_is_outdated(loaded_version, gen_version)
-    local loaded = string.gmatch(loaded_version, "[^.]+");
-    local gen = string.gmatch(gen_version, "[^.]+");
-    for _ = 1, 4 do
-        local l = loaded();
-        local g = gen();
-        if l and g then
-            local l_num = tonumber(l);
-            local g_num = tonumber(g);
-            if g_num < l_num then
-                return true;
-            end
-        end
-    end
-    return false;
+    return compare_builds(gen_version, loaded_version) < 0;
 end
 
-local function client_age_days()
-    local months = { Jan = 1, Feb = 2, Mar = 3, Apr = 4, May = 5, Jun = 6,
-        Jul = 7, Aug = 8, Sep = 9, Oct = 10, Nov = 11, Dec = 12
-    };
-
-    local client_month_str, client_day, client_year = sc.client_date_loaded:match("(%a+)%s+(%d+)%s+(%d+)");
-    local month_str, day, year = date("%b %d %Y"):match("(%a+)%s+(%d+)%s+(%d+)");
-
-    if not client_month_str or not client_day or not client_year or not month_str or not day or not year then
-        return 0;
-    end
-    local client_month = months[client_month_str] or 1;
-    local month = months[month_str] or 1;
-
-    local client_build_time = time({year = tonumber(client_year), month = client_month, day = tonumber(client_day)});
-    local now = time({year = tonumber(year), month = month, day = tonumber(day)});
-
-    local diff_seconds = math.abs(now - client_build_time);
-    local diff_days = diff_seconds / 86400;
-
-    return diff_days;
-end
 
 local timestamp = 0.0;
 local pname = UnitName("player");
@@ -451,7 +418,7 @@ local event_dispatch = {
         end
         if config.settings.general_version_mismatch_notify and
             generated_data_is_outdated(sc.client_version_loaded, sc.client_version_src) and
-            client_age_days() > version_warning_build_threshold_days then
+            client_age_days > version_warning_build_threshold_days then
             print(core.addon_name..": "..L["detected client and addon data mismatch for over 2 weeks. Consider checking for an update."]);
         end
 

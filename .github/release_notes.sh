@@ -27,7 +27,7 @@ data_changed() { # <path>...
     awk '
         /^diff --git / { in_header = 1; next }
         /^@@/          { in_header = 0; next }
-        !in_header && /^[+-]/ && !/addon_build_id/ { found = 1; exit }
+        !in_header && /^[+-]/ && !/addon_build_id|hotfixes_fetched_utc/ { found = 1; exit }
         END { exit !found }' <<< "$diff"
 }
 

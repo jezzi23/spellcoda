@@ -451,8 +451,40 @@ local function table_from_schema(dst, src, schema)
     end
 end
 
+-- -1, 0 or 1 as client build string a ("1.60.1.71139") is older than, equal to or newer than b, number by number
+-- from the left, a missing number counts as 0
+local function compare_builds(a, b)
+    local next_a = string.gmatch(a, "[^.]+");
+    local next_b = string.gmatch(b, "[^.]+");
+    for _ = 1, 4 do
+        local x = tonumber(next_a() or 0) or 0;
+        local y = tonumber(next_b() or 0) or 0;
+        if x ~= y then
+            return x < y and -1 or 1;
+        end
+    end
+    return 0;
+end
+
+-- days between the running client's build date (GetBuildInfo) and today, 0 when a date can not be read
+local client_age_days = 0;
+do
+    local months = { Jan = 1, Feb = 2, Mar = 3, Apr = 4, May = 5, Jun = 6,
+        Jul = 7, Aug = 8, Sep = 9, Oct = 10, Nov = 11, Dec = 12
+    };
+    local client_month_str, client_day, client_year = sc.client_date_loaded:match("(%a+)%s+(%d+)%s+(%d+)");
+    local month_str, day, year = date("%b %d %Y"):match("(%a+)%s+(%d+)%s+(%d+)");
+    if client_month_str and client_day and client_year and month_str and day and year then
+        local client_build_time = time({year = tonumber(client_year), month = months[client_month_str] or 1, day = tonumber(client_day)});
+        local now = time({year = tonumber(year), month = months[month_str] or 1, day = tonumber(day)});
+        client_age_days = math.abs(now - client_build_time) / 86400;
+    end
+end
+
 --------------------------------------------------------------------------------
 utils.client_matches                = client_matches;
+utils.compare_builds                = compare_builds;
+utils.client_age_days               = client_age_days;
 utils.faction_standing              = faction_standing;
 utils.spell_book_shown              = spell_book_shown;
 utils.is_secret                     = is_secret;

@@ -29,6 +29,35 @@ local ui_tabs_order                 = ui.ui_tabs_order;
 
 local libstub_launcher;
 
+-- the data's client build against the running client: -1 data older, 0 same build, 1 data newer
+local function data_build_cmp()
+    return sc.utils.compare_builds(sc.client_version_src, sc.client_version_loaded);
+end
+
+-- a small red X in the minimap button's lower right corner while the data is for another client build. The
+-- tooltip's check / X markup draws late when nothing keeps its texture loaded, so the button also holds both atlases
+-- in invisible textures
+local function mark_minimap_button_mismatch()
+    local button = libstub_icon:GetMinimapButton(sc.core.addon_name);
+    if not button then
+        return;
+    end
+    for _, atlas in ipairs({"UI-LFG-ReadyMark", "UI-LFG-DeclineMark"}) do
+        local keep = button:CreateTexture(nil, "BACKGROUND");
+        keep:SetAtlas(atlas);
+        keep:SetSize(1, 1);
+        keep:SetPoint("CENTER", button, "CENTER");
+        keep:SetAlpha(0);
+    end
+    if data_build_cmp() == 0 then
+        return;
+    end
+    local mark = button:CreateTexture(nil, "OVERLAY", nil, 7);
+    mark:SetAtlas("UI-LFG-DeclineMark");
+    mark:SetSize(11, 11);
+    mark:SetPoint("CENTER", button.icon, "BOTTOMRIGHT", -1, 1);
+end
+
 local function create_sw_base_ui()
 
     __sc_frame = CreateFrame("Frame", "__sc_frame", UIParent, "BasicFrameTemplate, BasicFrameTemplateWithInset");
@@ -186,10 +215,24 @@ local function load_sw_ui()
                 tooltip:AddLine("|cFF9CD6DE"..L["Right click"]..":|r |cFFFF0000("..L["IS OFF"]..")|r "..L["Toggle old rank warning overlay"]);
             end
             tooltip:AddLine(" ");
+            local cmp = data_build_cmp();
+            local mark = cmp == 0 and CreateAtlasMarkup("UI-LFG-ReadyMark", 14, 14) or
+                CreateAtlasMarkup("UI-LFG-DeclineMark", 14, 14);
             tooltip:AddLine("|cFF9CD6DE"..L["Addon data generated from"]..":|r");
-            tooltip:AddLine("    "..sc.client_name_src.." "..sc.client_version_src);
+            tooltip:AddLine("    "..sc.client_name_src.." "..sc.client_version_src.."  "..mark);
+            if sc.hotfixes_fetched_utc then
+                local fetched = sc.hotfixes_fetched_utc:gsub("^(%d+%-%d+%-%d+)T(%d+:%d+).*$", "%1 %2 UTC");
+                tooltip:AddLine("    "..L["Hotfixes fetched"].." "..fetched);
+            else
+                tooltip:AddLine("    |cFF808080"..L["Hotfixes: not included"].."|r");
+            end
             tooltip:AddLine("|cFF9CD6DE"..L["Current client build"]..":|r "..sc.client_version_loaded);
-            tooltip:AddLine("|cFF9CD6DE"..L["Factory reset (reloads UI)"]..":|r /sc reset");
+            if cmp < 0 and sc.utils.client_age_days > 7 then
+                tooltip:AddLine("    |cFFFF4040"..L["Data is from an older client build, check for an update"].."|r");
+            elseif cmp > 0 then
+                tooltip:AddLine("    |cFFFF4040"..L["Data is from a newer client build"].."|r");
+            end
+            tooltip:AddLine(" ");
             tooltip:AddLine("https://www.curseforge.com/wow/addons/spellcoda");
         end;
 
@@ -221,6 +264,7 @@ local function load_sw_ui()
         -- LibDBIcon 55 creates the button on Register
         libstub_icon:Register(sc.core.addon_name, libstub_launcher, config.settings.libstub_icon_conf);
         fix_minimap_button();
+        mark_minimap_button_mismatch();
     end
 
 
