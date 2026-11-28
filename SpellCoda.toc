@@ -63,6 +63,7 @@ override.lua
 [Game]/scaling.lua
 
 config.lua
+stat_lines.lua
 loadouts.lua
 equipment.lua
 buffs.lua

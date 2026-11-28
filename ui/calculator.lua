@@ -16,6 +16,8 @@ local update_loadout_and_effects      = sc.loadouts.update_loadout_and_effects;
 local active_loadout                  = sc.loadouts.active_loadout
 local stats_diff_format               = sc.loadouts.stats_diff_format;
 local stats_format                    = sc.loadouts.stats_format;
+local stats_sheet                     = sc.loadouts.stats_sheet;
+local sheet_text                      = sc.stat_lines.sheet_text;
 local cpy_effects                     = sc.loadouts.cpy_effects;
 local effects_finalize_forced         = sc.loadouts.effects_finalize_forced;
 local empty_effects                   = sc.loadouts.empty_effects;
@@ -36,6 +38,7 @@ local font                      = ui.font;
 local libDD                     = ui.libDD;
 local make_divider              = ui.make_divider;
 local open_compared_spells_list = ui.open_compared_spells_list;
+local open_stat_lines           = ui.open_stat_lines;
 
 
 local default_talents_plan = {
@@ -182,6 +185,9 @@ local function update_plan_model(model, anything)
         return;
     end
     model:SetUnit("player");
+    model:SetRotation(model.rotation);
+    model:SetCamDistanceScale(model.cam_scale);
+    model:SetViewTranslation(model.pan_x, model.pan_y);
     for slot, info in pairs(working_item_plan) do
         if not plan_model_weapon_slots[slot] then
             if info.link then
@@ -1208,9 +1214,18 @@ local function create_calculator_items_subframe(pframe)
     local model = CreateFrame("DressUpModel", nil, pframe.items);
     model:SetPoint("TOPLEFT", model_inset, 0);
     model:SetPoint("BOTTOMRIGHT", -model_inset, weapons_plan_top - 24);
-    model:SetFrameLevel(pframe.items:GetFrameLevel());
+    -- above the area, which takes left drags to move the window
+    model:SetFrameLevel(pframe.items:GetFrameLevel() + 1);
     model.rotation = 0;
+    model.cam_scale = 1;
+    model.pan_x = 0;
+    model.pan_y = 0;
     model:EnableMouse(true);
+    model:EnableMouseWheel(true);
+    model:SetScript("OnMouseWheel", function(self, delta)
+        self.cam_scale = math.max(0.4, math.min(1, self.cam_scale - 0.1 * delta));
+        self:SetCamDistanceScale(self.cam_scale);
+    end);
     model:SetScript("OnMouseDown", function(self, btn)
         if plan_cursor_item() then
             return;
@@ -1218,18 +1233,32 @@ local function create_calculator_items_subframe(pframe)
         if btn == "LeftButton" then
             self.drag_x = GetCursorPosition();
             self.drag_rotation = self.rotation;
+        elseif btn == "RightButton" then
+            self.pan_cursor_x, self.pan_cursor_y = GetCursorPosition();
+            self.pan_start_x, self.pan_start_y = self.pan_x, self.pan_y;
         end
     end);
     model:SetScript("OnUpdate", function(self)
-        if not self.drag_x then
-            return;
+        if self.drag_x then
+            if IsMouseButtonDown("LeftButton") then
+                self.rotation = self.drag_rotation + (GetCursorPosition() - self.drag_x) * 0.02;
+                self:SetRotation(self.rotation);
+            else
+                self.drag_x = nil;
+            end
         end
-        if not IsMouseButtonDown("LeftButton") then
-            self.drag_x = nil;
-            return;
+        if self.pan_cursor_x then
+            if IsMouseButtonDown("RightButton") then
+                local x, y = GetCursorPosition();
+                local scale = self:GetEffectiveScale();
+                local max_x, max_y = 0.5 * self:GetWidth(), 0.5 * self:GetHeight();
+                self.pan_x = math.max(-max_x, math.min(max_x, self.pan_start_x + (x - self.pan_cursor_x) / scale));
+                self.pan_y = math.max(-max_y, math.min(max_y, self.pan_start_y + (y - self.pan_cursor_y) / scale));
+                self:SetViewTranslation(self.pan_x, self.pan_y);
+            else
+                self.pan_cursor_x = nil;
+            end
         end
-        self.rotation = self.drag_rotation + (GetCursorPosition() - self.drag_x) * 0.02;
-        self:SetRotation(self.rotation);
     end);
     model:SetScript("OnReceiveDrag", plan_cursor_item);
     model:Hide();
@@ -1899,53 +1928,69 @@ local function create_calculator_stats_subframe(pframe)
         },
     };
 
-    local comparison_stats_listing_order = {};
-    for _, k in ipairs({
-        "str", "agi", "stam", "int", "spirit", "mp5", "extra_mana", "armor", "defense_skill_rating", "dodge_rating", "parry_rating", "resilience_rating",
-        "crit_rating", "hit_rating", "haste_rating", "expertise_rating", "ap", "rap", "weapon_skill", "armor_pen", "sp", "sd", "hp", "spell_pen",
-    }) do
-        local clients = pframe.stats.stat_fields[k].clients;
-        if not clients or client_matches(clients) then
-            table.insert(comparison_stats_listing_order, k);
-        else
-            pframe.stats.stat_fields[k] = nil;
-        end
-    end
+    local sections = {
+        { col = 1, title = L["Attributes"], keys = { "str", "agi", "stam", "int", "spirit" } },
+        { col = 1, title = L["Resources"],  keys = { "mp5", "extra_mana" } },
+        { col = 1, title = L["Defense"],    keys = { "armor", "defense_skill_rating", "dodge_rating", "parry_rating",
+                                                     "resilience_rating" } },
+        { col = 2, title = L["Combat"],     keys = { "crit_rating", "hit_rating", "haste_rating", "expertise_rating" } },
+        { col = 2, title = L["Physical"],   keys = { "ap", "rap", "weapon_skill", "armor_pen" } },
+        { col = 2, title = L["Spells"],     keys = { "sp", "sd", "hp", "spell_pen" } },
+    };
+    local col_gap = 30;
+    local col_w = math.floor((pframe.stats:GetWidth() - 2 * x_pad - col_gap) / 2);
+    local box_w = 70;
+    local row_h = 20;
+    local col_y = { pframe.stats.y_offset, pframe.stats.y_offset };
 
-    local new_column_breakpoint = "crit_rating";
+    local comparison_stats_listing_order = {};
+    local placement = {};
+    for _, sec in ipairs(sections) do
+        local col_x = x_pad + (sec.col - 1) * (col_w + col_gap);
+        local title = pframe.stats:CreateFontString(nil, "OVERLAY");
+        title:SetFontObject(GameFontNormal);
+        title:SetTextColor(232.0/255, 225.0/255, 32.0/255);
+        title:SetText(sec.title);
+        title:SetPoint("TOPLEFT", col_x, col_y[sec.col]);
+        col_y[sec.col] = col_y[sec.col] - 18;
+        for _, k in ipairs(sec.keys) do
+            local clients = pframe.stats.stat_fields[k].clients;
+            if not clients or client_matches(clients) then
+                table.insert(comparison_stats_listing_order, k);
+                placement[k] = { x = col_x, y = col_y[sec.col] };
+                col_y[sec.col] = col_y[sec.col] - row_h;
+            else
+                pframe.stats.stat_fields[k] = nil;
+            end
+        end
+        col_y[sec.col] = col_y[sec.col] - 6;
+    end
 
     local num_stats = #comparison_stats_listing_order;
 
-    local y_offset_stats = pframe.stats.y_offset;
-    local max_y_offset_stats = 0;
+    local max_y_offset_stats = math.min(col_y[1], col_y[2]);
     local i = 1;
-    local x_offset = 0;
-    local editbox_x_pad = 0;
     while i <= num_stats do
 
         local k = comparison_stats_listing_order[i];
-        if k == new_column_breakpoint then
-            -- split column special, skip
-            y_offset_stats = pframe.stats.y_offset;
-            x_offset = x_offset + 210;
-            editbox_x_pad = 50;
-        end
-
         local v = pframe.stats.stat_fields[k];
-        y_offset_stats = y_offset_stats - 17;
+        local pos = placement[k];
 
         v.label = pframe.stats:CreateFontString(nil, "OVERLAY");
 
         v.label:SetFontObject(font);
-        v.label:SetPoint("TOPLEFT", x_pad + x_offset, y_offset_stats);
+        v.label:SetPoint("TOPLEFT", pos.x + 8, pos.y - 4);
+        v.label:SetWidth(col_w - box_w - 16);
+        v.label:SetJustifyH("LEFT");
+        v.label:SetWordWrap(false);
         v.label:SetText(v.label_str);
-        v.label:SetTextColor(222/255, 192/255, 40/255);
+        v.label:SetTextColor(1, 1, 1);
 
         v.editbox = CreateFrame("EditBox", v.label_str.."editbox"..k, pframe.stats, "InputBoxTemplate");
-        v.editbox:SetPoint("TOPLEFT", 100 + editbox_x_pad + x_offset, y_offset_stats-2);
+        v.editbox:SetPoint("TOPRIGHT", pframe.stats, "TOPLEFT", pos.x + col_w, pos.y - 2);
         v.editbox:SetText("");
         v.editbox:SetAutoFocus(false);
-        v.editbox:SetSize(100, 10);
+        v.editbox:SetSize(box_w, 16);
         v.editbox.index = i;
         if sc.loadouts.manual_diff_in_pct(k) then
             local pct = v.editbox:CreateFontString(nil, "OVERLAY");
@@ -1988,11 +2033,10 @@ local function create_calculator_stats_subframe(pframe)
             pframe.stats.stat_fields[comparison_stats_listing_order[next_index]].editbox:SetFocus();
         end);
 
-        max_y_offset_stats = math.min(max_y_offset_stats, y_offset_stats);
         i = i + 1;
     end
 
-    max_y_offset_stats = max_y_offset_stats - 20;
+    max_y_offset_stats = max_y_offset_stats - 6;
     f = CreateFrame("Button", nil, pframe.stats, "UIPanelButtonTemplate");
     f:SetScript("OnClick", function()
 
@@ -2002,7 +2046,7 @@ local function create_calculator_stats_subframe(pframe)
         --update_calc_list(true);
     end);
 
-    f:SetPoint("TOPRIGHT", 5, max_y_offset_stats);
+    f:SetPoint("TOPRIGHT", pframe.stats, "TOPLEFT", x_pad + 2 * col_w + col_gap, max_y_offset_stats);
     f:SetHeight(20);
     f:SetWidth(120);
     f:SetText(L["Clear stats"]);
@@ -2511,11 +2555,172 @@ local function create_sw_ui_calculator_frame(pframe)
     make_divider(pframe);
     pframe.y_offset = pframe.y_offset - 8;
 
-    -- result row: Before -> Spells, Stats -> After, hover for the text, click to copy it
     pframe.diffs_txt = "";
 
     local function stats_txt(effects)
         return effects and (stats_format(active_loadout(), effects));
+    end
+    local function sheet_rows()
+        if not pframe.stats_effects then
+            return {};
+        end
+        return stats_sheet(active_loadout(), pframe.stats_effects, pframe.stats_effects_diffed);
+    end
+    -- the tooltip takes no mouse input: the wheel over the box moves a window of rows, the bar only shows where it is
+    local box_tooltip_rows = 30;
+    local scroll_bar = CreateFrame("Frame", nil, GameTooltip);
+    scroll_bar:SetPoint("TOPRIGHT", -4, -6);
+    scroll_bar:SetPoint("BOTTOMRIGHT", -4, 6);
+    scroll_bar:SetWidth(3);
+    scroll_bar:Hide();
+    local scroll_track = scroll_bar:CreateTexture(nil, "OVERLAY");
+    scroll_track:SetAllPoints();
+    scroll_track:SetColorTexture(1, 1, 1, 0.15);
+    local scroll_thumb = scroll_bar:CreateTexture(nil, "OVERLAY", nil, 1);
+    scroll_thumb:SetColorTexture(1, 0.82, 0, 0.9);
+    scroll_thumb:SetWidth(3);
+    local function place_scroll_thumb()
+        local s = scroll_bar.window;
+        local h = scroll_bar:GetHeight();
+        if not s or is_secret(h) or h <= 0 then
+            return;
+        end
+        scroll_thumb:ClearAllPoints();
+        scroll_thumb:SetPoint("TOP", scroll_bar, "TOP", 0, -h * (s.first - 1) / s.total);
+        scroll_thumb:SetHeight(math.max(4, h * box_tooltip_rows / s.total));
+    end
+    scroll_bar:SetScript("OnSizeChanged", place_scroll_thumb);
+    -- row stripes, anchored to the line's left and right texts so no width is measured
+    local stripes = {};
+    local function stripe_line(k, line)
+        local t = stripes[k];
+        if not t then
+            t = GameTooltip:CreateTexture(nil, "BORDER");
+            t:SetColorTexture(1, 1, 1, 0.06);
+            stripes[k] = t;
+        end
+        t:ClearAllPoints();
+        t:SetPoint("TOPLEFT", _G["GameTooltipTextLeft"..line], "TOPLEFT", -3, 1);
+        t:SetPoint("BOTTOMRIGHT", _G["GameTooltipTextRight"..line], "BOTTOMRIGHT", 3, -1);
+        t:Show();
+    end
+    local function hide_box_tooltip_extras()
+        scroll_bar:Hide();
+        for _, t in ipairs(stripes) do
+            t:Hide();
+        end
+    end
+    GameTooltip:HookScript("OnTooltipCleared", hide_box_tooltip_extras);
+    GameTooltip:HookScript("OnHide", hide_box_tooltip_extras);
+
+    -- rows: { text, r, g, b } or { left = text, right = text, extras = greyed name }
+    local function text_rows(rows, text)
+        if not text then
+            return;
+        end
+        text = string.gsub(text, "\n$", "");
+        for line in string.gmatch(text.."\n", "(.-)\n") do
+            rows[#rows + 1] = { line };
+        end
+    end
+    local function box_tooltip_hint(text, scrolls, shortened)
+        GameTooltip:AddLine(text, 0.7, 0.7, 0.7);
+        if scrolls then
+            GameTooltip:AddLine(L["Mouse wheel: scroll"], 0.7, 0.7, 0.7);
+        end
+        if shortened then
+            GameTooltip:AddLine(L["Hold ALT: show all spells"], 0.7, 0.7, 0.7);
+        end
+        GameTooltip:AddLine("|TInterface\\Buttons\\WHITE8X8:1:160:0:0:8:8:0:8:0:8:110:110:110|t");
+    end
+    local function box_tooltip_body(owner, hint, rows, shortened)
+        local total = #rows;
+        box_tooltip_hint(hint, total > box_tooltip_rows, shortened);
+        local first, last = 1, total;
+        if total > box_tooltip_rows then
+            first = math.max(1, math.min(owner.scroll_row or 1, total - box_tooltip_rows + 1));
+            last = first + box_tooltip_rows - 1;
+        end
+        owner.scroll_row = first;
+        local striped, nth = {}, 0;
+        for i = first, last do
+            local r = rows[i];
+            if r.left then
+                if r.extras then
+                    GameTooltip:AddDoubleLine(r.left, r.right, 0.71, 0.69, 0.61, 1, 1, 1);
+                else
+                    GameTooltip:AddDoubleLine(r.left, r.right, 1, 0.82, 0, 1, 1, 1);
+                end
+                nth = nth + 1;
+                if nth % 2 == 0 then
+                    striped[#striped + 1] = GameTooltip:NumLines();
+                end
+            else
+                GameTooltip:AddLine(r[1], r[2], r[3], r[4]);
+                nth = 0;
+            end
+        end
+        GameTooltip:Show();
+        for k, line in ipairs(striped) do
+            stripe_line(k, line);
+        end
+        if total > box_tooltip_rows then
+            scroll_bar.window = { first = first, total = total };
+            scroll_bar:Show();
+            place_scroll_thumb();
+        end
+    end
+    local function scroll_on_wheel(box)
+        box:EnableMouseWheel(true);
+        box:SetScript("OnMouseWheel", function(self, delta)
+            self.scroll_row = math.max(1, (self.scroll_row or 1) - 3 * delta);
+            self:GetScript("OnEnter")(self);
+        end);
+        box:HookScript("OnLeave", function(self)
+            self.scroll_row = nil;
+        end);
+        -- the shown tooltip calls its owner's UpdateTooltip every 0.2 s: redrawn when ALT changed
+        box.UpdateTooltip = function(self)
+            if IsAltKeyDown() ~= self.tooltip_alt then
+                self:GetScript("OnEnter")(self);
+            end
+        end;
+    end
+    local function sheet_tooltip(owner)
+        GameTooltip:SetOwner(owner, "ANCHOR_RIGHT");
+        owner.tooltip_alt = IsAltKeyDown();
+        local shortened = false;
+        local rows = {};
+        if config.settings.general_calc_stats_raw_dump then
+            GameTooltip:SetText(L["Sheet"]);
+            rows[1] = { L["Before"], 1, 1, 1 };
+            text_rows(rows, stats_txt(pframe.stats_effects));
+            rows[#rows + 1] = { " " };
+            rows[#rows + 1] = { L["After"], 1, 1, 1 };
+            text_rows(rows, stats_txt(pframe.stats_effects_diffed));
+        else
+            GameTooltip:SetText(L["Character sheet"]);
+            for _, r in ipairs(sheet_rows()) do
+                if r.header then
+                    rows[#rows + 1] = { r.header, 1, 1, 1 };
+                else
+                    if r.short_left and not owner.tooltip_alt then
+                        shortened = true;
+                    end
+                    rows[#rows + 1] = { left = (not owner.tooltip_alt and r.short_left) or r.left, right = r.right,
+                                        extras = r.extras };
+                end
+            end
+        end
+        box_tooltip_body(owner, L["Right click: Choose stat lines"], rows, shortened);
+    end
+    local function sheet_dump()
+        if config.settings.general_calc_stats_raw_dump then
+            dump_text(L["Sheet"], L["Before"]..":\n"..(stats_txt(pframe.stats_effects) or "").."\n"..L["After"]..":\n"..
+                (stats_txt(pframe.stats_effects_diffed) or ""), 300, 400);
+        else
+            dump_text(L["Character sheet"], sheet_text(sheet_rows()), 300, 400);
+        end
     end
 
     local arrow_tex_path = "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up";
@@ -2523,8 +2728,18 @@ local function create_sw_ui_calculator_frame(pframe)
     local flow_arrow_size = 20;
     local flow_arrow_space = flow_arrow_size + 2 * box_spacing;
     local end_box_width = 90;
-    local change_box_width = math.floor((pframe:GetWidth() - 2 * end_box_width - 2 * flow_arrow_space - box_spacing) / 2);
-    local box_x = 0;
+    local changes_label = pframe:CreateFontString(nil, "OVERLAY");
+    changes_label:SetFontObject(GameFontNormal);
+    local fp, _, flags = changes_label:GetFont();
+    changes_label:SetFont(fp, 15, flags);
+    changes_label:SetTextColor(232.0/255, 225.0/255, 32.0/255);
+    changes_label:SetText(L["Changes"]);
+    changes_label:SetPoint("LEFT", pframe, "TOPLEFT", 2, pframe.y_offset - 15);
+    local label_width = math.ceil(changes_label:GetStringWidth()) + 2 + 2 * box_spacing;
+    local sheet_gap = 16;
+    local change_box_width = math.floor(
+        (pframe:GetWidth() - label_width - end_box_width - flow_arrow_space - sheet_gap) / 2);
+    local box_x = label_width;
     local function flow_arrow()
         local arrow = pframe:CreateTexture(nil, "ARTWORK");
         arrow:SetTexture(arrow_tex_path);
@@ -2587,35 +2802,12 @@ local function create_sw_ui_calculator_frame(pframe)
         return box;
     end
 
-    local before_area = result_box(L["Before"], end_box_width);
-    before_area:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-
-        if config.settings.general_calc_stats_raw_dump then
-            GameTooltip:SetText(L["Before"]);
-        else
-            GameTooltip:SetText(L["Before (simplified)"]);
-        end
-
-        GameTooltip:AddLine(stats_txt(pframe.stats_effects));
-        GameTooltip:Show();
-    end);
-    before_area:SetScript("OnMouseDown", function(self)
-        dump_text(
-            L["Before"],
-            stats_txt(pframe.stats_effects),
-            300,
-            400
-        );
-    end);
-    pframe.before_area = before_area;
-
-    pframe.flow_arrow_before = flow_arrow();
     local spells_area = result_box(L["Spells"], change_box_width);
     spells_area:SetScript("OnEnter", function(self)
         self.tooltip_mod = sc.core.key_mod_flags();
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
         GameTooltip:SetText(L["Spells"]);
+        box_tooltip_hint(L["Right click: Edit compared spells"]);
         write_plan_spells_tooltip(GameTooltip, self.tooltip_mod);
         GameTooltip:Show();
     end);
@@ -2626,7 +2818,11 @@ local function create_sw_ui_calculator_frame(pframe)
             self:GetScript("OnEnter")(self);
         end
     end;
-    spells_area:SetScript("OnMouseDown", function(self)
+    spells_area:SetScript("OnMouseDown", function(self, button)
+        if button == "RightButton" then
+            open_compared_spells_list();
+            return;
+        end
         dump_text(
             L["Spells"],
             plan_spells_text(sc.core.key_mod_flags()),
@@ -2662,15 +2858,19 @@ local function create_sw_ui_calculator_frame(pframe)
     diffs_area:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
 
-        if config.settings.general_calc_stats_raw_dump then
-            GameTooltip:SetText(L["Changes"]);
-        else
-            GameTooltip:SetText(L["Changes (simplified)"]);
-        end
-        GameTooltip:AddLine(pframe.diffs_txt);
-        GameTooltip:Show();
+        GameTooltip:SetText(L["Changes"]);
+        self.tooltip_alt = IsAltKeyDown();
+        local shortened = pframe.diffs_txt_short ~= nil and not self.tooltip_alt;
+        local rows = {};
+        text_rows(rows, shortened and pframe.diffs_txt_short or pframe.diffs_txt);
+        box_tooltip_body(self, L["Right click: Choose stat lines"], rows, shortened);
     end);
-    diffs_area:SetScript("OnMouseDown", function(self)
+    scroll_on_wheel(diffs_area);
+    diffs_area:SetScript("OnMouseDown", function(self, button)
+        if button == "RightButton" then
+            open_stat_lines();
+            return;
+        end
         dump_text(
             L["Effect changes"],
             pframe.diffs_txt,
@@ -2680,28 +2880,65 @@ local function create_sw_ui_calculator_frame(pframe)
     end);
     pframe.diffs_area = diffs_area;
     pframe.diffs_fontstr = diffs_area.fontstr;
-
-    pframe.flow_arrow_after = flow_arrow();
-    local after_area = result_box(L["After"], end_box_width);
-    after_area:SetScript("OnEnter", function(self)
+    local stat_lines_btn = CreateFrame("Button", nil, diffs_area);
+    stat_lines_btn:SetSize(11, 11);
+    stat_lines_btn:SetPoint("TOPRIGHT", -3, -3);
+    diffs_area.fontstr:SetPoint("CENTER", -6, 0);
+    stat_lines_btn:SetNormalTexture("Interface\\Buttons\\UI-OptionsButton");
+    stat_lines_btn:SetHighlightTexture("Interface\\Buttons\\UI-OptionsButton", "ADD");
+    stat_lines_btn:GetHighlightTexture():SetAlpha(0.5);
+    stat_lines_btn:SetScript("OnClick", open_stat_lines);
+    stat_lines_btn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-        if config.settings.general_calc_stats_raw_dump then
-            GameTooltip:SetText(L["After"]);
-        else
-            GameTooltip:SetText(L["After (simplified)"]);
-        end
-        GameTooltip:AddLine(stats_txt(pframe.stats_effects_diffed));
+        GameTooltip:SetText(L["Choose stat lines"]);
+        GameTooltip:AddLine(L["Tooltip"].." -> "..L["Stat lines"], 0.6, 0.6, 0.6);
         GameTooltip:Show();
     end);
-    after_area:SetScript("OnMouseDown", function(self)
-        dump_text(
-            L["After"],
-            stats_txt(pframe.stats_effects_diffed),
-            300,
-            400
-        );
+    stat_lines_btn:SetScript("OnLeave", function()
+        GameTooltip:Hide();
     end);
-    pframe.after_area = after_area;
+
+    pframe.flow_arrow_spells = flow_arrow();
+    local sheet_area = result_box(L["Sheet"], end_box_width);
+    local portrait = sheet_area:CreateTexture(nil, "ARTWORK");
+    portrait:SetSize(20, 20);
+    sheet_area.fontstr:SetPoint("CENTER", 11, 0);
+    portrait:SetPoint("RIGHT", sheet_area.fontstr, "LEFT", -4, 0);
+    SetPortraitTexture(portrait, "player");
+    pframe:HookScript("OnShow", function()
+        SetPortraitTexture(portrait, "player");
+    end);
+    sheet_area:SetScript("OnEnter", function(self)
+        sheet_tooltip(self);
+    end);
+    scroll_on_wheel(sheet_area);
+    sheet_area:SetScript("OnMouseDown", function(self, button)
+        if button == "RightButton" then
+            open_stat_lines();
+            return;
+        end
+        sheet_dump();
+    end);
+    pframe.sheet_area = sheet_area;
+
+    -- the plan changes stats, stats change spell results: Stats -> Spells, then the sheet after a gap
+    local row_y = pframe.y_offset;
+    local x = label_width;
+    for _, v in ipairs({ { diffs_area, change_box_width }, { pframe.flow_arrow_spells }, { spells_area, change_box_width },
+                         { sheet_area, end_box_width } }) do
+        local region, width = v[1], v[2];
+        region:ClearAllPoints();
+        if width then
+            if region == sheet_area then
+                x = x + sheet_gap;
+            end
+            region:SetPoint("TOPLEFT", x, row_y);
+            x = x + width;
+        else
+            region:SetPoint("TOPLEFT", x + box_spacing, row_y - (30 - flow_arrow_size) / 2);
+            x = x + flow_arrow_space;
+        end
+    end
 
     -- the subtab row takes the 34 above the subframes
     pframe.y_offset = pframe.y_offset - 30 - 38;

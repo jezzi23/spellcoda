@@ -2238,7 +2238,9 @@ local function append_tooltip_ehp(tooltip, info, loadout)
     add_line(
         tooltip,
         string.format("%s:", L["Player"]),
-        string.format(" Defense skill %d | %d %s | %d %s", info.player_defense, info.player_armor, L["Armor"], info.player_resil, L["Resilience"]),
+        string.format(" Defense skill %d | %d %s", info.player_defense, info.player_armor, L["Armor"])..
+            (sc.utils.client_matches(bit.bnot(bit.bor(sc.client_flags.vanilla, sc.client_flags.forever))) and
+             string.format(" | %d %s", info.player_resil, L["Resilience"]) or ""),
         effect_color("target_info")
     );
     add_line(
@@ -2822,6 +2824,17 @@ local armor_ignorable = {
     [4] = "plate",
 };
 
+-- a font string's text width; secret (the widget has a secret aspect) -> an estimate from our own plain text, on the
+-- wide side so columns never overlap
+local function text_width(fstr, text)
+    local w = fstr:GetStringWidth();
+    if not is_secret(w) then
+        return w;
+    end
+    local plain = string.gsub(string.gsub(text or "", "|c%x%x%x%x%x%x%x%x", ""), "|r", "");
+    return 8 * #plain;
+end
+
 local function colored_diff_str(val, perc, num_digits)
     local val_str = format_number(val, num_digits-1);
     local perc_str = format_number(perc, num_digits).."%";
@@ -2873,8 +2886,11 @@ local function make_spells_cmp_view(tooltip, num_cmps)
         headers = {
             first_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
             second_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameFontNormal"),
-        }
+        },
+        -- never shown, measures the width of a space in the tooltip's right column font
+        space_fstr = tooltip:CreateFontString(nil, "ARTWORK", "GameTooltipText"),
     };
+    view.space_fstr:Hide();
     for i = 1, num_cmps do
         view.cmps[i] = { len = 0, diff_list = {}, diff_str = "", uses_mana = false };
     end
@@ -3054,14 +3070,40 @@ local function write_spells_cmp(tooltip, view, num_cmps, mod, loadout, fight_typ
         effect_color(color_tag));
 
     local min_width = 95;
+    local column_gap = 10;
 
-    -- anchors to tooltip lines left from the last show make the width secret when those lines are secret
+    -- each column as wide as its widest text; anchors to tooltip lines left from the last show make the width secret
+    -- when those lines are secret
     view.headers.first_fstr:ClearAllPoints();
     view.headers.second_fstr:ClearAllPoints();
-    local offset_to_first = math.max(min_width,
-        secret_or(view.headers.second_fstr:GetWidth(), min_width));
-    local offset_to_role_icon = offset_to_first + math.max(min_width,
-        secret_or(view.headers.first_fstr:GetWidth(), min_width));
+    local first_w = text_width(view.headers.first_fstr, header2);
+    local second_w = text_width(view.headers.second_fstr, header3);
+    for c = 1, num_cmps do
+        local cmp = view.cmps[c];
+        for i = 1, cmp.len do
+            local diff = cmp.diff_list[i];
+            local first_txt = colored_diff_str(diff.effect, diff.effect_changed_perc, 2);
+            local second_txt = "";
+            if not diff.tank_like then
+                second_txt = colored_diff_str(diff.effect_timed, diff.effect_timed_changed_perc, 2);
+            end
+            diff.frames.first_fstr:ClearAllPoints();
+            diff.frames.second_fstr:ClearAllPoints();
+            diff.frames.first_fstr:SetText(first_txt);
+            diff.frames.second_fstr:SetText(second_txt);
+            first_w = math.max(first_w, text_width(diff.frames.first_fstr, first_txt));
+            second_w = math.max(second_w, text_width(diff.frames.second_fstr, second_txt));
+        end
+    end
+    local offset_to_first = math.max(min_width, second_w + column_gap);
+    local offset_to_role_icon = offset_to_first + math.max(min_width, first_w + column_gap);
+
+    -- the right side of each row is blank space as wide as the columns and the role icon, so the tooltip makes room
+    -- for them next to the spell names
+    -- a secret width: assume narrow spaces, the tooltip comes out wider rather than the columns overlapping the names
+    view.space_fstr:SetText("          ");
+    local space_w = secret_or(view.space_fstr:GetStringWidth(), 30) / 10;
+    local columns_pad = string.rep(" ", math.ceil((offset_to_role_icon + 10 + 18) / math.max(space_w, 1)));
 
     local tooltip_name = tooltip:GetName();
     local rhs_txt = _G[tooltip_name .. "TextRight" .. tooltip:NumLines()];
@@ -3079,10 +3121,6 @@ local function write_spells_cmp(tooltip, view, num_cmps, mod, loadout, fight_typ
             local diff = cmp.diff_list[i];
             local spell_texture_str = "|T" .. diff.tex .. ":16:16:0:0|t "
 
-            diff.frames.first_fstr:SetText(colored_diff_str(diff.effect, diff.effect_changed_perc, 2));
-
-            diff.frames.second_fstr:SetText(colored_diff_str(diff.effect_timed, diff.effect_timed_changed_perc, 2));
-
             -- false: a weapon attack without its weapon's icon
             local weapon_tex;
             if diff.id == sc.auto_attack_spell_id then
@@ -3091,11 +3129,11 @@ local function write_spells_cmp(tooltip, view, num_cmps, mod, loadout, fight_typ
                 weapon_tex = cmp.ranged_tex or false;
             end
             if weapon_tex then
-                tooltip:AddDoubleLine(string.format("  |T%s:16:16:0:0|t  %s", weapon_tex, diff.disp), " ");
+                tooltip:AddDoubleLine(string.format("  |T%s:16:16:0:0|t  %s", weapon_tex, diff.disp), columns_pad);
             elseif weapon_tex == false then
-                tooltip:AddDoubleLine(string.format("  %s %s", spell_texture_str, diff.disp), " ");
+                tooltip:AddDoubleLine(string.format("  %s %s", spell_texture_str, diff.disp), columns_pad);
             else
-                tooltip:AddDoubleLine(string.format("  %s%s", spell_texture_str, diff.extra), " ");
+                tooltip:AddDoubleLine(string.format("  %s%s", spell_texture_str, diff.extra), columns_pad);
             end
 
             rhs_txt = _G[tooltip_name .. "TextRight" .. tooltip:NumLines()];
@@ -3106,7 +3144,6 @@ local function write_spells_cmp(tooltip, view, num_cmps, mod, loadout, fight_typ
             if diff.heal_like then
                 diff.frames.role_tex:SetTexCoord(0.25, 0.5, 0.0, 0.25);
             elseif diff.tank_like then
-                diff.frames.second_fstr:SetText("");
                 diff.frames.role_tex:SetTexCoord(0.0, 0.25, 0.25, 0.5);
             else
                 diff.frames.role_tex:SetTexCoord(0.25, 0.5, 0.25, 0.5);

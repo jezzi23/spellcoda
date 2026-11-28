@@ -257,6 +257,11 @@ local function open_compared_spells_list(open_tab)
     tooltip_frame.items.compared_list.flash();
 end
 
+local function open_stat_lines()
+    sw_activate_frame("tooltip_frame");
+    __sc_frame.tooltip_frame.stat_lines_tab:Click();
+end
+
 local function create_sw_spell_id_viewer()
 
     __sc_frame.spell_id_viewer_editbox = CreateFrame("EditBox", "sw_spell_id_viewer_editbox", __sc_frame, "InputBoxTemplate");
@@ -595,12 +600,40 @@ local function make_frame_scrollable(frame)
     end);
 end
 
+-- Dodge is the spell effective health is shown on
+local function make_dodge_drag_button(parent, level)
+    local btn = CreateFrame("Button", nil, parent);
+    btn:SetSize(18, 18);
+    btn:SetFrameLevel(level);
+    btn:SetNormalTexture(C_Spell.GetSpellTexture(spids.dodge) or ui.ehp_tex);
+    btn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD");
+    btn:RegisterForDrag("LeftButton");
+    btn:SetScript("OnDragStart", function()
+        ui.pickup_known_spell(spids.dodge);
+    end);
+    btn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+        GameTooltip:SetSpellByID(spids.dodge);
+        GameTooltip:Show();
+    end);
+    btn:SetScript("OnLeave", function()
+        GameTooltip:Hide();
+    end);
+    local label = parent:CreateFontString(nil, "OVERLAY");
+    label:SetFontObject(font);
+    label:SetPoint("LEFT", btn, "RIGHT", 6, 0);
+    label:SetText(L["Drag to an action bar"]);
+    label:SetTextColor(0.6, 0.6, 0.6);
+    return btn;
+end
+
 ui.create_sw_item_id_viewer  = create_sw_item_id_viewer;
 ui.create_sw_spell_id_viewer = create_sw_spell_id_viewer;
 ui.create_subtabs            = create_subtabs;
 ui.create_tab_button         = create_tab_button;
 ui.layout_tabs               = layout_tabs;
 ui.make_divider              = make_divider;
+ui.make_dodge_drag_button    = make_dodge_drag_button;
 ui.make_frame_scrollable     = make_frame_scrollable;
 ui.multi_row_checkbutton     = multi_row_checkbutton;
 ui.open_compared_spells_list = open_compared_spells_list;
@@ -608,5 +641,6 @@ ui.select_tab                = select_tab;
 ui.set_tab_icon              = set_tab_icon;
 ui.sw_activate_frame         = sw_activate_frame;
 ui.sw_activate_tab           = sw_activate_tab;
+ui.open_stat_lines           = open_stat_lines;
 ui.ui_tabs_idx               = ui_tabs_idx;
 ui.ui_tabs_order             = ui_tabs_order;

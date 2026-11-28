@@ -13,6 +13,7 @@ local font                      = ui.font;
 local libDD                     = ui.libDD;
 local make_frame_scrollable     = ui.make_frame_scrollable;
 local multi_row_checkbutton     = ui.multi_row_checkbutton;
+local make_dodge_drag_button    = ui.make_dodge_drag_button;
 local register_text_frame_color = ui.register_text_frame_color;
 
 
@@ -759,6 +760,7 @@ local function create_overlay_spells_frame(pframe)
     do
         local option_key = "overlay_ehp_display_idx";
         local dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_"..option_key, pframe);
+        make_dodge_drag_button(pframe, dd:GetFrameLevel() + 2):SetPoint("LEFT", dd, "RIGHT", -6, 2);
 
         dd._type = "DropDownMenu";
         dd._settings_id = option_key;

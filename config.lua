@@ -75,14 +75,8 @@ local default_settings     = {
     tooltip_item_ignore_mail                                    = false,
     tooltip_item_ignore_plate                                   = false,
     tooltip_item_stat_diff                                      = false,
-
-    -- stat diffs categories
-    tooltip_item_stat_diff_tank                                 = true,
-    tooltip_item_stat_diff_melee                                = true,
-    tooltip_item_stat_diff_ranged                               = true,
-    tooltip_item_stat_diff_caster                               = true,
-    tooltip_item_stat_diff_healer                               = true,
-    tooltip_item_stat_diff_spells                               = true,
+    -- shown stat line cells per class token, filled from the class defaults on first use (stat_lines.lua)
+    stat_lines                                                  = {},
 
     -- overlay
     overlay_display_normal                                      = false,
@@ -421,46 +415,32 @@ local function default_p_char()
     return data;
 end
 
-local function misc_modify_existing()
-
-    -- Force in some specific things into existing profiles for some very specific things
-    -- for specific version transitions.
-    -- Can be removed at some point in the future
-
-    if __sc_p_acc and
-        __sc_p_acc.version_saved and
-        __sc_p_acc.version_saved < 800000 and
-        __sc_p_acc.profiles then
-
-        for k, v in pairs(__sc_p_acc.profiles) do
-            if v.settings then
-                if v.settings.spell_calc_list then
-                    v.settings.spell_calc_list[81] = 81; -- dodge passive as EHP
-                end
-            end
-
+-- migrations[n] takes a profile's settings from settings_rev n - 1 to n. They run before load_persistent_data drops
+-- the keys that left default_settings, so a migration can still read them. Only append: profiles store the rev
+-- they reached, an entry that moves or goes away runs on the wrong profiles.
+local migrations = {
+    function(settings)
+        if settings.loadout_combat_ignore_buffs and settings.loadout_combat_unseen_buffs == nil then
+            settings.loadout_combat_unseen_buffs = combat_unseen_buffs.drop;
         end
-    end
-    if __sc_p_acc and
-        __sc_p_acc.version_saved and
-        __sc_p_acc.version_saved < 900000 and
-        __sc_p_acc.profiles then
-
-        for k, v in pairs(__sc_p_acc.profiles) do
-            if v.settings then
-                -- not applying gems by default for tbc items leads to confusion
-                -- force this into existing profiles during this version transition into 0.9
-                v.settings.tooltip_item_apply_gems = true;
-            end
-
+    end,
+    -- profiles saved before compared_spells keep their own lists, each class builds it from spell_calc_list
+    function(settings)
+        if settings.spell_calc_list and settings.compared_spells == nil then
+            settings.compared_spells = {};
         end
-    end
+    end,
+};
+default_settings.settings_rev = #migrations;
 
+local function migrate_settings(settings)
+    for rev = (settings.settings_rev or 0) + 1, #migrations do
+        migrations[rev](settings);
+    end
+    settings.settings_rev = #migrations;
 end
 
 local function load_config()
-
-    misc_modify_existing();
 
     if not __sc_p_acc then
         --sc.core.use_acc_defaults = true;
@@ -471,13 +451,7 @@ local function load_config()
         load_persistent_data(v, default_profile());
     end
     for _, v in pairs(__sc_p_acc.profiles) do
-        if v.settings.loadout_combat_ignore_buffs and v.settings.loadout_combat_unseen_buffs == nil then
-            v.settings.loadout_combat_unseen_buffs = combat_unseen_buffs.drop;
-        end
-        -- profiles saved before compared_spells keep their own lists, each class builds it from spell_calc_list
-        if v.settings.spell_calc_list and v.settings.compared_spells == nil then
-            v.settings.compared_spells = {};
-        end
+        migrate_settings(v.settings);
         load_persistent_data(v.settings, default_settings);
         -- saved data can come from another client, keep values bound by client data in range
         v.settings.loadout_lvl = math.min(v.settings.loadout_lvl, sc.max_lvl);
@@ -558,6 +532,7 @@ local function activate_settings()
     sc.overlay.overlay_reconfig();
     sc.ui.apply_colors();
     sc.ui.refresh_compared_spells();
+    sc.ui.refresh_stat_lines();
 
     sc.overlay.ccf_parent:ClearAllPoints();
     sc.overlay.ccf_parent:SetPoint(

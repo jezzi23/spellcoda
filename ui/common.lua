@@ -142,8 +142,10 @@ local function update_calc_list(was_rearranged, loadout, effects, effects_diffed
 
     eval_flags = bit.bor(eval_flags, evaluation_flags.expectation_of_self);
 
-    local diffs, _, diffs_in, diffs_out = sc.loadouts.diffed_stats_diff_format(loadout, effects, effects_diffed);
+    local diffs, _, diffs_in, diffs_out, diffs_short = sc.loadouts.diffed_stats_diff_format(loadout, effects,
+        effects_diffed);
     frame.diffs_txt = diffs;
+    frame.diffs_txt_short = diffs_short;
     -- Before / After are only shown on hover or click and built then, these effects tables keep the latest values
     frame.stats_effects = effects;
     frame.stats_effects_diffed = effects_diffed;
@@ -151,31 +153,32 @@ local function update_calc_list(was_rearranged, loadout, effects, effects_diffed
     frame.diffs_fontstr:SetText(L["Stats"].." |cFF00FF00+"..diffs_in.."|r |cFFFF0000-"..diffs_out.."|r");
 
     if frame.diffs_txt ~= "" then
-        frame.diffs_txt = stat_diffs_included_effects_str(true, true, true)..frame.diffs_txt;
+        local included = stat_diffs_included_effects_str(true, true, true);
+        frame.diffs_txt = included..frame.diffs_txt;
+        if diffs_short then
+            frame.diffs_txt_short = included..diffs_short;
+        end
     end
 
     local better, worse, spells_result = plan_spells_counts(loadout, effects, effects_diffed, eval_flags);
     frame.spells_fontstr:SetText(L["Spells"].." |cFF00FF00+"..better.."|r |cFFFF0000-"..worse.."|r");
 
-    -- a box flashes when its result changed since it was last filled: the stat text, the shown spell numbers; After,
-    -- the planned character, with either
+    -- the sheet flashes with the stat text, spell numbers do not change it
     local stats_changed = frame.shown_stats_result and frame.shown_stats_result ~= frame.diffs_txt;
     local spells_changed = frame.shown_spells_result and frame.shown_spells_result ~= spells_result;
     if stats_changed then
         frame.diffs_area.flash();
+        frame.sheet_area.flash();
     end
     if spells_changed then
         frame.spells_area.flash();
-    end
-    if stats_changed or spells_changed then
-        frame.after_area.flash();
     end
     frame.shown_stats_result = frame.diffs_txt;
     frame.shown_spells_result = spells_result;
 
     -- a shown box tooltip follows the new numbers
     local owner = GameTooltip:IsShown() and GameTooltip:GetOwner();
-    if owner and (owner == frame.diffs_area or owner == frame.before_area or owner == frame.after_area or
+    if owner and (owner == frame.diffs_area or owner == frame.sheet_area or
                   owner == frame.spells_area) then
         owner:GetScript("OnEnter")(owner);
     end

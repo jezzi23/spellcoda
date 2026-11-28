@@ -19,6 +19,7 @@ local make_divider           = ui.make_divider;
 local make_frame_scrollable  = ui.make_frame_scrollable;
 local make_help_icon_tooltip = ui.make_help_icon_tooltip;
 local multi_row_checkbutton  = ui.multi_row_checkbutton;
+local make_dodge_drag_button = ui.make_dodge_drag_button;
 
 local function create_tooltip_spells_frame(pframe)
 
@@ -223,16 +224,16 @@ local function create_tooltip_spells_frame(pframe)
             color_tag = "stat_weights",
         },
         {
-            id = "tooltip_display_resource_regen",
-            txt = L["Resource restoration"],
-            tooltip = sc.overlay.label_handler.overlay_display_resource_regen.tooltip,
-            color_tag = "cost",
-        },
-        {
             id = "tooltip_display_ehp",
             txt = L["Effective health"],
             color_tag = "expectation",
             tooltip = sc.overlay.label_handler.overlay_display_ehp.tooltip,
+        },
+        {
+            id = "tooltip_display_resource_regen",
+            txt = L["Resource restoration"],
+            tooltip = sc.overlay.label_handler.overlay_display_resource_regen.tooltip,
+            color_tag = "cost",
         },
     };
 
@@ -342,7 +343,7 @@ local function create_tooltip_spells_frame(pframe)
     tsfs[#tsfs + 1] = pframe.preset_default_button;
     tsfs[#tsfs + 1] = pframe.preset_detailed_button;
 
-    -- the last two (resource restoration, effective health) are not about a spell's effect, they go below a divider
+    -- the last two (effective health, resource restoration) are not about a spell's effect: below a divider
     local num_separate = 2;
     local groups = { {}, {} };
     for i, v in ipairs(tooltip_components) do
@@ -362,10 +363,16 @@ local function create_tooltip_spells_frame(pframe)
             make_divider(pframe);
             pframe.y_offset = pframe.y_offset - 8;
         end
-        for _, v in pairs(multi_row_checkbutton(group, pframe, 2, tooltip_toggle)) do
+        for _, v in pairs(multi_row_checkbutton(group, pframe, k == 1 and 2 or 1, tooltip_toggle)) do
             tsfs[#tsfs + 1] = v;
         end
     end
+
+    -- clicks on the Dodge icon next to it must not toggle the option
+    local ehp_check = getglobal("__sc_frame_setting_tooltip_display_ehp");
+    local ehp_text = getglobal(ehp_check:GetName().."Text");
+    ehp_check:SetHitRectInsets(0, -ehp_text:GetStringWidth(), 0, 0);
+    make_dodge_drag_button(pframe, ehp_check:GetFrameLevel() + 2):SetPoint("LEFT", ehp_text, "RIGHT", 10, 0);
     pframe.y_offset = pframe.y_offset - 25;
 
     make_frame_scrollable(pframe);
@@ -375,7 +382,7 @@ end
 -- the comparison list at the frame's y offset: icon, name, move up / down and remove per entry, scrolls past num_rows
 local function create_compared_spells_list(pframe)
     local row_height = 16;
-    local num_rows = 5;
+    local num_rows = 6;
     local area = CreateFrame("Frame", nil, pframe);
     area:SetPoint("TOPLEFT", 0, pframe.y_offset);
     area:SetPoint("RIGHT", pframe, "RIGHT", -20, 0);
@@ -462,6 +469,12 @@ local function create_compared_spells_list(pframe)
     local function make_row(r)
         local y = -2 - row_height * (r - 1);
         local row = {};
+
+        row.stripe = area:CreateTexture(nil, "BACKGROUND", nil, 1);
+        row.stripe:SetPoint("TOPLEFT", 8, y);
+        row.stripe:SetPoint("RIGHT", area, "RIGHT", 0, 0);
+        row.stripe:SetHeight(row_height);
+        row.stripe:SetColorTexture(1, 1, 1, 0.06);
 
         row.highlight = area:CreateTexture(nil, "BORDER");
         row.highlight:SetPoint("TOPLEFT", 8, y);
@@ -556,6 +569,7 @@ local function create_compared_spells_list(pframe)
                         v:Show();
                     end
                 end
+                row.stripe:SetShown(i % 2 == 1);
                 row.up:SetEnabled(i > 1);
                 row.down:SetEnabled(i < #entries);
             elseif row then
@@ -682,89 +696,11 @@ local function create_tooltip_items_frame(pframe)
             tooltip = L["Adds/removes some sensible aspects of the tooltip. Examples: Never showing Attack for caster classes or for cloth items; Show wand spell for wands; etc"],
         },
         {
-            id = "tooltip_item_stat_diff",
-            txt = L["Always show stat changes"],
-        },
-        {
             id = "tooltip_item_weapon_skill",
             txt = L["Show skill levels for weapons"],
         },
     }, 2);
 
-    f_txt = label(L["Show stats for:"]);
-    -- named after one of its settings so a profile switch refreshes the shown picks (activate_config)
-    pframe.stat_diff_dd = libDD:Create_UIDropDownMenu("__sc_frame_setting_tooltip_item_stat_diff_tank", pframe);
-    pframe.stat_diff_dd._type = "DropDownMenu";
-    pframe.stat_diff_dd:SetPoint("LEFT", f_txt, "RIGHT", -5, -3);
-    local stat_diff_opts = {
-        { "tooltip_item_stat_diff_tank",   L["Tank"],
-            L["Stamina, health, armor, dodge, parry, block, defense and their ratings, threat"] },
-        { "tooltip_item_stat_diff_melee",  L["Melee"],
-            L["Strength, agility, stamina, health, attack power, critical, hit, haste, expertise, armor penetration, weapon damage and speed, physical damage, threat"] },
-        { "tooltip_item_stat_diff_ranged", L["Ranged"],
-            L["Agility, stamina, health, ranged attack power, critical, hit, haste, armor penetration, weapon damage and speed, physical damage, threat"] },
-        { "tooltip_item_stat_diff_caster", L["Caster"],
-            client_matches(client_flags.forever) and
-                L["Intellect, spirit, stamina, health, mana, spell damage, critical, hit, haste, spell piercing, cost, mana regeneration, threat"] or
-                L["Intellect, spirit, stamina, health, mana, spell damage, critical, hit, haste, spell penetration, cost, mana regeneration, threat"] },
-        { "tooltip_item_stat_diff_healer", L["Healer"],
-            L["Intellect, spirit, stamina, health, mana, healing power, spell critical, haste, cost, mana regeneration, healing done and taken"] },
-        { "tooltip_item_stat_diff_spells", L["Ability effects"],
-            L["Modifications to spells"] },
-    };
-    -- to the right edge; the dropdown template draws about 20 px left of its anchor and 20 px past its width
-    local stat_diff_dd_width = pframe:GetWidth() - 15 - f_txt:GetStringWidth() - 40;
-    pframe.stat_diff_dd.init_func = function()
-        local picked = {};
-        for _, v in ipairs(stat_diff_opts) do
-            if config.settings[v[1]] then
-                picked[#picked + 1] = v[2];
-            end
-        end
-        local dd = pframe.stat_diff_dd;
-        if #picked == 0 then
-            libDD:UIDropDownMenu_SetText(dd, L["None"]);
-        else
-            libDD:UIDropDownMenu_SetText(dd, table.concat(picked, ", "));
-            if dd.Text:GetUnboundedStringWidth() > stat_diff_dd_width - 20 then
-                libDD:UIDropDownMenu_SetText(dd, string.format(L["%d of %d"], #picked, #stat_diff_opts));
-            end
-        end
-    end;
-    libDD:UIDropDownMenu_SetWidth(pframe.stat_diff_dd, stat_diff_dd_width);
-    libDD:UIDropDownMenu_SetInitializeFunction(pframe.stat_diff_dd, function()
-        for _, v in ipairs(stat_diff_opts) do
-            local opt = v[1];
-            libDD:UIDropDownMenu_AddButton(
-                {
-                    text = v[2],
-                    checked = config.settings[opt],
-                    isNotRadio = true,
-                    keepShownOnClick = true,
-                    tooltipTitle = v[2],
-                    tooltipText = v[3],
-                    tooltipOnButton = true,
-                    func = function()
-                        config.settings[opt] = not config.settings[opt];
-                        sc.loadouts.force_update = true;
-                        __sc_frame.calculator_frame.calculator_plan_changed = true;
-                        pframe.stat_diff_dd.init_func();
-                    end
-                }
-            );
-        end
-    end);
-    pframe.stat_diff_dd:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-        GameTooltip:SetText(L["Stats listed in stat changes and the calculator"], 1, 1, 1);
-        GameTooltip:Show();
-    end);
-    pframe.stat_diff_dd:SetScript("OnLeave", function()
-        GameTooltip:Hide();
-    end);
-    pframe.stat_diff_dd.init_func();
-    tifs[#tifs + 1] = pframe.stat_diff_dd;
-    pframe.y_offset = pframe.y_offset - 25;
 
     section(L["Included item changes"]);
     checks({
@@ -944,6 +880,266 @@ local function create_tooltip_items_frame(pframe)
 end
 
 
+local function create_tooltip_stat_lines_frame(pframe)
+    local stat_lines = sc.stat_lines;
+    local boxes = {};
+    local refresh;
+
+    local function available(id)
+        return stat_lines.cell_names[id] ~= nil and
+            not (id == "def.resilience" and client_matches(bit.bor(client_flags.vanilla, client_flags.forever)));
+    end
+
+    local function set_cells(ids, on)
+        for _, id in ipairs(ids) do
+            stat_lines.set_cell(id, on);
+        end
+        sc.loadouts.force_update = true;
+        __sc_frame.calculator_frame.calculator_plan_changed = true;
+        refresh();
+    end
+
+    local function toggle_all(ids)
+        local shown = stat_lines.shown_cells();
+        local all_on = true;
+        for _, id in ipairs(ids) do
+            all_on = all_on and shown[id];
+        end
+        set_cells(ids, not all_on);
+    end
+
+    local header_r, header_g, header_b = 232.0/255, 225.0/255, 32.0/255;
+
+    local function cell_box(id, txt, title)
+        local f = CreateFrame("CheckButton", "__sc_frame_stat_line_"..id:gsub("%.", "_"), pframe,
+            "ChatConfigCheckButtonTemplate");
+        local fstr = getglobal(f:GetName().."Text");
+        fstr:SetText(txt or "");
+        f:SetHitRectInsets(0, txt and -fstr:GetStringWidth() or 0, 0, 0);
+        f:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+            GameTooltip:SetText(title or txt, 1, 0.82, 0);
+            for _, name in ipairs(stat_lines.cell_names[id]) do
+                GameTooltip:AddLine("- "..name, 1, 1, 1);
+            end
+            GameTooltip:Show();
+        end);
+        f:SetScript("OnLeave", function()
+            GameTooltip:Hide();
+        end);
+        f:SetScript("OnClick", function(self)
+            set_cells({id}, self:GetChecked() and true or false);
+        end);
+        boxes[id] = f;
+        return f, txt and fstr:GetStringWidth() or 0;
+    end
+
+    local function toggle_label(text, x, y, ids, title, width, justify)
+        local btn = CreateFrame("Button", nil, pframe);
+        btn:SetPoint("TOPLEFT", x, y);
+        local fstr = btn:CreateFontString(nil, "OVERLAY");
+        fstr:SetFontObject(title and GameFontNormal or GameFontHighlight);
+        fstr:SetText(text);
+        fstr:SetAllPoints(btn);
+        fstr:SetJustifyH(justify or "LEFT");
+        btn:SetSize(width or fstr:GetStringWidth() + 4, 18);
+        local r, g, b = 1, 1, 1;
+        if title then
+            r, g, b = header_r, header_g, header_b;
+        end
+        fstr:SetTextColor(r, g, b);
+        btn:SetScript("OnClick", function()
+            toggle_all(ids);
+        end);
+        btn:SetScript("OnEnter", function(self)
+            if title then
+                fstr:SetTextColor(1, 1, 1);
+            else
+                fstr:SetTextColor(header_r, header_g, header_b);
+            end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+            GameTooltip:SetText(L["Click to toggle all"], 1, 1, 1);
+            GameTooltip:Show();
+        end);
+        btn:SetScript("OnLeave", function()
+            fstr:SetTextColor(r, g, b);
+            GameTooltip:Hide();
+        end);
+        return btn;
+    end
+
+    pframe.y_offset = pframe.y_offset - 8;
+    local header = pframe:CreateFontString(nil, "OVERLAY");
+    header:SetFontObject(GameFontNormal);
+    header:SetPoint("TOPLEFT", 5, pframe.y_offset);
+    local defaults_btn = CreateFrame("Button", nil, pframe, "UIPanelButtonTemplate");
+    defaults_btn:SetPoint("TOPRIGHT", pframe, "TOPRIGHT", -20, pframe.y_offset + 4);
+    defaults_btn:SetSize(120, 22);
+    defaults_btn:SetText(L["Class defaults"]);
+    defaults_btn:SetScript("OnClick", function()
+        stat_lines.reset_class_cells();
+        sc.loadouts.force_update = true;
+        __sc_frame.calculator_frame.calculator_plan_changed = true;
+        refresh();
+    end);
+    pframe.y_offset = pframe.y_offset - 22;
+    make_divider(pframe);
+    pframe.y_offset = pframe.y_offset - 2;
+
+    local box_x = 10;
+    local box_width = 24;
+    local right_edge = pframe:GetWidth() - 8;
+
+    local function section_title(title, ids)
+        pframe.y_offset = pframe.y_offset - 2;
+        toggle_label(title, 0, pframe.y_offset, ids, true);
+        pframe.y_offset = pframe.y_offset - 18;
+    end
+
+    local lists = {};
+    local list_col_w = 0;
+    local function list_block(title, prefix, keys, labels)
+        local list = { title = title, entries = {}, ids = {} };
+        for _, k in ipairs(keys) do
+            local id = prefix..k;
+            if available(id) then
+                local f, w = cell_box(id, labels[k]);
+                list.entries[#list.entries + 1] = f;
+                list.ids[#list.ids + 1] = id;
+                list_col_w = math.max(list_col_w, box_width + w + 8);
+            end
+        end
+        lists[#lists + 1] = list;
+        return list;
+    end
+
+    local function place_list(list)
+        section_title(list.title, list.ids);
+        local per_row = math.max(1, math.floor((right_edge - box_x) / list_col_w));
+        if list.per_row then
+            per_row = math.min(per_row, list.per_row);
+        end
+        for i, f in ipairs(list.entries) do
+            local col = (i - 1) % per_row;
+            f:SetPoint("TOPLEFT", box_x + col * list_col_w, pframe.y_offset);
+            if col == per_row - 1 or i == #list.entries then
+                pframe.y_offset = pframe.y_offset - 20;
+            end
+        end
+        pframe.y_offset = pframe.y_offset - 2;
+    end
+
+    -- Strength, Agility, Intellect on one row, Stamina and Spirit below
+    local attributes = list_block(L["Attributes"], "attr.", { "str", "agi", "int", "sta", "spi" }, {
+        str = L["Strength"], agi = L["Agility"], sta = L["Stamina"], int = L["Intellect"], spi = L["Spirit"],
+    });
+    attributes.per_row = 3;
+    local resources = list_block(L["Resources"], "res.", stat_lines.resource_keys, {
+        health = L["Health"], mana = L["Mana"], regen = L["Mana regen"],
+    });
+    local defense = list_block(L["Defense"], "def.", stat_lines.defense_keys, {
+        armor = L["Armor"], defense = L["Defense"], dodge = L["Dodge"], parry = L["Parry"], block = L["Block"],
+        resilience = L["Resilience"],
+    });
+    local abilities = list_block(L["Abilities"], "abil.", stat_lines.ability_keys, {
+        mod = L["Modifiers"], hit = L["Hit"], crit = L["Critical"], cost = L["Cost"], cast = L["Cast time"],
+        dur = L["Duration"], threat = L["Threat"],
+    });
+
+    place_list(attributes);
+    place_list(resources);
+
+    local row_labels = {
+        power = L["Power"], hit = L["Hit"], crit = L["Critical"], haste = L["Haste"], pen = L["Penetration"],
+        dmg = L["Damage %"], threat = L["Threat"], weapon = L["Weapon"], procs = L["On hit procs"],
+    };
+    local column_labels = { melee = L["Melee"], ranged = L["Ranged"], spell = L["Spell damage"], heal = L["Healing"] };
+    local measure = pframe:CreateFontString(nil, "OVERLAY");
+    measure:SetFontObject(GameFontHighlight);
+    local function text_width(text)
+        measure:SetText(text);
+        return measure:GetStringWidth();
+    end
+    local label_w = 0;
+    for _, row in ipairs(stat_lines.rows) do
+        label_w = math.max(label_w, text_width(row_labels[row[1]]));
+    end
+    local col_w = 60;
+    for _, col in ipairs(stat_lines.columns) do
+        col_w = math.max(col_w, text_width(column_labels[col]) + 12);
+    end
+    measure:SetText("");
+    local col_x0 = math.max(box_x + label_w + 16, right_edge - #stat_lines.columns * col_w);
+    local row_h = 17;
+
+    pframe.y_offset = pframe.y_offset - 4;
+    local header_y = pframe.y_offset;
+    pframe.y_offset = pframe.y_offset - 20;
+    local all_ids = {};
+    local column_ids = {};
+    for _, col in ipairs(stat_lines.columns) do
+        column_ids[col] = {};
+    end
+    local n_rows = 0;
+    for _, row in ipairs(stat_lines.rows) do
+        local row_ids = {};
+        local row_boxes = {};
+        for c, col in ipairs(stat_lines.columns) do
+            local id = col.."."..row[1];
+            if row[2][col] and available(id) then
+                local f = cell_box(id, nil, column_labels[col]..": "..row_labels[row[1]]);
+                f:SetPoint("TOPLEFT", col_x0 + (c - 1) * col_w + col_w / 2 - box_width / 2, pframe.y_offset + 3);
+                row_ids[#row_ids + 1] = id;
+                all_ids[#all_ids + 1] = id;
+                column_ids[col][#column_ids[col] + 1] = id;
+            end
+        end
+        if #row_ids > 0 then
+            n_rows = n_rows + 1;
+            if n_rows % 2 == 1 then
+                local stripe = pframe:CreateTexture(nil, "BACKGROUND");
+                stripe:SetColorTexture(1, 1, 1, 0.06);
+                stripe:SetSize(col_x0 + #stat_lines.columns * col_w - (box_x - 4), row_h);
+                stripe:SetPoint("TOPLEFT", box_x - 4, pframe.y_offset);
+            end
+            toggle_label(row_labels[row[1]], box_x, pframe.y_offset, row_ids, false, col_x0 - box_x);
+            pframe.y_offset = pframe.y_offset - row_h;
+        end
+    end
+    toggle_label(L["Combat"], 0, header_y, all_ids, true);
+    for c, col in ipairs(stat_lines.columns) do
+        toggle_label(column_labels[col], col_x0 + (c - 1) * col_w, header_y, column_ids[col], false, col_w, "CENTER");
+    end
+    pframe.y_offset = pframe.y_offset - 4;
+
+    place_list(defense);
+    place_list(abilities);
+
+    pframe.y_offset = pframe.y_offset - 2;
+    make_divider(pframe);
+    pframe.y_offset = pframe.y_offset - 4;
+    multi_row_checkbutton({
+        {
+            id = "tooltip_item_stat_diff",
+            txt = L["Always show stat changes"],
+            tooltip = L["Item tooltips show stat changes without holding SHIFT"],
+        },
+    }, pframe, 1, nil, 5);
+
+    refresh = function()
+        local shown = stat_lines.shown_cells();
+        for id, f in pairs(boxes) do
+            f:SetChecked(shown[id]);
+        end
+        local class_name = UnitClass("player");
+        header:SetText(string.format("|c%s%s|r  |cFFA9A9A9%s: %s|r",
+            RAID_CLASS_COLORS[sc.class].colorStr, class_name, L["Profile"], config.active_profile_name or ""));
+    end;
+    pframe.on_show = refresh;
+    ui.refresh_stat_lines = refresh;
+
+end
+
 local function create_sw_ui_tooltip_frame(pframe)
 
     pframe.y_offset = pframe.y_offset - 5;
@@ -961,9 +1157,19 @@ local function create_sw_ui_tooltip_frame(pframe)
     create_subtabs(pframe, {
         {"spells", L["Spells"]},
         {"items", L["Items"]},
+        {"stat_lines", L["Stat lines"]},
     });
     create_tooltip_spells_frame(pframe.spells);
     create_tooltip_items_frame(pframe.items);
+    create_tooltip_stat_lines_frame(pframe.stat_lines);
+    pframe.stat_lines_tab:HookScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+        GameTooltip:SetText(L["Stats listed in item tooltip stat changes and the calculator"], 1, 1, 1, 1, true);
+        GameTooltip:Show();
+    end);
+    pframe.stat_lines_tab:HookScript("OnLeave", function()
+        GameTooltip:Hide();
+    end);
     pframe.spells_tab:Click();
 end
 

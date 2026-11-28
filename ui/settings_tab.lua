@@ -150,8 +150,8 @@ local function create_sw_ui_settings_frame(pframe)
         },
         {
             id = "general_average_proc_effects",
-            txt = L["Average out proc effects"],
-            tooltip = L["Removes many proc effects and instead averages out its effect, giving more meaning to the spell evaluation. Example: Nature's grace modifies expected cast time to scale with crit, giving crit higher stat weight. Clearcasts etc."],
+            txt = L["Average out class proc effects"],
+            tooltip = L["Instead of counting these buffs only while they are up, their effect is averaged into every evaluation, so the stats that trigger them get their real value. Example: Nature's Grace lowers the expected cast time by your chance to crit, Clearcasting lowers the expected cost."],
             func = function(self)
 
                 if self:GetChecked() then
@@ -180,7 +180,7 @@ local function create_sw_ui_settings_frame(pframe)
         },
         {
             id = "general_on_hit_procs",
-            txt = L["On hit proc effects"],
+            txt = L["On hit procs (items, enchants, seals)"],
             tooltip = L["Adds the expected damage of on hit effects to attacks and the abilities that trigger them. Example: Windfury, Hand of Justice, chance on hit weapons and weapon enchants."],
         },
     };

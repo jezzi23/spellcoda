@@ -1,7 +1,5 @@
 local _, sc = ...;
 
-local L                                 = sc.L;
-
 local attr                              = sc.attr;
 local classes                           = sc.classes;
 local powers                            = sc.powers;
@@ -29,7 +27,6 @@ local cat_form_ap_per_agi               = sc.cat_form_ap_per_agi;
 local armor_per_agi                     = sc.scaling.armor_per_agi;
 local block_value_per_str               = sc.scaling.block_value_per_str;
 local cr_weights                        = sc.scaling.cr_weights;
-local spirit_mana_regen                 = sc.scaling.spirit_mana_regen;
 
 local write_item_info_from_link         = sc.utils.write_item_info_from_link;
 local request_item_data                 = sc.utils.request_item_data;
@@ -39,9 +36,14 @@ local is_secret                         = sc.utils.is_secret;
 local any_secret                        = sc.utils.any_secret;
 local secret_or                         = sc.utils.secret_or;
 local client_flags                      = sc.client_flags;
-local spell_lname                       = sc.utils.spell_lname;
 
 local config                            = sc.config;
+local add_field_line                    = sc.stat_lines.add_field_line;
+local format_changes                    = sc.stat_lines.format_changes;
+local format_sheet                      = sc.stat_lines.format_sheet;
+local sheet_text                        = sc.stat_lines.sheet_text;
+local stat_lines_shown_cells            = sc.stat_lines.shown_cells;
+local stat_lines_settings_id            = sc.stat_lines.settings_id;
 
 --------------------------------------------------------------------------------
 local loadouts = {};
@@ -330,7 +332,6 @@ local effects_additive = {
         "phys_crit_forced",
         "phys_crit_mod",
         "phys_hit",
-        "phys_dmg",
         "phys_dmg_flat",
         "skill_flat",
         "target_res",
@@ -360,21 +361,17 @@ local effects_additive = {
         "rap_flat",
         "rap_mod",
         "rap_mod_forced",
-        "cost_mod",
         "phys_hit",
         "phys_crit",
         "phys_crit_forced",
         "offhand_mod",
         "extra_hits_flat",
-        "skill",
         "class_misc",
         "base_res_phys_flat",
         "base_res_phys_mod",
         "base_res_phys_mod_forced",
         "res_phys_mod",
         "res_phys_mod_forced",
-        "base_phys_res_flat",
-        "phys_res_flat",
         "block",
         "block_value_flat",
         "dodge",
@@ -694,957 +691,6 @@ local function effects_differ(a, b)
     return false;
 end
 
-local function add_field_line(info, val, txt, diff, perc, mul, raw, extras)
-    local red = (diff and "|cFFC32C0B") or "|cFFFFFFFF";
-    local green = (diff and "|cFF21B915") or "|cFFFFFFFF";
-    local stat_color = "|cFFFFD100";
-
-    if diff and extras then
-        stat_color = "|cFFB5B09B";
-    end
-
-    local force_add = false;
-    local val_str;
-    if type(val) == "number" then
-        -- rounding from undone multiplicative effects, as in effects_differ; the raw dump stays exact
-        if not raw and
-            ((mul and math.abs(val - 1) <= 0.000000001) or (not mul and math.abs(val) <= 0.000000001)) then
-            return false;
-        end
-        local perc_symbol = "";
-        local val_disp = val;
-        if not raw then
-            if mul then
-                perc = true;
-                val_disp = val_disp - 1;
-            end
-            if perc then
-                val_disp = 100*val_disp;
-                perc_symbol = "%";
-            end
-        end
-        local abs_val = math.abs(val_disp);
-        if abs_val == math.floor(abs_val) then
-            val_str = string.format("%.0f", abs_val)
-        else
-            val_str = string.format("%.3f", abs_val):gsub("%.?0+$", "");
-        end
-
-        val_str = val_str..perc_symbol;
-    elseif type(val) == "string" then
-        val_str = val;
-        force_add = true;
-    else
-        return false;
-    end
-
-    if force_add or (mul and val > 1) or (not mul and val > 0) then
-        info.num_in = info.num_in + 1;
-        info.str = info.str..string.format("%s+ %s|r %s%s|r\n", green, val_str, stat_color, txt);
-        return true;
-    elseif (mul and val < 1) or (not mul and val < 0) then
-        info.num_out = info.num_out + 1;
-        info.str = info.str..string.format("%s-  %s|r %s%s|r\n", red, val_str, stat_color, txt);
-        return true;
-    end
-end
-
-local stat_diff_flags = {
-
-    tank          = bit.lshift(1, 1),
-    melee         = bit.lshift(1, 2),
-    ranged        = bit.lshift(1, 3),
-    caster        = bit.lshift(1, 4),
-    healer        = bit.lshift(1, 5),
-
-    spells        = bit.lshift(1, 6),
-};
-
-local lnames;
-local function init_lnames()
-    -- this function is called once after localized strings have been loaded
-
-    lnames = {
-        schools =
-            {L["Physical"], L["Holy"], L["Fire"], L["Nature"], L["Frost"], L["Shadow"], L["Arcane"]},
-        spell_pen = client_matches(client_flags.forever) and L["Spell piercing"] or L["Spell penetration"],
-        school_spell_pen = client_matches(client_flags.forever) and L["spell piercing"] or L["spell penetration"],
-        on_hit = {
-            {"any", L["On hit"], bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)},
-            {"mh", L["On hit, main hand"], stat_diff_flags.melee},
-            {"oh", L["On hit, off hand"], stat_diff_flags.melee},
-            {"ranged", L["On hit, ranged"], stat_diff_flags.ranged},
-        },
-        attributes =
-            {L["Strength"], L["Agility"], L["Stamina"], L["Intellect"], L["Spirit"]},
-            -- some selected ability fields to show
-        ability_additive_fields = {      -- lname,                      -is percentage
-            {"threat",                  L["Threat"],                        true},
-            {"threat_flat",             L["Threat"],                            },
-            {"crit",                    L["Critical"],                      true},
-            {"ignore_cant_crit",        L["Can crit"],                          },
-            {"effect_mod",              L["Effect modifier"],               true},
-            {"effect_mod_flat",         L["Effect modifier"],                   },
-            {"effect_mod_ot",           L["Periodic effect modifier"],      true},
-            {"effect_mod_ot_flat",      L["Periodic effect modifier"],          },
-            {"base_mod",                L["Base effect modifier"],          true},
-            {"base_mod_flat",           L["Base effect modifier"],              },
-            {"base_mod_ot",             L["Base periodic effect modifier"], true},
-            {"base_mod_ot_flat",        L["Base periodic effect modifier"],     },
-            {"cast_mod_flat",           L["Cast time modifier"],                },
-            {"cast_mod",                L["Cast time modifier"],            true},
-            {"extra_dur_flat",          L["Extra duration"],                    },
-            {"extra_dur",               L["Extra duration"],                    },
-            {"extra_tick_time_flat",    L["Extra tick time"],                   },
-            {"cost_mod",                L["Cost modifier"],                 true},
-            {"cost_mod_flat",           L["Cost modifier"],                     },
-            {"crit_mod",                L["Critical damage modifier"],      true},
-            {"hit",                     L["Hit"],                           true},
-            {"sp_flat",                 L["Spell power"],                       },
-            {"flat_add",                L["Additional effect"],                 },
-            {"flat_add_ot",             L["Additional periodic effect"],        },
-            {"refund",                  L["Refunds"],                           },
-            {"coef_mod",                L["Coefficient modifier"],          true},
-            {"coef_mod_flat",           L["Coefficient modifier"],              },
-            {"effect_mod_only_heal",    L["Healing modifier"],              true},
-            {"jumps_flat",              L["Extra jumps"],                       },
-            {"jump_amp",                L["Jump amplifier"],                true},
-            {"gcd_flat",                L["GCD modifier"],                      },
-            {"gcd",                     L["GCD modifier"],                  true},
-        },
-        ability_multiplicative_fields = { -- lname,                  -is percentage
-            {"vuln_mod",                  L["Threat"],                      true},
-            {"cast_haste",                L["Spell cast haste"],            true},
-            {"heal_mod",                  L["Healing modifier"],            true},
-            {"cost_mod",                  L["Cost modifier"],               true},
-        };
-    };
-    local rating_lnames = {
-        [combat_ratings.CR_DEFENSE_SKILL                    ]   = { L["Defense skill rating"],              stat_diff_flags.tank, true},
-        [combat_ratings.CR_DODGE                            ]   = { L["Dodge rating"],                      stat_diff_flags.tank },
-        [combat_ratings.CR_PARRY                            ]   = { L["Parry rating"],                      stat_diff_flags.tank },
-        [combat_ratings.CR_BLOCK                            ]   = { L["Block rating"],                      stat_diff_flags.tank },
-        [combat_ratings.CR_HASTE_SPELL                      ]   = { L["Spell haste rating"],                bit.bor(stat_diff_flags.caster, stat_diff_flags.healer) },
-        [combat_ratings.CR_HASTE_MELEE                      ]   = { L["Melee haste rating"],                stat_diff_flags.melee },
-        [combat_ratings.CR_HASTE_RANGED                     ]   = { L["Ranged haste rating"],               stat_diff_flags.ranged },
-        [combat_ratings.CR_HIT_SPELL                        ]   = { L["Spell hit rating"],                  stat_diff_flags.caster },
-        [combat_ratings.CR_HIT_MELEE                        ]   = { L["Melee hit rating"],                  stat_diff_flags.melee },
-        [combat_ratings.CR_HIT_RANGED                       ]   = { L["Ranged hit rating"],                 stat_diff_flags.ranged },
-        [combat_ratings.CR_CRIT_SPELL                       ]   = { L["Spell critical rating"],             bit.bor(stat_diff_flags.caster, stat_diff_flags.healer) },
-        [combat_ratings.CR_CRIT_MELEE                       ]   = { L["Melee critical rating"],             stat_diff_flags.melee },
-        [combat_ratings.CR_CRIT_RANGED                      ]   = { L["Ranged critical rating"],            stat_diff_flags.ranged },
-        [combat_ratings.CR_EXPERTISE                        ]   = { L["Expertise critical rating"],         stat_diff_flags.melee, true},
-
-        [combat_ratings.CR_RESILIENCE_CRIT_TAKEN            ]   = { L["Resilience critical chance rating"], bit.bnot(0) },
-        [combat_ratings.CR_RESILIENCE_PLAYER_DAMAGE_TAKEN   ]   = { L["Resilience critical damage rating"], bit.bnot(0) },
-    };
-    for k, _ in pairs(ratings) do
-        ratings[k][3] =  rating_lnames[ratings[k][1]][1] or ""; -- lname
-        ratings[k][4] =  rating_lnames[ratings[k][1]][2]; -- stat_diff_flags
-        ratings[k][5] =  rating_lnames[ratings[k][1]][3]; -- is percentage
-    end
-
-    -- shown as one line when every member has the same rating and weight
-    local rating_groups = {
-        {L["Hit rating"],       {combat_ratings.CR_HIT_MELEE, combat_ratings.CR_HIT_RANGED, combat_ratings.CR_HIT_SPELL}},
-        {L["Critical rating"],  {combat_ratings.CR_CRIT_MELEE, combat_ratings.CR_CRIT_RANGED, combat_ratings.CR_CRIT_SPELL}},
-        {L["Haste rating"],     {combat_ratings.CR_HASTE_MELEE, combat_ratings.CR_HASTE_RANGED, combat_ratings.CR_HASTE_SPELL}},
-    };
-    local rating_by_type = {};
-    for _, v in ipairs(ratings) do
-        rating_by_type[v[1]] = v;
-    end
-    lnames.rating_group_of = {};
-    for _, g in ipairs(rating_groups) do
-        local group = {lname = g[1], members = {}, flags = 0};
-        for _, cr in ipairs(g[2]) do
-            group.members[#group.members + 1] = rating_by_type[cr];
-            group.flags = bit.bor(group.flags, rating_by_type[cr][4]);
-            lnames.rating_group_of[cr] = group;
-        end
-    end
-end
-
-local stat_diff_flag_options = {
-    tooltip_item_stat_diff_tank             = "tank",
-    tooltip_item_stat_diff_melee            = "melee",
-    tooltip_item_stat_diff_ranged           = "ranged",
-    tooltip_item_stat_diff_caster           = "caster",
-    tooltip_item_stat_diff_healer           = "healer",
-    tooltip_item_stat_diff_spells           = "spells",
-};
-local attribute_flags_req = {
-    stat_diff_flags.melee,                                   -- str
-    bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged),  -- agi
-    bit.bor(
-        stat_diff_flags.tank,
-        stat_diff_flags.melee,
-        stat_diff_flags.ranged,
-        stat_diff_flags.caster,
-        stat_diff_flags.healer),                            -- stam
-    bit.bor(stat_diff_flags.caster, stat_diff_flags.healer), -- int
-    bit.bor(stat_diff_flags.caster, stat_diff_flags.healer)  -- spirit
-};
-
-local function human_friendly_fields(loadout, effects, is_diff, loadout_data, effects_before, effects_after)
-    -- if is_diff is true, loadout should be nil and effects is the diffed effects
-    -- loadout_data, effects_before and effects_after need to be supplied for edge cases when doing diffs
-
-    local stat_flags = 0;
-    for conf_key, flag_name in pairs(stat_diff_flag_options) do
-        if config.settings[conf_key] then
-            stat_flags = bit.bor(stat_flags, stat_diff_flags[flag_name]);
-        end
-    end
-
-
-    local cr_scaling = loadout_data.cr_scaling;
-
-    local info = {
-        str = "",
-        num_in = 0;
-        num_out = 0;
-    };
-
-    if stat_flags == 0 then
-
-        return info.str, info.num_in + info.num_out, info.num_in, info.num_out;
-    end
-
-    -- When diffed, attributes and ratings are grayed out a bit as to indicate
-    -- that when e.g. +1 agility is not additive to the consequent + crit%, dodge% and armor which is also displayed
-
-    ---------------------------------
-    --- Attributes
-    ---------------------------------
-    for i, v in ipairs(lnames.attributes) do
-        if bit.band(stat_flags, attribute_flags_req[i]) ~= 0 then
-            local val = ((loadout and loadout.stats[i]) or 0)
-                +
-                effects.by_attr.stat_flat[i];
-
-            add_field_line(info, val, v, is_diff, nil, nil, nil, true);
-        end
-    end
-    ---------------------------------
-    --- Ratings
-    ---------------------------------
-    local function rating_val(v)
-        return ((loadout and loadout[v[2]]) or 0) + effects.raw[v[2].."_flat"];
-    end
-    local function add_rating_line(val, rating_type, lname, is_percentage)
-        local val_resolved = val/(cr_scaling * cr_weights[rating_type]);
-        if is_percentage then
-            add_field_line(info, val, string.format("(%s%%) %s",string.format("%.2f", val_resolved):gsub("%.?0+$", ""), lname), is_diff, nil, nil, nil, true);
-        else
-            add_field_line(info, val, string.format("(%.1f) %s", val_resolved, lname), is_diff, nil, nil, nil, true);
-        end
-    end
-    local groups_done = {};
-    for _, v in ipairs(ratings) do
-        local group = lnames.rating_group_of[v[1]];
-        local merged = false;
-        if group and not groups_done[group] then
-            local first = group.members[1];
-            local val = rating_val(first);
-            merged = true;
-            for _, m in ipairs(group.members) do
-                if rating_val(m) ~= val or cr_weights[m[1]] ~= cr_weights[first[1]] then
-                    merged = false;
-                    break;
-                end
-            end
-            if merged then
-                groups_done[group] = true;
-                if bit.band(stat_flags, group.flags) ~= 0 then
-                    add_rating_line(val, first[1], group.lname, not first[5]);
-                end
-            end
-        end
-        if not merged and not groups_done[group or 0] and bit.band(stat_flags, v[4]) ~= 0 then
-            add_rating_line(rating_val(v), v[1], v[3], not v[5]);
-        end
-    end
-
-    ---------------------------------
-    --- Attack power
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.melee) ~= 0 then
-        local val = ((loadout and loadout.ap) or 0)
-            +
-            effects.raw.ap_flat;
-        add_field_line(info, val, L["Melee attack power"], is_diff);
-    end
-    ---------------------------------
-    --- Ranged attack power
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.ranged) ~= 0 then
-        local val = ((loadout and loadout.rap) or 0)
-            +
-            effects.raw.rap_flat;
-        add_field_line(info, val, L["Ranged attack power"], is_diff);
-    end
-    ---------------------------------
-    --- Health
-    ---------------------------------
-    if bit.band(stat_flags,
-        bit.bor(
-            stat_diff_flags.tank,
-            stat_diff_flags.melee,
-            stat_diff_flags.ranged,
-            stat_diff_flags.caster,
-            stat_diff_flags.healer)
-        ) ~= 0 then
-        local val = ((loadout and loadout.player_hp_max) or 0)
-            +
-            effects.raw.hp_flat;
-        add_field_line(info, val, L["Health"], is_diff);
-    end
-    ---------------------------------
-    --- Mana
-    ---------------------------------
-    if bit.band(stat_flags, bit.bor(stat_diff_flags.caster, stat_diff_flags.healer)) ~= 0 then
-        local val = ((loadout and loadout.resources_max[powers.mana]) or 0)
-            +
-            effects.raw.mana;
-        add_field_line(info, val, L["Mana"], is_diff);
-    end
-    ---------------------------------
-    --- Armor
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.tank) ~= 0 then
-        local val = ((loadout and loadout.armor) or 0)
-            +
-            effects.by_school.res_flat[schools.physical];
-        add_field_line(info, val, L["Armor"], is_diff);
-    end
-    ---------------------------------
-    --- Spell damage
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.caster) ~= 0 then
-        local can_compact = true;
-        local school_prev;
-        for i = 2, 7 do
-            local val = ((loadout and loadout.spell_dmg_by_school[i]) or 0)
-                +
-                effects.by_school.sp_dmg_flat[i];
-                school_prev = school_prev or val;
-
-            if val ~= school_prev then
-                can_compact = false;
-                break;
-            end
-        end
-        if not can_compact then
-            for i = 2, 7 do
-                local val = ((loadout and loadout.spell_dmg_by_school[i]) or 0)
-                    +
-                    effects.by_school.sp_dmg_flat[i];
-                add_field_line(info, val, lnames.schools[i].." "..L["spell damage"], is_diff);
-            end
-        else
-            add_field_line(info, school_prev, L["Spell damage"], is_diff);
-        end
-    end
-
-    ---------------------------------
-    --- Healing power
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.healer) ~= 0 then
-        local val = ((loadout and loadout.healing_power) or 0)
-            +
-            effects.raw.healing_power_flat;
-        add_field_line(info, val, L["Healing power"], is_diff);
-    end
-
-    ---------------------------------
-    --- Melee crit
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.melee) ~= 0 then
-        local val = ((loadout and loadout.melee_crit) or 0)
-            +
-            0.01*effects.raw.melee_crit_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_CRIT_MELEE])
-            +
-            effects.raw.phys_crit_forced;
-        add_field_line(info, val, L["Physical critical chance"], is_diff, true);
-    end
-    ---------------------------------
-    --- Ranged crit
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.ranged) ~= 0 then
-        local val = ((loadout and loadout.ranged_crit) or 0)
-            +
-            0.01*effects.raw.ranged_crit_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_CRIT_RANGED])
-            +
-            effects.raw.phys_crit_forced;
-        add_field_line(info, val, L["Ranged critical chance"], is_diff, true);
-    end
-    ---------------------------------
-    --- Spell crit
-    ---------------------------------
-
-    if bit.band(stat_flags, bit.bor(stat_diff_flags.caster, stat_diff_flags.healer)) ~= 0 then
-        local can_compact = true;
-        local school_prev;
-        for i = 2, 7 do
-
-            local val = ((loadout and loadout.spell_crit_by_school[i]) or 0)
-                +
-                effects.by_school.crit_forced[i]
-                +
-                0.01*effects.raw.spell_crit_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_CRIT_SPELL]);
-
-            school_prev = school_prev or val;
-
-            if val ~= school_prev then
-                can_compact = false;
-                break;
-            end
-        end
-        if not can_compact then
-            for i = 2, 7 do
-                local val = ((loadout and loadout.spell_crit_by_school[i]) or 0)
-                    +
-                    effects.by_school.crit_forced[i]
-                    +
-                    0.01*effects.raw.spell_crit_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_CRIT_SPELL]);
-                add_field_line(info, val, lnames.schools[i].." "..L["spell critical chance"], is_diff, true);
-            end
-        else
-            add_field_line(info, school_prev, L["Spell critical chance"], is_diff, true);
-        end
-    end
-
-    ---------------------------------
-    --- Melee hit
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.melee) ~= 0 then
-        local val = 
-            effects.raw.phys_hit
-            +
-            0.01*(((loadout and loadout.melee_hit_rating) or 0) + effects.raw.melee_hit_rating_flat)/
-                (cr_scaling * cr_weights[combat_ratings.CR_HIT_MELEE]);
-        add_field_line(info, val, L["Melee hit chance"], is_diff, true);
-    end
-    ---------------------------------
-    --- Ranged hit
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.ranged) ~= 0 then
-        local val =
-            effects.raw.phys_hit
-            +
-            0.01*(((loadout and loadout.ranged_hit_rating) or 0) + effects.raw.ranged_hit_rating_flat)/
-                (cr_scaling * cr_weights[combat_ratings.CR_HIT_RANGED]);
-        add_field_line(info, val, L["Ranged hit chance"], is_diff, true);
-    end
-    ---------------------------------
-    --- Spell hit
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.caster) ~= 0 then
-        local can_compact = true;
-        local school_prev;
-        for i = 2, 7 do
-
-            local val = ((loadout and loadout.spell_dmg_hit_by_school[i]) or 0)
-                +
-                effects.by_school.spell_hit[i]
-                +
-                0.01*(((loadout and loadout.spell_hit_rating) or 0) + effects.raw.spell_hit_rating_flat)/
-                    (cr_scaling * cr_weights[combat_ratings.CR_HIT_SPELL]);
-
-            school_prev = school_prev or val;
-
-            if val ~= school_prev then
-                can_compact = false;
-                break;
-            end
-        end
-        if not can_compact then
-            for i = 2, 7 do
-                local val = ((loadout and loadout.spell_dmg_hit_by_school[i]) or 0)
-                    +
-                    effects.by_school.spell_hit[i]
-                    +
-                    0.01*(((loadout and loadout.spell_hit_rating) or 0) + effects.raw.spell_hit_rating_flat)/
-                        (cr_scaling * cr_weights[combat_ratings.CR_HIT_SPELL]);
-                add_field_line(info, val, lnames.schools[i].." "..L["spell hit chance"], is_diff, true);
-            end
-        else
-            add_field_line(info, school_prev, L["Spell hit chance"], is_diff, true);
-        end
-    end
-
-    ---------------------------------
-    --- Melee haste multiplier
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.melee) ~= 0 then
-        local haste_mul_from_rating = 1.0 +
-            0.01*(((loadout and loadout.melee_haste_rating) or 0)+effects.raw.melee_haste_rating_flat)/
-                (cr_scaling * cr_weights[combat_ratings.CR_HASTE_MELEE]);
-        add_field_line(info,
-            effects.mul.raw.melee_haste*effects.mul.raw.melee_haste_forced*haste_mul_from_rating,
-            L["Melee haste"], is_diff, true, true);
-    end
-    ---------------------------------
-    --- Ranged haste multiplier
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.ranged) ~= 0 then
-        local haste_mul_from_rating = 1.0 +
-            0.01*(((loadout and loadout.ranged_haste_rating) or 0)+effects.raw.ranged_haste_rating_flat)/
-                (cr_scaling * cr_weights[combat_ratings.CR_HASTE_RANGED]);
-        add_field_line(info,
-            effects.mul.raw.ranged_haste*effects.mul.raw.ranged_haste_forced*haste_mul_from_rating,
-            L["Ranged haste"], is_diff, true, true);
-    end
-    ---------------------------------
-    --- Spell haste multiplier
-    ---------------------------------
-    if bit.band(stat_flags, bit.bor(stat_diff_flags.caster, stat_diff_flags.healer)) ~= 0 then
-        local haste_mul_from_rating = 1.0 +
-            0.01*(((loadout and loadout.spell_haste_rating) or 0)+effects.raw.spell_haste_rating_flat)/
-                (cr_scaling * cr_weights[combat_ratings.CR_HASTE_SPELL]);
-        add_field_line(info,
-            effects.mul.raw.cast_haste*haste_mul_from_rating,
-            L["Spell cast haste"], is_diff, true, true);
-    end
-    ---------------------------------
-    --- Mana regen
-    ---------------------------------
-    if bit.band(stat_flags, bit.bor(stat_diff_flags.caster, stat_diff_flags.healer)) ~= 0 then
-        -- Don't show mp5 stat since it's already baked into other field
-        --add_field_line(info, effects.raw.mp5_flat, L["mana every 5 sec"], is_diff);
-        add_field_line(info, effects.raw.regen_while_casting, L["Mana regen while casting"], is_diff, true);
-
-        -- Some problems here: in tbc spirit_mana_regen is non linear and cannot be used on simple diff
-        -- split into two cases if we are doing diff or not
-
-        local mp1_casting;
-        local mp1_not_casting;
-        if is_diff then
-            -- must do mana regen calc from the ground up with
-            local spirit = loadout_data.stats[attr.spirit];
-            local intellect = loadout_data.stats[attr.intellect];
-
-            local spirit_before = spirit + effects_before.by_attr.stat_flat[attr.spirit];
-            local intellect_before = intellect + effects_before.by_attr.stat_flat[attr.intellect];
-
-            local spirit_after = spirit + effects_after.by_attr.stat_flat[attr.spirit];
-            local intellect_after = intellect + effects_after.by_attr.stat_flat[attr.intellect];
-
-            local mp2_not_casting_before = spirit_mana_regen(spirit_before, intellect_before);
-            local mp2_not_casting_after = spirit_mana_regen(spirit_after, intellect_after);
-
-            local mp2_not_casting = mp2_not_casting_after - mp2_not_casting_before;
-
-            local mp5 = effects.raw.mp5_flat
-                +
-                effects.raw.mana * effects_after.raw.perc_max_mana_as_mp5
-                +
-                effects.by_attr.stat_flat[attr.intellect] * effects_after.raw.mp5_from_int_mod;
-
-            mp1_casting =
-                0.2 * mp5 +
-                0.5 * mp2_not_casting * math.max(0, math.min(1.0, effects_after.raw.regen_while_casting));
-            mp1_not_casting =
-                0.2 * mp5 +
-                0.5 * mp2_not_casting;
-
-        else
-            local spirit = loadout.stats[attr.spirit] + effects.by_attr.stat_flat[attr.spirit];
-            local intellect = loadout.stats[attr.intellect] + effects.by_attr.stat_flat[attr.intellect];
-            local mp2_not_casting = spirit_mana_regen(spirit, intellect);
-
-            local mp5 = effects.raw.mp5_flat
-                +
-                (effects.raw.mana + loadout.resources_max[powers.mana])  * effects.raw.perc_max_mana_as_mp5
-                +
-                effects.raw.mp5_from_int_mod * intellect;
-
-            mp1_casting =
-                0.2 * mp5 +
-                0.5 * mp2_not_casting * math.max(0, math.min(1.0, effects.raw.regen_while_casting));
-            mp1_not_casting =
-                0.2 * mp5 +
-                0.5 * mp2_not_casting;
-        end
-
-        add_field_line(info, mp1_casting, L["Mana regen per sec while casting"], is_diff);
-        add_field_line(info, mp1_not_casting, L["Mana regen per sec while not casting"], is_diff);
-    end
-    ---------------------------------
-    --- Dodge chance
-    ---------------------------------
-
-    if bit.band(stat_flags, stat_diff_flags.tank) ~= 0 then
-        local val = ((loadout and loadout.dodge) or 0)
-            +
-            effects.raw.dodge
-            +
-            0.0004*effects.raw.defense_skill_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_DEFENSE_SKILL])
-            +
-            0.01*effects.raw.dodge_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_DODGE]);
-        add_field_line(info, val, L["Dodge"], is_diff, true);
-    end
-
-    ---------------------------------
-    --- Parry chance
-    ---------------------------------
-
-    if bit.band(stat_flags, stat_diff_flags.tank) ~= 0 then
-        if loadout_data.parry ~= 0 then
-            local val = ((loadout and loadout.parry) or 0)
-                +
-                effects.raw.parry
-                +
-                0.0004*effects.raw.defense_skill_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_DEFENSE_SKILL])
-                +
-                0.01*effects.raw.parry_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_PARRY]);
-            add_field_line(info, val, L["Parry"], is_diff, true);
-        end
-    end
-
-    ---------------------------------
-    --- Block chance
-    ---------------------------------
-
-    if bit.band(stat_flags, stat_diff_flags.tank) ~= 0 then
-        -- the diff's own can_block is the change, 0 when both sides have a shield
-        if effects_after.raw.can_block > 0 then
-
-            local val = ((loadout and loadout.block) or 0)
-                +
-                effects.raw.block
-                +
-                0.0004*effects.raw.defense_skill_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_DEFENSE_SKILL])
-                +
-                0.01*effects.raw.block_rating_flat/(cr_scaling * cr_weights[combat_ratings.CR_BLOCK]);
-
-            if loadout_data.block then
-                add_field_line(info, val, L["Block"], is_diff, true);
-            end
-            add_field_line(info, ((loadout and loadout.block_value) or 0) + effects.raw.block_value_flat,
-                L["Block value"], is_diff);
-        end
-    end
-
-    ---------------------------------
-    --- Armor penetration
-    ---------------------------------
-    if bit.band(stat_flags, bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)) ~= 0 then
-        add_field_line(info, -effects.by_school.target_res_flat[schools.physical], L["Armor penetration"], is_diff);
-        local ignored = effects.by_school.target_res[schools.physical];
-        local mh_subclass_bit = bit.lshift(1, effects_after.raw.wpn_subclass_mh);
-        for mask, v in pairs(effects.wpn_subclass.target_res) do
-            if bit.band(mask, mh_subclass_bit) ~= 0 then
-                ignored = ignored + v;
-            end
-        end
-        add_field_line(info, -ignored, L["Armor penetration"], is_diff, true);
-    end
-    ---------------------------------
-    --- Spell peneteration
-    ---------------------------------
-
-    if bit.band(stat_flags, stat_diff_flags.caster) ~= 0 then
-        local can_compact = true;
-        local school_prev;
-        -- Holy (i=2) spell pen not included in most spell penetration stats effects?
-        -- ignore 2 in order to be able to compact the other magical spells into one field
-        for i = 3, 7 do
-
-            local val = -effects.by_school.pierce_flat[i];
-
-            school_prev = school_prev or val;
-
-            if val ~= school_prev then
-                can_compact = false;
-                break;
-            end
-        end
-        if not can_compact then
-            for i = 3, 7 do
-                local val = -effects.by_school.pierce_flat[i];
-                add_field_line(info, val, lnames.schools[i].." "..lnames.school_spell_pen, is_diff);
-            end
-        else
-            add_field_line(info, school_prev, lnames.spell_pen, is_diff);
-        end
-    end
-
-    ---------------------------------
-    --- Spell critical effect modifier
-    ---------------------------------
-    if bit.band(stat_flags, bit.bor(stat_diff_flags.caster, stat_diff_flags.healer)) ~= 0 then
-        local can_compact = true;
-        local school_prev;
-        for i = 2, 7 do
-
-            local val = effects.by_school.crit_mod[i];
-
-            school_prev = school_prev or val;
-
-            if val ~= school_prev then
-                can_compact = false;
-                break;
-            end
-        end
-        if not can_compact then
-            for i = 2, 7 do
-                local val = effects.by_school.crit_mod[i];
-                add_field_line(info, val, lnames.schools[i].." "..L["spell critical damage modifier"], is_diff, true);
-            end
-        else
-            add_field_line(info, school_prev, L["Spell critical damage modifier"], is_diff, true);
-        end
-    end
-    ---------------------------------
-    --- Spell cost modifier
-    ---------------------------------
-    if bit.band(stat_flags, bit.bor(stat_diff_flags.caster, stat_diff_flags.healer)) ~= 0 then
-        local can_compact = true;
-        local school_prev;
-        for i = 2, 7 do
-
-            local val = effects.by_school.cost_mod[i];
-
-            school_prev = school_prev or val;
-
-            if val ~= school_prev then
-                can_compact = false;
-                break;
-            end
-        end
-        if not can_compact then
-            for i = 2, 7 do
-                local val = effects.by_school.cost_mod[i];
-                add_field_line(info, val, lnames.schools[i].." "..L["spell cost"], is_diff, true);
-            end
-        else
-            add_field_line(info, school_prev, L["Spell cost"], is_diff, true);
-        end
-    end
-
-    ---------------------------------
-    --- Physical threat
-    ---------------------------------
-    if bit.band(stat_flags, bit.bor(stat_diff_flags.tank, stat_diff_flags.melee, stat_diff_flags.ranged)) ~= 0 then
-        add_field_line(info, effects.by_school.threat[schools.physical], L["Physical threat"], is_diff, true);
-    end
-
-    ---------------------------------
-    --- Spell threat
-    ---------------------------------
-    if bit.band(stat_flags, bit.bor(stat_diff_flags.tank, stat_diff_flags.caster, stat_diff_flags.healer)) ~= 0 then
-        local can_compact = true;
-        local school_prev;
-        for i = 2, 7 do
-
-            local val = effects.by_school.threat[i];
-
-            school_prev = school_prev or val;
-
-            if val ~= school_prev then
-                can_compact = false;
-                break;
-            end
-        end
-        if not can_compact then
-            for i = 2, 7 do
-                local val = effects.by_school.threat[i];
-                add_field_line(info, val, lnames.schools[i].." "..L["spell threat"], is_diff, true);
-            end
-        else
-            add_field_line(info, school_prev, L["Spell threat"], is_diff, true);
-        end
-    end
-    ---------------------------------
-    --- % Stats
-    ---------------------------------
-    if stat_flags ~= 0 then
-        local can_compact = true;
-        local attr_prev;
-        for i = 1, 5 do
-
-            local val = effects.by_attr.stat_mod[i] + effects.by_attr.stat_mod_forced[i];
-
-            attr_prev = attr_prev or val;
-
-            if val ~= attr_prev then
-                can_compact = false;
-                break;
-            end
-        end
-        if not can_compact then
-            for i = 1, 5 do
-                local val = effects.by_attr.stat_mod[i] + effects.by_attr.stat_mod_forced[i];
-                if bit.band(stat_flags, attribute_flags_req[i]) ~= 0 then
-                    add_field_line(info, val, lnames.attributes[i], is_diff, true);
-                end
-            end
-        else
-            add_field_line(info, attr_prev, L["All stats"], is_diff, true);
-        end
-    end
-
-    ---------------------------------
-    --- Weapon slots
-    ---------------------------------
-    if bit.band(stat_flags, bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)) ~= 0 then
-        add_field_line(info, effects.raw.wpn_min_mh, L["Main hand minimum damage"], is_diff);
-        add_field_line(info, effects.raw.wpn_max_mh, L["Main hand maximum damage"], is_diff);
-        add_field_line(info, effects.raw.wpn_delay_mh, L["Main hand weapon speed"], is_diff);
-        add_field_line(info, effects.raw.wpn_min_oh, L["Offhand minimum damage"], is_diff);
-        add_field_line(info, effects.raw.wpn_max_oh, L["Offhand maximum damage"], is_diff);
-        add_field_line(info, effects.raw.wpn_delay_oh, L["Offhand weapon speed"], is_diff);
-    end
-    if bit.band(stat_flags, stat_diff_flags.ranged) ~= 0 then
-        add_field_line(info, effects.raw.wpn_min_ranged, L["Ranged minimum damage"], is_diff);
-        add_field_line(info, effects.raw.wpn_max_ranged, L["Ranged maximum damage"], is_diff);
-        add_field_line(info, effects.raw.wpn_delay_ranged, L["Ranged weapon speed"], is_diff);
-    end
-    ---------------------------------
-    --- Physical damage
-    ---------------------------------
-    if bit.band(stat_flags, bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)) ~= 0 then
-        add_field_line(info, effects.raw.phys_dmg_flat, L["Physical damage"], is_diff);
-    end
-
-    ---------------------------------
-    --- Physical damage modifier
-    ---------------------------------
-    if bit.band(stat_flags, bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)) ~= 0 then
-        add_field_line(info, effects.mul.raw.phys_mod, L["Physical damage"], is_diff, true, true);
-    end
-    ---------------------------------
-    --- Physical damage taken (target)
-    ---------------------------------
-    if bit.band(stat_flags, bit.bor(stat_diff_flags.melee, stat_diff_flags.ranged)) ~= 0 then
-        add_field_line(info, effects.mul.raw.vuln_phys, L["Target physical damage taken"], is_diff, true, true);
-    end
-
-    ---------------------------------
-    --- Spell damage multiplier
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.caster) ~= 0 then
-        local can_compact = true;
-        local school_prev;
-        for i = 2, 7 do
-
-            local val = effects.mul.by_school.dmg_mod[i];
-
-            school_prev = school_prev or val;
-
-            if val ~= school_prev then
-                can_compact = false;
-                break;
-            end
-        end
-        if not can_compact then
-            for i = 2, 7 do
-                local val = effects.mul.by_school.dmg_mod[i];
-                add_field_line(info, val, lnames.schools[i].." "..L["spell damage"], is_diff, true, true);
-            end
-        else
-            add_field_line(info, school_prev, L["Spell damage"], is_diff, true, true);
-        end
-    end
-    ---------------------------------
-    --- Spell damage taken (target)
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.caster) ~= 0 then
-        local can_compact = true;
-        local school_prev;
-        for i = 2, 7 do
-
-            local val = effects.mul.by_school.vuln_mod[i];
-
-            school_prev = school_prev or val;
-
-            if val ~= school_prev then
-                can_compact = false;
-                break;
-            end
-        end
-        if not can_compact then
-            for i = 2, 7 do
-                local val = effects.mul.by_school.vuln_mod[i];
-                add_field_line(info, val, L["Target"].." "..lnames.schools[i].." "..L["spell damage taken"], is_diff, true, true);
-            end
-        else
-            add_field_line(info, school_prev, L["Target spell damage taken"], is_diff, true, true);
-        end
-    end
-
-    ---------------------------------
-    --- Healing modifier
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.healer) ~= 0 then
-        add_field_line(info, effects.mul.raw.heal_mod, L["Healing"], is_diff, true, true);
-    end
-    ---------------------------------
-    --- Healing taken (target)
-    ---------------------------------
-    if bit.band(stat_flags, stat_diff_flags.healer) ~= 0 then
-        add_field_line(info, effects.mul.raw.vuln_heal, L["Target healing taken"], is_diff, true, true);
-    end
-
-    ---------------------------------
-    --- Ability effects
-    ---------------------------------
-
-    if bit.band(stat_flags, stat_diff_flags.spells) ~= 0 then
-        for k, v in ipairs(lnames.ability_additive_fields) do
-            local val_last;
-            for spell_id, val in pairs(effects.ability[v[1]]) do
-
-                if val_last == val then
-                    -- same value as previous thing, just add append this spell name
-                    -- info.str now ends with "\n", need to move it to appended string
-                    info.str = info.str:sub(1, -2)..", "..spell_lname(spell_id).."\n";
-                else
-                    if (add_field_line(info, val, v[2]..": "..spell_lname(spell_id), is_diff, v[3])) then
-                        val_last = val;
-                    end
-                end
-
-            end
-        end
-
-        for k, v in ipairs(lnames.ability_multiplicative_fields) do
-
-            local val_last;
-            for spell_id, val in pairs(effects.mul.ability[v[1]]) do
-
-                if val_last == val then
-                    -- same value as previous thing, just add append this spell name
-                    -- info.str now ends with "\n", need to move it to appended string
-                    info.str = info.str:sub(1, -2)..", "..spell_lname(spell_id).."\n";
-                else
-                    if (add_field_line(info, val, v[2]..": "..spell_lname(spell_id), is_diff, v[3], true)) then
-                        val_last = val;
-                    end
-                end
-            end
-        end
-    end
-
-    ---------------------------------
-    --- On hit procs
-    ---------------------------------
-
-    for _, v in ipairs(lnames.on_hit) do
-        if bit.band(stat_flags, v[3]) ~= 0 then
-            for id, count in pairs(effects.procs[v[1]]) do
-                add_field_line(info, count, v[2]..": "..(spell_lname(id) or tostring(id)), is_diff);
-            end
-        end
-    end
-
-    return info.str, info.num_in + info.num_out, info.num_in, info.num_out;
-end
-
-
-
 local function loadout_raw_dump(loadout, diff)
 
     local info = {
@@ -1713,13 +759,12 @@ local function stats_diff_format(loadout, effects_before, effects_after)
         --print ("\nCall stack: \n" .. debugstack(2, 3, 2));
     end
 
-    cpy_effects(effects_diff_buffer, effects_after);
-    effects_negate_for_diff(effects_diff_buffer, effects_before);
-
     if config.settings.general_calc_stats_raw_dump then
+        cpy_effects(effects_diff_buffer, effects_after);
+        effects_negate_for_diff(effects_diff_buffer, effects_before);
         return effects_raw_dump(effects_diff_buffer, true);
     else
-        return human_friendly_fields(nil, effects_diff_buffer, true, loadout, effects_before, effects_after);
+        return format_changes(loadout, effects_before, effects_after);
     end
 end
 
@@ -1738,8 +783,16 @@ local function stats_format(loadout, effects)
             lnum_in + num_in,
             lnum_out + num_out;
     else
-        return human_friendly_fields(loadout, effects, false, loadout, effects, effects);
+        local rows = format_sheet(loadout, effects, effects);
+        return sheet_text(rows), #rows, 0, 0;
     end
+end
+
+local function stats_sheet(loadout, effects_before, effects_after)
+    if __spellcoda_debug__ and (not effects_before.finalized or not effects_after.finalized) then
+        print("FAILURE: Stat sheet without finalized effects");
+    end
+    return format_sheet(loadout, effects_before, effects_after);
 end
 
 local function manual_effects_zero_diff()
@@ -1918,9 +971,17 @@ local function effects_finalize_forced(loadout, effects)
         effects.by_school.crit_forced[i] = effects.by_school.crit_forced[i] + spell_crit_from_int;
     end
 
+    -- the sheet's health, mana and attack power already hold the active % modifiers, a forced one scales them too,
+    -- as the attributes above
+    local mana_max = loadout.resources_max[powers.mana];
+    if mana_max <= 1 then
+        mana_max = 0;
+    end
     effects.raw.mana =
         (1.0 + effects.raw.mana_mod + effects.raw.mana_mod_forced)
             * ((effects.by_attr.stat_flat[attr.intellect] * mana_per_int))
+        +
+        mana_max * effects.raw.mana_mod_forced / (1.0 + effects.raw.mana_mod)
         +
         effects.raw.mana; -- only added from custom stats as of now
 
@@ -1931,7 +992,9 @@ local function effects_finalize_forced(loadout, effects)
          (effects.by_attr.stat_flat[attr.stamina] * hp_per_stam)
          +
          effects.raw.hp_flat
-        );
+        )
+        +
+        loadout.player_hp_max * effects.raw.hp_mod_forced / (1.0 + effects.raw.hp_mod);
 
     effects.by_school.res_flat[schools.physical] = effects.by_school.res_flat[schools.physical] +
         effects.by_attr.stat_flat[attr.agility]*armor_per_agi;
@@ -1969,25 +1032,17 @@ local function effects_finalize_forced(loadout, effects)
         effects.by_attr.stat_flat[attr.strength] * ap_per_str +
         effects.by_attr.stat_flat[attr.agility] * agi_ap;
 
-    effects.raw.ap_flat = 
-        (1.0 + effects.raw.ap_mod + effects.raw.ap_mod_forced)
-        *
-        (
-         (added_ap)
-         +
-         (effects.raw.ap_flat /(1.0 + effects.raw.ap_mod_forced))
-        );
+    effects.raw.ap_flat =
+        (1.0 + effects.raw.ap_mod + effects.raw.ap_mod_forced) * (added_ap + effects.raw.ap_flat)
+        +
+        loadout.ap * effects.raw.ap_mod_forced / (1.0 + effects.raw.ap_mod);
 
 
     local added_rap = effects.by_attr.stat_flat[attr.agility] * rap_per_agi;
-    effects.raw.rap_flat = 
-        (1.0 + effects.raw.rap_mod + effects.raw.rap_mod_forced)
-        *
-        (
-         (added_rap)
-         +
-         (effects.raw.rap_flat /(1.0 + effects.raw.rap_mod_forced))
-        );
+    effects.raw.rap_flat =
+        (1.0 + effects.raw.rap_mod + effects.raw.rap_mod_forced) * (added_rap + effects.raw.rap_flat)
+        +
+        loadout.rap * effects.raw.rap_mod_forced / (1.0 + effects.raw.rap_mod);
 
 
     local crit_from_agi = 0.01*(sc.physical_crit_to_agi[loadout.lvl] or 0)*effects.by_attr.stat_flat[attr.agility];
@@ -2686,6 +1741,10 @@ local function remember_effects_inputs(loadout)
     effects_inputs.shapeshift = loadout.shapeshift;
     effects_inputs.base_armor = loadout.base_armor;
     effects_inputs.armor = loadout.armor;
+    effects_inputs.ap = loadout.ap;
+    effects_inputs.rap = loadout.rap;
+    effects_inputs.player_hp_max = loadout.player_hp_max;
+    effects_inputs.mana_max = loadout.resources_max[powers.mana];
     effects_inputs.friendly_towards = loadout.friendly_towards;
     effects_inputs.hostile_towards = loadout.hostile_towards;
     for _, u in ipairs(loadout_units) do
@@ -2701,6 +1760,10 @@ local function effects_inputs_equal(loadout)
         effects_inputs.shapeshift ~= loadout.shapeshift or
         effects_inputs.base_armor ~= loadout.base_armor or
         effects_inputs.armor ~= loadout.armor or
+        effects_inputs.ap ~= loadout.ap or
+        effects_inputs.rap ~= loadout.rap or
+        effects_inputs.player_hp_max ~= loadout.player_hp_max or
+        effects_inputs.mana_max ~= loadout.resources_max[powers.mana] or
         effects_inputs.friendly_towards ~= loadout.friendly_towards or
         effects_inputs.hostile_towards ~= loadout.hostile_towards then
         return false;
@@ -2965,7 +2028,7 @@ local function update_loadout_and_effects_diffed_from_ui()
 end
 
 -- reused while neither effects table was rebuilt and the sheet values and settings it reads are unchanged
-local diffed_stats_diff = { valid = false, stats = {}, flags = {} };
+local diffed_stats_diff = { valid = false, stats = {} };
 
 local function diffed_stats_diff_format(loadout, effects_before, effects_after)
     local c = diffed_stats_diff;
@@ -2979,21 +2042,18 @@ local function diffed_stats_diff_format(loadout, effects_before, effects_after)
         c.block == loadout.block and
         c.parry == loadout.parry and
         c.cr_scaling == loadout.cr_scaling and
-        c.raw_dump == settings.general_calc_stats_raw_dump;
+        c.raw_dump == settings.general_calc_stats_raw_dump and
+        c.shown_cells == stat_lines_shown_cells() and
+        c.shown_id == stat_lines_settings_id();
     if same then
         for i = 1, 5 do
             if c.stats[i] ~= loadout.stats[i] then
                 same = false;
             end
         end
-        for k, _ in pairs(stat_diff_flag_options) do
-            if c.flags[k] ~= settings[k] then
-                same = false;
-            end
-        end
     end
     if not same then
-        c.str, c.total, c.num_in, c.num_out = stats_diff_format(loadout, effects_before, effects_after);
+        c.str, c.total, c.num_in, c.num_out, c.short_str = stats_diff_format(loadout, effects_before, effects_after);
         c.effects_rebuild_id = effects_rebuild_id;
         c.diffed_build_id = diffed_build_id;
         c.block = loadout.block;
@@ -3003,12 +2063,11 @@ local function diffed_stats_diff_format(loadout, effects_before, effects_after)
         for i = 1, 5 do
             c.stats[i] = loadout.stats[i];
         end
-        for k, _ in pairs(stat_diff_flag_options) do
-            c.flags[k] = settings[k];
-        end
+        c.shown_cells = stat_lines_shown_cells();
+        c.shown_id = stat_lines_settings_id();
         c.valid = true;
     end
-    return c.str, c.total, c.num_in, c.num_out;
+    return c.str, c.total, c.num_in, c.num_out, c.short_str;
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -3040,7 +2099,8 @@ loadouts.apply_procs                                  = apply_procs;
 loadouts.stats_diff_format                            = stats_diff_format;
 loadouts.diffed_stats_diff_format                     = diffed_stats_diff_format;
 loadouts.stats_format                                 = stats_format;
-loadouts.init_lnames                                  = init_lnames;
+loadouts.stats_sheet                                  = stats_sheet;
+loadouts.init_lnames                                  = function() sc.stat_lines.init(ratings); end;
 
 sc.loadouts = loadouts;
 
