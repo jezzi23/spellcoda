@@ -284,6 +284,10 @@ local effects_additive = {
         "sd_of_stat_pct_forced",
         "hp_of_stat_pct",
         "hp_of_stat_pct_forced",
+        "ap_of_stat_pct",
+        "ap_of_stat_pct_forced",
+        "rap_of_stat_pct",
+        "rap_of_stat_pct_forced",
     },
     ability = {
         "threat",
@@ -322,10 +326,10 @@ local effects_additive = {
     -- effects that affects the base value (points) of other subauras
     -- indexed by the aura internal idx
     aura_pts = {
-        -1, 0, 1, 2, 3, 4, 5
+        -1, 0, 1, 2, 3, 4, 5, 6, 7
     },
     aura_pts_flat = {
-        -1, 0, 1, 2, 3, 4, 5
+        -1, 0, 1, 2, 3, 4, 5, 6, 7
     },
     wpn_subclass = {
         "phys_crit",
@@ -361,6 +365,8 @@ local effects_additive = {
         "rap_flat",
         "rap_mod",
         "rap_mod_forced",
+        "sd_of_ap_pct",
+        "sd_of_ap_pct_forced",
         "phys_hit",
         "phys_crit",
         "phys_crit_forced",
@@ -1031,14 +1037,28 @@ local function effects_finalize_forced(loadout, effects)
     local added_ap =
         effects.by_attr.stat_flat[attr.strength] * ap_per_str +
         effects.by_attr.stat_flat[attr.agility] * agi_ap;
+    local added_rap = effects.by_attr.stat_flat[attr.agility] * rap_per_agi;
+    for i = 1, 5 do
+        added_ap = added_ap +
+            (effects.by_attr.ap_of_stat_pct[i] + effects.by_attr.ap_of_stat_pct_forced[i]) * effects.by_attr.stat_flat[i] +
+            effects.by_attr.ap_of_stat_pct_forced[i] * loadout.stats[i];
+        added_rap = added_rap +
+            (effects.by_attr.rap_of_stat_pct[i] + effects.by_attr.rap_of_stat_pct_forced[i]) * effects.by_attr.stat_flat[i] +
+            effects.by_attr.rap_of_stat_pct_forced[i] * loadout.stats[i];
+    end
 
     effects.raw.ap_flat =
         (1.0 + effects.raw.ap_mod + effects.raw.ap_mod_forced) * (added_ap + effects.raw.ap_flat)
         +
         loadout.ap * effects.raw.ap_mod_forced / (1.0 + effects.raw.ap_mod);
 
+    local sd_from_ap =
+        (effects.raw.sd_of_ap_pct + effects.raw.sd_of_ap_pct_forced) * effects.raw.ap_flat +
+        effects.raw.sd_of_ap_pct_forced * loadout.ap;
+    for i = 1, 7 do
+        effects.by_school.sp_dmg_flat[i] = effects.by_school.sp_dmg_flat[i] + sd_from_ap;
+    end
 
-    local added_rap = effects.by_attr.stat_flat[attr.agility] * rap_per_agi;
     effects.raw.rap_flat =
         (1.0 + effects.raw.rap_mod + effects.raw.rap_mod_forced) * (added_rap + effects.raw.rap_flat)
         +
