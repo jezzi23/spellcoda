@@ -356,8 +356,9 @@ local function changing_reads(spell, effects)
 end
 
 -- Spell resistance after wowsims forever (sim/core/spell_resistances.go, fit to combat logs, unconfirmed): no level
--- based resistance, debuffs stop at 0, Spell Piercing (creatures only) takes the resistance below 0 for a bonus but
--- none under 1%, dot_resi_pen parts take a tenth of a positive share and no bonus, binary spells miss instead
+-- based resistance, debuffs stop at 0, Spell Piercing (creatures only) takes the resistance below 0 for a bonus,
+-- dot_resi_pen parts take a tenth of a positive share and no bonus, binary spells miss instead. wowsims finds no bonus
+-- under 1%, likely a mistake that may get patched, assumed absent here since it would make stat weights misleading
 local school_keys = sc.calc.indexed_keys.school;
 local target_pvp_flag = sc.loadouts.loadout_flags.target_pvp;
 local no_spell_piercing = sc.no_spell_piercing;
@@ -455,11 +456,6 @@ local function spell_res(comp, spell, loadout, effects, terms)
         i = i + 1;
     end
     local share = resi / (math.abs(resi) + 8 * loadout.lvl + 19);
-    local dead_zone = 0;
-    if share < 0 and share > -0.01 then
-        dead_zone = share;
-        share = 0;
-    end
     local tenth = bit.band(comp.flags, comp_flags.dot_resi_pen) ~= 0;
     local no_bonus = false;
     if bit.band(spell.flags, spell_flags.binary) ~= 0 then
@@ -484,7 +480,6 @@ local function spell_res(comp, spell, loadout, effects, terms)
         terms.lvl_res = 0;
         terms.roll = share;
         terms.tenth = tenth;
-        terms.dead_zone = dead_zone;
         terms.no_bonus = no_bonus;
     end
     return resi, roll_mean(share);

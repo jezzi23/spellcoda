@@ -417,9 +417,7 @@ local add_mitigation_lines = (function()
                 s = s .. " = " .. num(sum);
             end
             local share;
-            if t.dead_zone ~= 0 then
-                share = L["no bonus"] .. " (" .. L["deadzone threshold"] .. ")";
-            elseif t.no_bonus then
+            if t.no_bonus then
                 share = L["no bonus"];
             elseif t.binary and t.share > 0 then
                 share = string.format("+%.1f%% %s", 100 * t.miss_added, L["binary miss"]);
@@ -427,6 +425,9 @@ local add_mitigation_lines = (function()
                 share = string.format("%.1f%% %s", 100 * t.share, L["average resisted"]);
             else
                 share = string.format("%.1f%% %s", -100 * t.share, L["average bonus"]);
+                if t.share > -0.01 then
+                    share = share .. " (" .. L["within deadzone"] .. ")";
+                end
             end
             if t.tenth and t.share > 0 then
                 share = share .. " (1/10)";

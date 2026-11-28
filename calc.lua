@@ -519,7 +519,6 @@ local function stats_res(comp, spell, loadout, effects, terms)
         end
         terms.roll = target_resi / math_max(loadout.lvl * 5, 100);
         terms.tenth = bit_band(comp.flags, comp_flags.dot_resi_pen) ~= 0;
-        terms.dead_zone = 0;
         terms.no_bonus = false;
         if terms.tenth then
             terms.roll = terms.roll * 0.1;
@@ -4076,10 +4075,9 @@ calc.res_details = (function()
             bit_band(comp.flags, unmitigated_comp_flags) ~= 0 then
             return nil;
         end
-        terms.dead_zone = 0;
         terms.no_bonus = false;
         local resi, share = stats_res(comp, spell, loadout, effects, terms);
-        if share == 0 and terms.dead_zone == 0 and not terms.no_bonus then
+        if share == 0 and not terms.no_bonus then
             return nil;
         end
         terms.final = resi;
